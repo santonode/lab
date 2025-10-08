@@ -6,7 +6,237 @@
     <title>Santo - Asset List</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <style>
-        /* [Existing styles remain unchanged] */
+        body {
+            min-height: 100%;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        .header {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background-color: #263238;
+            color: white;
+            padding: 5px 0;
+            text-align: center;
+            z-index: 1000;
+            font-family: Arial, sans-serif;
+            font-weight: bold;
+            border-bottom: 2px solid #000000;
+            height: 45px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border-radius: 10px;
+            display: inline-block;
+            padding: 5px 10px;
+            background: linear-gradient(45deg, #26A69A, #FFCA28);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .header .user-info {
+            position: absolute;
+            top: 50%;
+            left: 10px;
+            transform: translateY(-50%);
+            font-size: 14px;
+            color: #FFCA28;
+            padding: 2px 5px;
+            line-height: 1;
+            text-decoration: none;
+        }
+        .header .gear-icon {
+            position: absolute;
+            top: 5px;
+            right: 10px;
+            font-size: 16px;
+            text-decoration: none;
+            color: white;
+            background-color: #000000;
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+        .content {
+            margin-top: 50px;
+            margin-bottom: 0;
+            min-height: calc(100vh - 75px);
+            padding-top: 5px;
+            text-align: center;
+            padding-bottom: 45px;
+        }
+        .summary {
+            font-size: 1.2em;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: bold;
+            position: sticky;
+            top: 50px;
+            background-color: #fff;
+            z-index: 10;
+            padding: 5px 10px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .meme-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 0;
+        }
+        .meme-table th, .meme-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .meme-table th {
+            background-color: #f2f2f2;
+            cursor: pointer;
+        }
+        .meme-table th a {
+            color: #000;
+            text-decoration: none;
+        }
+        .meme-table th a:hover {
+            text-decoration: underline;
+        }
+        .meme-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .meme-table tr:hover {
+            background-color: #f1f1f1;
+        }
+        .meme-table th:nth-child(1), .meme-table td:nth-child(1) { /* ID */
+            width: 5%;
+            min-width: 40px;
+        }
+        .meme-table th:nth-child(2), .meme-table td:nth-child(2) { /* Type */
+            width: 5%;
+            min-width: 60px;
+        }
+        .meme-table th:nth-child(3), .meme-table td:nth-child(3) { /* Description / Owner */
+            width: 80%;
+            min-width: 150px;
+        }
+        .meme-table th:nth-child(4), .meme-table td:nth-child(4) { /* Counts */
+            width: 10%;
+            min-width: 50px;
+        }
+        @media (max-width: 600px) {
+            .content {
+                padding: 0 10px;
+            }
+            .summary {
+                font-size: 0.9em;
+                top: 50px;
+                padding: 2px 5px;
+                margin-bottom: 2px;
+            }
+            .meme-table {
+                display: block;
+                overflow-x: auto;
+            }
+            .meme-table th, .meme-table td {
+                min-width: 40px;
+            }
+            .meme-table th:nth-child(3), .meme-table td:nth-child(3) {
+                min-width: 150px;
+            }
+            .header .user-info {
+                font-size: 12px;
+                padding: 1px 3px;
+                max-width: 120px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+        }
+        .footer {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            background-color: #263238;
+            color: white;
+            padding: 5px 0;
+            text-align: center;
+            z-index: 1000;
+            border-top: 2px solid #000000;
+            height: 35px;
+            box-sizing: border-box;
+        }
+        .footer p {
+            margin: 3px 0;
+            font-size: 12px;
+        }
+        .download-link {
+            color: #26A69A;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .download-link:hover {
+            text-decoration: underline;
+        }
+        /* Popup styles */
+        .popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border: 2px solid #263238;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            z-index: 2000;
+            width: 300px;
+            text-align: center;
+        }
+        .popup-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1500;
+        }
+        .popup h3 {
+            margin: 0 0 15px;
+            color: #263238;
+        }
+        .popup input {
+            width: 80%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .popup button {
+            padding: 8px 15px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .popup .register-btn {
+            background-color: #26A69A;
+            color: white;
+        }
+        .popup .decline-btn {
+            background-color: #FFCA28;
+            color: black;
+        }
+        .popup button:hover {
+            opacity: 0.9;
+        }
     </style>
 </head>
 <body>
@@ -49,7 +279,7 @@
                         <td class="meme-id">{{ meme.meme_id }}</td>
                         <td class="meme-type">{{ meme.type }}</td>
                         <td class="meme-description">
-                            {% set download_url = meme|get_download_url %} <!-- Changed from meme.meme_url|get_download_url -->
+                            {% set download_url = meme|get_download_url %} <!-- Fixed filter call -->
                             {% if download_url and download_url != meme.meme_url %}
                                 <a class="download-link" href="javascript:void(0)" onclick="incrementAndDownload('{{ meme.meme_id }}', '{{ download_url }}')">{{ meme.meme_description }}</a>
                             {% else %}
