@@ -493,4 +493,63 @@ def guess():
                     session['user_type'] = user_type
                     if user_type != 'Guest':
                         cur.execute('INSERT INTO game_logs (timestamp, ip_address, username, win, guesses) VALUES (%s, %s, %s, %s, %s)', 
-                                  (datetime.now(), ip_address, username,
+                                  (datetime.now(), ip_address, username, win, len(session['guesses'])))
+                        cur.execute('''
+                            INSERT INTO user_stats (user_id, wins, losses, total_guesses, games_played)
+                            VALUES (%s, %s, %s, %s, 1)
+                            ON CONFLICT (user_id) DO UPDATE
+                            SET wins = user_stats.wins + EXCLUDED.wins,
+                                losses = user_stats.losses + EXCLUDED.losses,
+                                total_guesses = user_stats.total_guesses + EXCLUDED.total_guesses,
+                                games_played = user_stats.games_played + EXCLUDED.games_played
+                        ''', (user_id, win, 1-win, len(session['guesses'])))
+                        cur.execute('UPDATE users SET points = GREATEST(points + %s, 0) WHERE id = %s', (points_change, user_id))
+                        conn.commit()
+                        print(f"Debug - Game logged: user_id={user_id}, win={win}, guesses={len(session['guesses'])}, points_change={points_change}, username={username}")
+                    else:
+                        print(f"Debug - Skipping points update for guest user: {username}")
+        except psycopg.Error as e:
+            print(f"Database logging error: {str(e)}")
+
+    share_text = f"Wurdle {date.today().strftime('%Y-%m-%d')} {len(session['guesses'])}/6\n"
+    for g in session['guesses']:
+        share_text += ''.join({
+            'green': '🟩', 'yellow': '🟨', 'gray': '⬜'
+        }[color] for color in g['result']) + '\n'
+    session['share_text'] = share_text
+
+    print(f"Debug - Final result before jsonify: {result}, game_over: {game_over}, message: {message}, username={username}")
+    return jsonify({
+        'guess': guess,
+        'result': result,
+        'game_over': game_over,
+        'message': message,
+        'share_text': share_text
+    })
+
+@wurdle_bp.route('/toggle_hard_mode', methods=['POST'])
+def toggle_hard_mode():
+    if session.get('last_played_date') == str(date.today()):
+        return jsonify({'error': 'Cannot change settings. You have already played today.'})
+    session['hard_mode'] = not session.get('hard_mode', False)
+    session.modified = True
+    return jsonify({'hard_mode': session['hard_mode']})
+
+@wurdle_bp.route('/favicon.ico')
+def favicon():
+    return current_app.send_static_file('favicon.ico')
+
+@wurdle_bp.route('/leader')
+def leader():
+    try:
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT id, username, points FROM users ORDER BY points DESC')
+                leaders = [{'id': row[0], 'username': row[1], 'points': row[2]} for row in cur.fetchall()]
+        return render_template('leader.html', leaders=leaders)
+    except psycopg.Error as e:
+        print(f"Database error in leader: {str(e)}")
+        return render_template('leader.html', leaders=[])
+    except Exception as e:
+        print(f"Unexpected error in leader: {str(e)}")
+        return render_template('leader.html', leaders=[])
