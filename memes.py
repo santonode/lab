@@ -32,7 +32,21 @@ def memes():
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
                 cur.execute('SELECT meme_id, meme_url, meme_description, meme_download_counts, type, owner FROM memes ORDER BY meme_id')
-                memes = [{'meme_id': row[0], 'meme_url': row[1], 'meme_description': row[2], 'meme_download_counts': row[3], 'type': row[4], 'owner': row[5]} for row in cur.fetchall()]
+                rows = cur.fetchall()
+                current_app.logger.debug(f"Raw query results: {rows}")  # Log raw results for debugging
+                memes = []
+                for row in rows:
+                    if not isinstance(row, tuple) or len(row) != 6:
+                        current_app.logger.error(f"Invalid row format: {row}, expected 6 columns")
+                        continue
+                    memes.append({
+                        'meme_id': row[0],
+                        'meme_url': row[1],
+                        'meme_description': row[2],
+                        'meme_download_counts': row[3],
+                        'type': row[4],
+                        'owner': row[5]
+                    })
                 cur.execute('SELECT id, username FROM users')
                 users = [{'id': row[0], 'username': row[1]} for row in cur.fetchall()]
                 cur.execute('SELECT COUNT(*) FROM memes')
@@ -65,7 +79,7 @@ def memes():
         current_app.logger.error(f"Database error in memes: {str(e)}")
         return render_template('memes.html', memes=[], users=[], message="Error fetching meme data.", meme_count=0, total_downloads=0, username=None, user_type='Guest', points=0)
     except Exception as e:
-        current_app.logger.error(f"Unexpected error in memes: {str(e)}")
+        current_app.logger.error(f"Unexpected error in memes: {str(e)}", exc_info=True)  # Include stack trace
         return render_template('memes.html', memes=[], users=[], message="Error fetching meme data.", meme_count=0, total_downloads=0, username=None, user_type='Guest', points=0)
 
 # Admin route
@@ -120,7 +134,21 @@ def admin():
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
                 cur.execute('SELECT meme_id, meme_url, meme_description, meme_download_counts, type, owner FROM memes ORDER BY meme_id')
-                memes = [{'meme_id': row[0], 'meme_url': row[1], 'meme_description': row[2], 'meme_download_counts': row[3], 'type': row[4], 'owner': row[5]} for row in cur.fetchall()]
+                rows = cur.fetchall()
+                current_app.logger.debug(f"Raw query results for admin: {rows}")
+                memes = []
+                for row in rows:
+                    if not isinstance(row, tuple) or len(row) != 6:
+                        current_app.logger.error(f"Invalid row format in admin: {row}, expected 6 columns")
+                        continue
+                    memes.append({
+                        'meme_id': row[0],
+                        'meme_url': row[1],
+                        'meme_description': row[2],
+                        'meme_download_counts': row[3],
+                        'type': row[4],
+                        'owner': row[5]
+                    })
                 cur.execute('SELECT id, username FROM users')
                 users = [{'id': row[0], 'username': row[1]} for row in cur.fetchall()]
                 cur.execute('SELECT COUNT(*) FROM memes')
@@ -130,7 +158,7 @@ def admin():
         current_app.logger.error(f"Database error in admin: {str(e)}")
         return render_template('admin.html', memes=[], users=[], meme_count=0, message="Error fetching meme data.", authenticated=authenticated, next_meme_id=next_meme_id)
     except Exception as e:
-        current_app.logger.error(f"Unexpected error in admin: {str(e)}")
+        current_app.logger.error(f"Unexpected error in admin: {str(e)}", exc_info=True)
         return render_template('admin.html', memes=[], users=[], meme_count=0, message="Error fetching meme data.", authenticated=authenticated, next_meme_id=next_meme_id)
 
 # Register route for guest users
