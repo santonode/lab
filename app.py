@@ -3,7 +3,7 @@ from wurdle import wurdle_bp
 from memes import memes_bp, get_download_url
 import os
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
 app.secret_key = os.urandom(24)
 app.register_blueprint(wurdle_bp)
 app.register_blueprint(memes_bp, url_prefix='/memes')
