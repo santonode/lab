@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wurdle - Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        .header {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background-color: #263238; /* Navy */
+            color: white;
+            padding: 5px 0;
+            text-align: center;
+            z-index: 1000;
+            font-family: Arial, sans-serif;
+            font-weight: bold;
+            border-bottom: 2px solid #000000;
+            height: 45px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border-radius: 10px;
+            display: inline-block;
+            padding: 5px 10px;
+            background: linear-gradient(45deg, #26A69A, #FFCA28);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .footer {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            background-color: #263238;
+            color: white;
+            padding: 5px 0;
+            text-align: center;
+            z-index: 1000;
+            border-top: 2px solid #000000;
+            height: 35px;
+            box-sizing: border-box;
+        }
+        .footer p {
+            margin: 3px 0;
+            font-size: 12px;
+        }
+        .content {
+            margin-top: 50px;
+            margin-bottom: 40px;
+            min-height: calc(100vh - 85px);
+            padding-top: 20px;
+            text-align: center;
+            padding-bottom: 60px;
+        }
+        .auth-form {
+            margin-bottom: 20px;
+        }
+        .auth-form input {
+            padding: 5px;
+            font-size: 16px;
+            width: 200px;
+        }
+        .auth-form button {
+            padding: 5px 10px;
+            font-size: 16px;
+            background-color: #26A69A;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .auth-form button:hover {
+            background-color: #1e7d71;
+        }
+        .user-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr; /* Adjusted for username, password, edit, delete */
+            gap: 10px;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+        }
+        .user-grid div {
+            padding: 10px;
+            text-align: left;
+        }
+        .user-grid .username {
+            font-weight: bold;
+        }
+        .user-grid .edit-btn, .user-grid .delete-btn, .user-grid .save-btn {
+            padding: 5px 10px;
+            font-size: 14px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 70px;
+        }
+        .user-grid .edit-btn {
+            background-color: #26A69A;
+            color: white;
+        }
+        .user-grid .edit-btn:hover {
+            background-color: #1e7d71;
+        }
+        .user-grid .save-btn {
+            background-color: #4CAF50; /* Green for Save */
+            color: white;
+        }
+        .user-grid .save-btn:hover {
+            background-color: #45a049;
+        }
+        .user-grid .delete-btn {
+            background-color: #FF4444; /* Red for Delete */
+            color: white;
+        }
+        .user-grid .delete-btn:hover {
+            background-color: #CC0000;
+        }
+        .edit-form {
+            display: none;
+            grid-column: span 4; /* Span all columns */
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #e0e0e0;
+            border-radius: 5px;
+        }
+        .edit-form input {
+            padding: 5px;
+            font-size: 16px;
+            width: 200px;
+            margin-right: 10px;
+            margin-bottom: 5px;
+        }
+        .message {
+            margin-top: 10px;
+            color: #FFCA28;
+        }
+
+        @media (max-width: 600px) {
+            .content {
+                padding: 0 10px;
+            }
+            .user-grid {
+                grid-template-columns: 1fr; /* Stack on mobile */
+                padding: 10px;
+            }
+            .user-grid .edit-btn, .user-grid .delete-btn, .user-grid .save-btn {
+                width: 100%;
+                max-width: 100px;
+            }
+            .edit-form {
+                grid-column: span 1;
+            }
+            .auth-form input {
+                width: 100%;
+                max-width: 250px;
+            }
+            .auth-form button {
+                width: 100%;
+                max-width: 150px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Wurdle</h1>
+    </div>
+    <div class="content">
+        {% if not authenticated %}
+            <div class="auth-form">
+                <form method="POST">
+                    <input type="password" name="admin_pass" placeholder="Enter Admin Password" required>
+                    <button type="submit">Submit</button>
+                </form>
+            </div>
+            {% if message %}
+                <div class="message">{{ message }}</div>
+            {% endif %}
+        {% else %}
+            <h2>User List</h2>
+            <div class="user-grid">
+                {% for user in users %}
+                    <div class="username">{{ user.username }}</div>
+                    <div>{{ user.password }}</div>
+                    <div>
+                        <button class="edit-btn" onclick="toggleEdit('edit-form-{{ loop.index }}', '{{ user.username }}', '{{ user.password }}', this)">Edit</button>
+                    </div>
+                    <div>
+                        <form method="POST" style="display: inline;">
+                            <input type="hidden" name="delete_username" value="{{ user.username }}">
+                            <button type="submit" class="delete-btn" name="delete">Delete</button>
+                        </form>
+                    </div>
+                    <div class="edit-form" id="edit-form-{{ loop.index }}">
+                        <form method="POST">
+                            <input type="hidden" name="edit_username" value="{{ user.username }}">
+                            <input type="text" name="new_username" placeholder="New Username" value="{{ user.username }}" required>
+                            <input type="password" name="new_password" placeholder="New Password" value="{{ user.password }}" required>
+                            <button type="submit" class="save-btn" name="save">Save</button>
+                        </form>
+                    </div>
+                {% endfor %}
+            </div>
+            {% if message %}
+                <div class="message">{{ message }}</div>
+            {% endif %}
+        {% endif %}
+    </div>
+    <div class="footer">
+        <p>Made with ❤️ by Wurdle Team</p>
+        <p>Play Now and Share with Friends!</p>
+    </div>
+
+    <script>
+        function toggleEdit(formId, username, password, button) {
+            const form = document.getElementById(formId);
+            const isEditing = form.style.display === 'block';
+
+            if (isEditing) {
+                form.style.display = 'none';
+                button.textContent = 'Edit';
+                button.className = 'edit-btn';
+            } else {
+                form.style.display = 'block';
+                button.textContent = 'Save';
+                button.className = 'save-btn';
+                const inputs = form.getElementsByTagName('input');
+                inputs[1].value = username; // Set username
+                inputs[2].value = password; // Set password
+            }
+        }
+    </script>
+</body>
+</html>
