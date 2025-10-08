@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, session, redirect, url_for, current_app, jsonify
 import psycopg
 import os
+import re
 from datetime import datetime
 
 # Define the Blueprint
@@ -33,7 +34,7 @@ def memes():
             with conn.cursor() as cur:
                 cur.execute('SELECT meme_id, meme_url, meme_description, meme_download_counts, type, owner FROM memes ORDER BY meme_id')
                 rows = cur.fetchall()
-                current_app.logger.debug(f"Raw query results: {rows}")  # Log raw results for debugging
+                current_app.logger.debug(f"Raw query results: {rows}")
                 memes = []
                 for row in rows:
                     if not isinstance(row, tuple) or len(row) != 6:
@@ -79,7 +80,7 @@ def memes():
         current_app.logger.error(f"Database error in memes: {str(e)}")
         return render_template('memes.html', memes=[], users=[], message="Error fetching meme data.", meme_count=0, total_downloads=0, username=None, user_type='Guest', points=0)
     except Exception as e:
-        current_app.logger.error(f"Unexpected error in memes: {str(e)}", exc_info=True)  # Include stack trace
+        current_app.logger.error(f"Unexpected error in memes: {str(e)}", exc_info=True)
         return render_template('memes.html', memes=[], users=[], message="Error fetching meme data.", meme_count=0, total_downloads=0, username=None, user_type='Guest', points=0)
 
 # Admin route
@@ -215,7 +216,15 @@ def increment_download(meme_id):
 
 # Custom filter for download URL
 def get_download_url(meme):
-    return f"/download/{meme['meme_id']}"
+    # Extract Google Drive asset ID from meme_url
+    meme_url = meme.get('meme_url', '')
+    if 'drive.google.com' in meme_url:
+        # Match common Google Drive URL formats
+        match = re.search(r'/d/([a-zA-Z0-9-_]+)', meme_url) or re.search(r'id=([a-zA-Z0-9-_]+)', meme_url)
+        if match:
+            asset_id = match.group(1)
+            return f"https://drive.google.com/uc?export=download&id={asset_id}"
+    return meme_url  # Fallback to original URL if not a Google Drive link
 
 # Database initialization function (to be called in app context)
 def init_db():
@@ -237,7 +246,7 @@ def init_db():
                 count = cur.fetchone()[0]
                 if count == 0:
                     cur.execute('INSERT INTO memes (meme_url, meme_description, type, owner) VALUES (%s, %s, %s, %s)',
-                                ('https://example.com/meme1.jpg', 'Funny Cat', 'image', 'admin'))
+                                ('https://drive.google.com/file/d/1abc123XYZ/view', 'Funny Cat', 'image', 'admin'))
                     conn.commit()
                     current_app.logger.info(f"Initialized memes table with {count + 1} records")
                 else:
