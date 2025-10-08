@@ -189,7 +189,7 @@ def increment_download(meme_id):
 def get_download_url(meme):
     return f"/download/{meme['meme_id']}"
 
-# Initialize database on module import
+# Database initialization function (to be called in app context)
 def init_db():
     try:
         with psycopg.connect(DATABASE_URL) as conn:
@@ -218,5 +218,3 @@ def init_db():
     except psycopg.Error as e:
         current_app.logger.error(f"Database initialization error: {str(e)}")
         raise
-
-init_db()
