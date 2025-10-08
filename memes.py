@@ -20,9 +20,6 @@ def get_download_url(url):
             return f"https://drive.google.com/uc?export=download&id={file_id}"
     return url
 
-# Register the custom filter
-memes_bp.jinja_env.filters['get_download_url'] = get_download_url
-
 # Initialize Postgres database
 def init_db():
     try:
