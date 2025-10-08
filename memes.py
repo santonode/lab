@@ -295,7 +295,6 @@ def memes():
     except Exception as e:
         print(f"Unexpected error in memes: {str(e)}")
         return render_template('memes.html', memes=[], users=[], message="Error fetching meme data.", meme_count=0, total_downloads=0, username=None, user_type='Guest', points=0)
-
 @memes_bp.route('/memes/register', methods=['POST'])
 def memes_register():
     ip_address = request.remote_addr
