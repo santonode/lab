@@ -362,22 +362,22 @@
         });
 
         function handleDownload(memeId, url) {
-            fetch(`/add_point_and_redirect/${memeId}/${encodeURIComponent(url)}`, {
-                method: 'POST', // Match the route's POST method
+            fetch(`/add_point_and_redirect/${memeId}`, {
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
+                body: JSON.stringify({ url: url }),
             })
-            .then(response => {
-                if (response.ok) {
-                    // Follow the redirect directly
-                    window.location.href = response.url || get_download_url(url); // Fallback to transformed URL
-                } else if (response.status === 403) {
-                    // Fallback to opening the original URL in a new tab
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.href = data.download_url; // Initiate download with the returned URL
+                } else if (data.error && data.error.includes('403')) {
                     window.open(url, '_blank');
                     alert('Download failed due to a restriction. Please complete any verification in the new tab and download manually.');
                 } else {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    throw new Error(data.error || 'Unknown error');
                 }
             })
             .catch(error => {
