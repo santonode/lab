@@ -10,7 +10,7 @@
             position: fixed;
             top: 0;
             width: 100%;
-            background-color: #263238; /* Navy */
+            background-color: #263238;
             color: white;
             padding: 5px 0;
             text-align: center;
@@ -82,57 +82,70 @@
         .auth-form button:hover {
             background-color: #1e7d71;
         }
-        .user-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr 1fr; /* Adjusted for username, password, edit, delete */
-            gap: 10px;
-            max-width: 800px;
+        .user-table, .meme-table {
+            max-width: 1500px;
             margin: 0 auto;
-            padding: 20px;
+            border-collapse: collapse;
             background-color: #f0f0f0;
             border-radius: 5px;
+            overflow: hidden;
+            margin-top: 20px;
         }
-        .user-grid div {
-            padding: 10px;
+        .user-table th, .user-table td, .meme-table th, .meme-table td {
+            padding: 5px;
             text-align: left;
+            border: 1px solid #ccc;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
-        .user-grid .username {
+        .user-table th, .meme-table th {
+            background-color: #263238;
+            color: white;
+        }
+        .user-table .user-id {
             font-weight: bold;
+            color: #263238;
+            width: 50px;
         }
-        .user-grid .edit-btn, .user-grid .delete-btn, .user-grid .save-btn {
-            padding: 5px 10px;
-            font-size: 14px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            width: 70px;
+        .user-table .username {
+            font-weight: bold;
+            width: 100px;
         }
-        .user-grid .edit-btn {
-            background-color: #26A69A;
-            color: white;
+        .user-table .password {
+            width: 500px;
         }
-        .user-grid .edit-btn:hover {
-            background-color: #1e7d71;
+        .user-table .points {
+            width: 100px;
         }
-        .user-grid .save-btn {
-            background-color: #4CAF50; /* Green for Save */
-            color: white;
+        .meme-table .meme-id {
+            font-weight: bold;
+            color: #263238;
+            width: 50px;
         }
-        .user-grid .save-btn:hover {
-            background-color: #45a049;
+        .meme-table .meme-description {
+            width: 500px;
         }
-        .user-grid .delete-btn {
-            background-color: #FF4444; /* Red for Delete */
-            color: white;
+        .meme-table .meme-type {
+            font-weight: bold;
+            width: 100px;
         }
-        .user-grid .delete-btn:hover {
-            background-color: #CC0000;
+        .meme-table .meme-url {
+            width: 300px;
+        }
+        .meme-table .meme-owner {
+            width: 150px;
+        }
+        .meme-table .meme-download-counts {
+            width: 150px;
+        }
+        .user-table .actions, .meme-table .actions {
+            width: 200px;
+            text-align: center;
         }
         .edit-form {
             display: none;
-            grid-column: span 4; /* Span all columns */
-            margin-top: 10px;
-            padding: 10px;
+            padding: 5px;
             background-color: #e0e0e0;
             border-radius: 5px;
         }
@@ -140,36 +153,70 @@
             padding: 5px;
             font-size: 16px;
             width: 200px;
-            margin-right: 10px;
+            margin-right: 5px;
             margin-bottom: 5px;
+        }
+        .edit-btn, .save-btn, .delete-btn, .add-btn {
+            padding: 5px 10px;
+            font-size: 14px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .edit-btn, .save-btn, .add-btn {
+            background-color: #26A69A;
+            color: white;
+        }
+        .edit-btn:hover, .save-btn:hover, .add-btn:hover {
+            background-color: #1e7d71;
+        }
+        .delete-btn {
+            background-color: #FF4444;
+            color: white;
+        }
+        .delete-btn:hover {
+            background-color: #CC0000;
         }
         .message {
             margin-top: 10px;
             color: #FFCA28;
         }
+        .upload-form {
+            margin-top: 20px;
+        }
+        .upload-form input[type="file"] {
+            padding: 5px;
+            font-size: 14px;
+        }
+        .upload-form button {
+            padding: 5px 10px;
+            font-size: 14px;
+            background-color: #26A69A;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .upload-form button:hover {
+            background-color: #1e7d71;
+        }
 
         @media (max-width: 600px) {
-            .content {
-                padding: 0 10px;
-            }
-            .user-grid {
-                grid-template-columns: 1fr; /* Stack on mobile */
-                padding: 10px;
-            }
-            .user-grid .edit-btn, .user-grid .delete-btn, .user-grid .save-btn {
+            .user-table, .meme-table {
                 width: 100%;
-                max-width: 100px;
             }
-            .edit-form {
-                grid-column: span 1;
+            .user-table th, .user-table td, .meme-table th, .meme-table td {
+                padding: 3px;
+                font-size: 12px;
             }
-            .auth-form input {
-                width: 100%;
-                max-width: 250px;
+            .user-table .password, .meme-table .meme-description, .meme-table .meme-url {
+                width: auto;
             }
-            .auth-form button {
-                width: 100%;
-                max-width: 150px;
+            .meme-table .meme-type {
+                width: auto;
+            }
+            .meme-table .meme-owner {
+                width: auto;
             }
         }
     </style>
@@ -191,28 +238,140 @@
             {% endif %}
         {% else %}
             <h2>User List</h2>
-            <div class="user-grid">
-                {% for user in users %}
-                    <div class="username">{{ user.username }}</div>
-                    <div>{{ user.password }}</div>
-                    <div>
-                        <button class="edit-btn" onclick="toggleEdit('edit-form-{{ loop.index }}', '{{ user.username }}', '{{ user.password }}', this)">Edit</button>
-                    </div>
-                    <div>
-                        <form method="POST" style="display: inline;">
-                            <input type="hidden" name="delete_username" value="{{ user.username }}">
-                            <button type="submit" class="delete-btn" name="delete">Delete</button>
-                        </form>
-                    </div>
-                    <div class="edit-form" id="edit-form-{{ loop.index }}">
-                        <form method="POST">
-                            <input type="hidden" name="edit_username" value="{{ user.username }}">
-                            <input type="text" name="new_username" placeholder="New Username" value="{{ user.username }}" required>
-                            <input type="password" name="new_password" placeholder="New Password" value="{{ user.password }}" required>
-                            <button type="submit" class="save-btn" name="save">Save</button>
-                        </form>
-                    </div>
-                {% endfor %}
+            <table class="user-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Password</th>
+                        <th>Points</th>
+                        <th colspan="2">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                        <tr>
+                            <td class="user-id">{{ user.id }}</td>
+                            <td class="username">{{ user.username }}</td>
+                            <td class="password">{{ user.password }}</td>
+                            <td class="points">{{ user.points }}</td>
+                            <td>
+                                <button class="edit-btn" onclick="toggleEdit('edit-form-user-{{ loop.index }}', '{{ user.id }}', '{{ user.username }}', '{{ user.password }}', '{{ user.points }}', this)">Edit</button>
+                            </td>
+                            <td>
+                                <form method="POST" style="display: inline;">
+                                    <input type="hidden" name="delete_username" value="{{ user.username }}">
+                                    <button type="submit" class="delete-btn" name="delete">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                        <tr class="edit-form" id="edit-form-user-{{ loop.index }}" style="display: none;">
+                            <td colspan="6">
+                                <form method="POST">
+                                    <input type="hidden" name="edit_username" value="{{ user.username }}">
+                                    <input type="text" name="new_username" placeholder="New Username" value="{{ user.username }}" required>
+                                    <input type="password" name="new_password" placeholder="New Password" value="{{ user.password }}" required>
+                                    <input type="number" name="new_points" placeholder="Points" value="{{ user.points }}" min="0" required>
+                                    <button type="submit" class="save-btn" name="save">Save</button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    <tr>
+                        <td colspan="6">
+                            <button class="add-btn" onclick="toggleEdit('add-form-user', '', '', '', '', this)">Add User</button>
+                        </td>
+                    </tr>
+                    <tr class="edit-form" id="add-form-user" style="display: none;">
+                        <td colspan="6">
+                            <form method="POST">
+                                <input type="hidden" name="add_user" value="true">
+                                <input type="text" name="new_username" placeholder="New Username" required>
+                                <input type="password" name="new_password" placeholder="New Password" required>
+                                <input type="number" name="new_points" placeholder="Points" min="0" value="0" required>
+                                <button type="submit" class="save-btn" name="save_user">Save</button>
+                            </form>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>Meme List</h2>
+            <table class="meme-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                        <th>URL</th>
+                        <th>Owner</th>
+                        <th>Download Counts</th>
+                        <th colspan="2">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for meme in memes %}
+                        <tr>
+                            <td class="meme-id">{{ meme.meme_id }}</td>
+                            <td class="meme-type">{{ meme.type }}</td>
+                            <td class="meme-description">{{ meme.meme_description }}</td>
+                            <td class="meme-url">{{ meme.meme_url }}</td>
+                            <td class="meme-owner">
+                                {% set owner = users|selectattr('id', 'equalto', meme.owner)|first %}
+                                {{ owner.username if owner else 'Unknown' }}
+                            </td>
+                            <td class="meme-download-counts">{{ meme.meme_download_counts }}</td>
+                            <td>
+                                <button class="edit-btn" onclick="toggleEdit('edit-form-meme-{{ loop.index }}', '{{ meme.meme_id }}', '{{ meme.type }}', '{{ meme.meme_description }}', '{{ meme.meme_url }}', '{{ meme.meme_download_counts }}', '{{ meme.owner }}', this)">Edit</button>
+                            </td>
+                            <td>
+                                <form method="POST" style="display: inline;">
+                                    <input type="hidden" name="delete_meme_id" value="{{ meme.meme_id }}">
+                                    <button type="submit" class="delete-btn" name="delete_meme">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                        <tr class="edit-form" id="edit-form-meme-{{ loop.index }}" style="display: none;">
+                            <td colspan="8">
+                                <form method="POST">
+                                    <input type="hidden" name="edit_meme_id" value="{{ meme.meme_id }}">
+                                    <input type="text" name="new_type" placeholder="New Type" value="{{ meme.type }}" required>
+                                    <input type="text" name="new_description" placeholder="New Description" value="{{ meme.meme_description }}" required>
+                                    <input type="text" name="new_meme_url" placeholder="New URL" value="{{ meme.meme_url }}" required>
+                                    <input type="number" name="new_owner" placeholder="New Owner ID" value="{{ meme.owner }}" min="1" required>
+                                    <input type="number" name="new_download_counts" placeholder="Download Counts" value="{{ meme.meme_download_counts }}" min="0" required>
+                                    <button type="submit" class="save-btn" name="save_meme">Save</button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    <tr>
+                        <td colspan="8">
+                            <button class="add-btn" onclick="toggleEdit('add-form-meme', '', '', '', '', '', '', this)">Add Meme</button>
+                        </td>
+                    </tr>
+                    <tr class="edit-form" id="add-form-meme" style="display: none;">
+                        <td colspan="8">
+                            <form method="POST">
+                                <input type="hidden" name="add_meme" value="true">
+                                <input type="number" name="new_meme_id" placeholder="Meme ID" value="{{ next_meme_id }}" required>
+                                <input type="text" name="new_type" placeholder="New Type" required>
+                                <input type="text" name="new_description" placeholder="New Description" required>
+                                <input type="text" name="new_meme_url" placeholder="New URL" required>
+                                <input type="number" name="new_owner" placeholder="Owner ID" min="1" required>
+                                <input type="number" name="new_download_counts" placeholder="Download Counts" min="0" value="0" required>
+                                <button type="submit" class="save-btn" name="save_meme">Save</button>
+                            </form>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="upload-form">
+                <form method="POST" enctype="multipart/form-data">
+                    <input type="number" name="meme_id" placeholder="Meme ID" required>
+                    <input type="file" name="thumbnail" accept=".jpg,.jpeg" required>
+                    <button type="submit" name="upload_thumbnail">Upload Thumbnail</button>
+                </form>
             </div>
             {% if message %}
                 <div class="message">{{ message }}</div>
@@ -225,21 +384,33 @@
     </div>
 
     <script>
-        function toggleEdit(formId, username, password, button) {
+        function toggleEdit(formId, id, typeOrUsername, descriptionOrPassword, urlOrPoints, countsOrNothing, ownerOrNothing, button) {
             const form = document.getElementById(formId);
-            const isEditing = form.style.display === 'block';
+            const isEditing = form.style.display === 'table-row';
 
             if (isEditing) {
                 form.style.display = 'none';
-                button.textContent = 'Edit';
-                button.className = 'edit-btn';
+                button.textContent = formId.includes('add') ? 'Add ' + (formId.includes('user') ? 'User' : 'Meme') : 'Edit';
+                button.className = formId.includes('add') ? 'add-btn' : 'edit-btn';
             } else {
-                form.style.display = 'block';
+                form.style.display = 'table-row';
                 button.textContent = 'Save';
                 button.className = 'save-btn';
                 const inputs = form.getElementsByTagName('input');
-                inputs[1].value = username; // Set username
-                inputs[2].value = password; // Set password
+                if (!formId.includes('add')) {
+                    inputs[1].value = typeOrUsername; // Set type or username
+                    inputs[2].value = descriptionOrPassword; // Set description or password
+                    inputs[3].value = urlOrPoints; // Set URL or points
+                    if (formId.includes('meme')) {
+                        inputs[4].value = ownerOrNothing; // Set owner ID
+                        inputs[5].value = countsOrNothing; // Set download counts
+                    }
+                } else if (formId === 'add-form-meme') {
+                    // Pre-populate meme_id if not already set
+                    if (!inputs[1].value) {
+                        inputs[1].value = '{{ next_meme_id }}' || 1;
+                    }
+                }
             }
         }
     </script>
