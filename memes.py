@@ -3,6 +3,8 @@ import psycopg
 import os
 import re
 from datetime import datetime
+import uuid
+import os
 
 # Define the Blueprint
 memes_bp = Blueprint('memes', __name__)
@@ -192,9 +194,25 @@ def admin():
                 thumbnail = request.files.get('thumbnail')
                 if meme_id.isdigit() and thumbnail and thumbnail.filename.endswith(('.jpg', '.jpeg')):
                     try:
-                        # Placeholder: Add thumbnail handling logic (e.g., save to static or database)
-                        # Note: This requires additional server-side storage setup
-                        message = f"Thumbnail upload for meme {meme_id} initiated (implementation pending)."
+                        # Create thumbnails directory if it doesn't exist
+                        thumbnail_dir = os.path.join(os.path.dirname(__file__), 'static', 'thumbnails')
+                        os.makedirs(thumbnail_dir, exist_ok=True)
+                        
+                        # Generate a unique filename to avoid conflicts
+                        unique_filename = f"{uuid.uuid4()}_{thumbnail.filename}"
+                        thumbnail_path = os.path.join(thumbnail_dir, unique_filename)
+                        
+                        # Save the file
+                        thumbnail.save(thumbnail_path)
+                        
+                        # Update meme with thumbnail URL (relative path)
+                        thumbnail_url = f"/static/thumbnails/{unique_filename}"
+                        with psycopg.connect(DATABASE_URL) as conn:
+                            with conn.cursor() as cur:
+                                cur.execute('UPDATE memes SET meme_url = %s WHERE meme_id = %s', (thumbnail_url, int(meme_id)))
+                                conn.commit()
+                        
+                        message = f"Thumbnail uploaded successfully for meme {meme_id} at {thumbnail_url}"
                     except Exception as e:
                         message = f"Error uploading thumbnail: {str(e)}"
 
