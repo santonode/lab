@@ -363,17 +363,17 @@
 
         function handleDownload(memeId, url) {
             fetch(`/add_point_and_redirect/${memeId}/${encodeURIComponent(url)}`, {
-                method: 'GET', // Match the route's GET method
+                method: 'POST', // Match the route's POST method
                 headers: {
                     'Content-Type': 'application/json',
                 },
             })
             .then(response => {
                 if (response.ok) {
-                    // If the server redirect works, let it handle the download
-                    window.location.href = response.url; // Follow the redirect
+                    // Follow the redirect directly
+                    window.location.href = response.url || get_download_url(url); // Fallback to transformed URL
                 } else if (response.status === 403) {
-                    // Fallback to opening the original URL in a new tab for manual download
+                    // Fallback to opening the original URL in a new tab
                     window.open(url, '_blank');
                     alert('Download failed due to a restriction. Please complete any verification in the new tab and download manually.');
                 } else {
@@ -382,9 +382,20 @@
             })
             .catch(error => {
                 console.error('Error during download:', error);
-                alert('An error occurred. Please try again or download manually from the link.');
+                alert('An error occurred. Please try again or download manually from the link: ' + url);
                 window.open(url, '_blank'); // Last resort fallback
             });
+        }
+
+        // Client-side get_download_url function to match server logic
+        function get_download_url(url) {
+            if (url && url.includes('drive.google.com/file/d/')) {
+                const match = url.match(/https:\/\/drive.google.com\/file\/d\/([^\/]+)\/view\?usp=drive_link/);
+                if (match) {
+                    return `https://drive.google.com/uc?export=download&id=${match[1]}`;
+                }
+            }
+            return url;
         }
     </script>
 </body>
