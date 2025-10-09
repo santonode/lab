@@ -381,7 +381,7 @@
         function handleDownload(memeId, description) {
             // Construct video filename using the raw description and append .mp4
             const videoFilename = `${description}.mp4`;
-            const videoUrl = `/static/videos/${videoFilename}`;
+            const videoUrl = `/static/videos/${encodeURIComponent(videoFilename)}`;
             
             fetch(`/increment_download/${memeId}`, {
                 method: 'POST',
@@ -392,10 +392,28 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Add a small delay to ensure the count is updated before redirect
-                    setTimeout(() => {
-                        window.location.href = videoUrl;
-                    }, 500);
+                    // Force download using a blob
+                    fetch(videoUrl)
+                        .then(response => response.blob())
+                        .then(blob => {
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = videoFilename;
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            window.URL.revokeObjectURL(url);
+                        })
+                        .catch(error => {
+                            console.error('Error fetching file:', error);
+                            const newTab = window.open(videoUrl, '_blank');
+                            if (newTab) {
+                                alert('An error occurred. Please try again or download manually from the new tab: ' + videoUrl);
+                            } else {
+                                alert('Popup blocked. Please allow popups and try again, or download manually from: ' + videoUrl);
+                            }
+                        });
                 } else {
                     throw new Error(data.error || 'Unknown error');
                 }
