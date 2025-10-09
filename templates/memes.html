@@ -121,11 +121,15 @@
             width: 5%;
             min-width: 60px;
         }
-        .meme-table th:nth-child(3), .meme-table td:nth-child(3) { /* Description / Owner */
-            width: 80%;
+        .meme-table th:nth-child(3), .meme-table td:nth-child(3) { /* Thumb */
+            width: 10%;
+            min-width: 80px;
+        }
+        .meme-table th:nth-child(4), .meme-table td:nth-child(4) { /* Description / Owner */
+            width: 70%;
             min-width: 150px;
         }
-        .meme-table th:nth-child(4), .meme-table td:nth-child(4) { /* Counts */
+        .meme-table th:nth-child(5), .meme-table td:nth-child(5) { /* Counts */
             width: 10%;
             min-width: 50px;
         }
@@ -147,6 +151,9 @@
                 min-width: 40px;
             }
             .meme-table th:nth-child(3), .meme-table td:nth-child(3) {
+                min-width: 80px;
+            }
+            .meme-table th:nth-child(4), .meme-table td:nth-child(4) {
                 min-width: 150px;
             }
             .header .user-info {
@@ -256,6 +263,7 @@
                 <tr>
                     <th><a href="?sort=id&order={{ 'asc' if request.args.get('sort') != 'id' or request.args.get('order') == 'desc' else 'desc' }}">ID</a></th>
                     <th><a href="?sort=type&order={{ 'asc' if request.args.get('sort') != 'type' or request.args.get('order') == 'desc' else 'desc' }}">Type</a></th>
+                    <th><a href="?sort=thumb&order={{ 'asc' if request.args.get('sort') != 'thumb' or request.args.get('order') == 'desc' else 'desc' }}">Thumb</a></th>
                     <th><a href="?sort=description&order={{ 'asc' if request.args.get('sort') != 'description' or request.args.get('order') == 'desc' else 'desc' }}">Description / Owner</a></th>
                     <th><a href="?sort=counts&order={{ 'asc' if request.args.get('sort') != 'counts' or request.args.get('order') == 'desc' else 'desc' }}">Counts</a></th>
                 </tr>
@@ -269,6 +277,8 @@
                     {% set sorted_memes = memes|sort(attribute='meme_id', reverse=(sort_order == 'desc')) %}
                 {% elif sort_key == 'type' %}
                     {% set sorted_memes = memes|sort(attribute='type', reverse=(sort_order == 'desc')) %}
+                {% elif sort_key == 'thumb' %}
+                    {% set sorted_memes = memes|sort(attribute='thumbnail_url', reverse=(sort_order == 'desc')) %}
                 {% elif sort_key == 'description' %}
                     {% set sorted_memes = memes|sort(attribute='meme_description', reverse=(sort_order == 'desc')) %}
                 {% else %}
@@ -278,10 +288,17 @@
                     <tr>
                         <td class="meme-id">{{ meme.meme_id }}</td>
                         <td class="meme-type">{{ meme.type }}</td>
+                        <td class="meme-thumb">
+                            {% if meme.thumbnail_url %}
+                                <img src="{{ url_for('static', filename='thumbnails/' ~ meme.meme_id|string ~ '.jpg') }}" alt="Thumbnail" style="max-width: 100px; max-height: 100px;">
+                            {% else %}
+                                No thumbnail
+                            {% endif %}
+                        </td>
                         <td class="meme-description">
                             {{ meme.meme_description if meme.meme_description else 'No description' }}<br>
-                            {% if meme.meme_url %}
-                                <a class="download-link" href="javascript:void(0)" onclick="handleDownload('{{ meme.meme_id }}', '{{ meme.meme_url }}')">Download</a> /
+                            {% if meme.thumbnail_url and meme.meme_description %}
+                                <a class="download-link" href="javascript:void(0)" onclick="handleDownload('{{ meme.meme_id }}', '{{ meme.meme_description }}')">Download</a> /
                             {% endif %}
                             {% set owner = users|selectattr('id', 'equalto', meme.owner)|first %}
                             {{ owner.username if owner else 'Unknown' }}
@@ -361,53 +378,42 @@
             });
         });
 
-        function handleDownload(memeId, url) {
-            fetch(`/add_point_and_redirect/${memeId}`, {
+        function handleDownload(memeId, description) {
+            // Construct video filename using the raw description and append .mp4
+            const videoFilename = `${description}.mp4`;
+            const videoUrl = `/static/videos/${videoFilename}`;
+            
+            fetch(`/increment_download/${memeId}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ url: url }),
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
                     // Add a small delay to ensure the count is updated before redirect
                     setTimeout(() => {
-                        window.location.href = data.download_url;
+                        window.location.href = videoUrl;
                     }, 500);
-                } else if (data.error && data.error.includes('403')) {
-                    // Enhanced fallback for Safari
-                    const newTab = window.open(url, '_blank');
-                    if (newTab) {
-                        alert('Download failed due to a restriction. Please complete any CAPTCHA or verification in the new tab and download manually.');
-                    } else {
-                        alert('Popup blocked. Please allow popups and try again, or download manually from: ' + url);
-                    }
                 } else {
                     throw new Error(data.error || 'Unknown error');
                 }
             })
             .catch(error => {
                 console.error('Error during download:', error);
-                const newTab = window.open(url, '_blank');
+                const newTab = window.open(videoUrl, '_blank');
                 if (newTab) {
-                    alert('An error occurred. Please try again or download manually from the new tab: ' + url);
+                    alert('An error occurred. Please try again or download manually from the new tab: ' + videoUrl);
                 } else {
-                    alert('Popup blocked. Please allow popups and try again, or download manually from: ' + url);
+                    alert('Popup blocked. Please allow popups and try again, or download manually from: ' + videoUrl);
                 }
             });
         }
 
-        // Client-side get_download_url function to match server logic
+        // Client-side get_download_url function (not needed for local files)
         function get_download_url(url) {
-            if (url && url.includes('drive.google.com/file/d/')) {
-                const match = url.match(/https:\/\/drive.google.com\/file\/d\/([^\/]+)\/view\?usp=drive_link/);
-                if (match) {
-                    return `https://drive.google.com/uc?export=download&id=${match[1]}`;
-                }
-            }
-            return url;
+            return url; // No transformation needed for local files
         }
     </script>
 </body>
