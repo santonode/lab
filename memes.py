@@ -291,19 +291,27 @@ def register():
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-# Increment download count and redirect to download URL
-@memes_bp.route('/add_point_and_redirect/<int:meme_id>/<path:url>', methods=['POST'])
-def add_point_and_redirect(meme_id, url):
+# Increment download count and return download URL
+@memes_bp.route('/add_point_and_redirect/<int:meme_id>', methods=['POST'])
+def add_point_and_redirect(meme_id):
+    url = request.json.get('url')  # Expect URL in request body
+    if not url:
+        current_app.logger.error("No URL provided in request body")
+        return jsonify({'success': False, 'error': 'No URL provided'}), 400
+
     try:
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
                 cur.execute('UPDATE memes SET meme_download_counts = meme_download_counts + 1 WHERE meme_id = %s', (meme_id,))
+                if cur.rowcount == 0:
+                    current_app.logger.error(f"Meme ID {meme_id} not found")
+                    return jsonify({'success': False, 'error': 'Meme not found'}), 404
                 conn.commit()
                 current_app.logger.debug(f"Incremented download count for meme_id {meme_id}")
         # Transform URL if it's a Google Drive link
         transformed_url = get_download_url(url)
-        current_app.logger.debug(f"Redirecting to: {transformed_url}")
-        return redirect(transformed_url, code=302)
+        current_app.logger.debug(f"Returning download URL: {transformed_url}")
+        return jsonify({'success': True, 'download_url': transformed_url})
     except psycopg.Error as e:
         current_app.logger.error(f"Database error in add_point_and_redirect: {str(e)}")
         return jsonify({'success': False, 'error': 'Database error updating download count'}), 500
