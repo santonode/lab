@@ -2,9 +2,8 @@ from flask import Blueprint, render_template, request, session, redirect, url_fo
 import psycopg
 import os
 import re
-import requests
 from datetime import datetime
-import uuid
+import hashlib
 
 # Define the Blueprint
 memes_bp = Blueprint('memes', __name__)
@@ -293,7 +292,26 @@ def hash_password(password):
     import hashlib
     return hashlib.sha256(password.encode()).hexdigest()
 
-# Increment download count route
+# Increment download count and redirect to download URL
+@memes_bp.route('/add_point_and_redirect/<int:meme_id>/<path:url>')
+def add_point_and_redirect(meme_id, url):
+    try:
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute('UPDATE memes SET meme_download_counts = meme_download_counts + 1 WHERE meme_id = %s', (meme_id,))
+                conn.commit()
+                current_app.logger.debug(f"Incremented download count for meme_id {meme_id}")
+        # Transform URL if it's a Google Drive link
+        transformed_url = get_download_url(url)
+        return redirect(transformed_url, code=302)
+    except psycopg.Error as e:
+        current_app.logger.error(f"Database error in add_point_and_redirect: {str(e)}")
+        return "Error updating download count", 500
+    except Exception as e:
+        current_app.logger.error(f"Unexpected error in add_point_and_redirect: {str(e)}")
+        return "Error updating download count", 500
+
+# Increment download count (for AJAX calls)
 @memes_bp.route('/increment_download/<int:meme_id>', methods=['POST'])
 def increment_download(meme_id):
     try:
@@ -303,59 +321,23 @@ def increment_download(meme_id):
                 if cur.rowcount == 0:
                     return jsonify({'success': False, 'error': 'Meme not found.'})
                 conn.commit()
+                current_app.logger.debug(f"Incremented download count for meme_id {meme_id}")
                 return jsonify({'success': True})
     except psycopg.Error as e:
         current_app.logger.error(f"Database error incrementing download count: {str(e)}")
-        return jsonify({'success': False, 'error': 'Database error.'})
+        return jsonify({'success': False, 'error': 'Database error.'}), 500
     except Exception as e:
         current_app.logger.error(f"Unexpected error incrementing download count: {str(e)}")
-        return jsonify({'success': False, 'error': 'Unexpected error.'})
+        return jsonify({'success': False, 'error': 'Unexpected error.'}), 500
 
 # Custom filter for download URL
-def get_download_url(meme):
-    meme_url = meme.get('meme_url', '')
-    if 'drive.google.com' in meme_url:
-        match = re.search(r'/d/([a-zA-Z0-9-_]+)', meme_url) or re.search(r'id=([a-zA-Z0-9-_]+)', meme_url)
+def get_download_url(url):
+    if url and 'drive.google.com/file/d/' in url:
+        match = re.search(r'https://drive.google.com/file/d/([^/]+)/view\?usp=drive_link', url)
         if match:
-            asset_id = match.group(1)
-            return f"https://drive.google.com/uc?export=download&id={asset_id}"
-    return meme_url
-
-# Download file route
-@memes_bp.route('/download/<int:meme_id>')
-def download_file(meme_id):
-    try:
-        with psycopg.connect(DATABASE_URL) as conn:
-            with conn.cursor() as cur:
-                cur.execute('SELECT meme_url FROM memes WHERE meme_id = %s', (meme_id,))
-                result = cur.fetchone()
-                if not result:
-                    return "File not found", 404
-                meme_url = result[0]
-                download_url = get_download_url({'meme_url': meme_url})
-
-        # Fetch the file from the download URL
-        response = requests.get(download_url, stream=True)
-        if response.status_code == 200:
-            # Set headers for file download
-            filename = f"{meme_id}.jpg"  # Adjust extension based on meme.type if needed
-            headers = {
-                'Content-Disposition': f'attachment; filename={filename}',
-                'Content-Type': 'application/octet-stream'
-            }
-            return response.content, 200, headers
-        else:
-            current_app.logger.error(f"Failed to fetch file from {download_url}, status: {response.status_code}")
-            return "Failed to fetch file", 500
-    except psycopg.Error as e:
-        current_app.logger.error(f"Database error in download_file: {str(e)}")
-        return "Database error", 500
-    except requests.RequestException as e:
-        current_app.logger.error(f"Request error in download_file: {str(e)}")
-        return "Failed to fetch file", 500
-    except Exception as e:
-        current_app.logger.error(f"Unexpected error in download_file: {str(e)}", exc_info=True)
-        return "Unexpected error", 500
+            file_id = match.group(1)
+            return f"https://drive.google.com/uc?export=download&id={file_id}"
+    return url
 
 # Database initialization function (to be called in app context)
 def init_db():
