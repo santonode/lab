@@ -21,7 +21,7 @@ def get_next_id(table_name):
     try:
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
-                cur.execute(f"SELECT COALESCE(MAX({table_name}_id), 0) + 1 FROM {table_name}")
+                cur.execute(f"SELECT COALESCE(MAX(meme_id), 0) + 1 FROM {table_name}")
                 return cur.fetchone()[0]
     except psycopg.Error as e:
         current_app.logger.error(f"Database error in get_next_id: {str(e)}")
