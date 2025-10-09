@@ -326,23 +326,8 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Fetch the file as a blob for cross-browser compatibility
-                    fetch(url)
-                    .then(response => response.blob())
-                    .then(blob => {
-                        const blobUrl = URL.createObjectURL(blob);
-                        const link = document.createElement('a');
-                        link.href = blobUrl;
-                        link.download = `${memeId}.jpg`;  // Suggest a filename (adjust extension as needed)
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        URL.revokeObjectURL(blobUrl);  // Cleanup to avoid memory leaks
-                    })
-                    .catch(error => {
-                        console.error('Error fetching file for download:', error);
-                        alert('Failed to download the file. Please try again.');
-                    });
+                    // Use server-side proxy for download
+                    window.location.href = `/download/${memeId}`;
                 } else {
                     console.error('Failed to increment download count:', data.error);
                     alert('Failed to update download count. Please try again.');
