@@ -321,8 +321,6 @@ def get_download_url(meme):
             return f"https://drive.google.com/uc?export=download&id={asset_id}"
     return meme_url
 
-memes_bp.jinja_env.filters['get_download_url'] = get_download_url
-
 # Download file route
 @memes_bp.route('/download/<int:meme_id>')
 def download_file(meme_id):
