@@ -279,13 +279,12 @@
                         <td class="meme-id">{{ meme.meme_id }}</td>
                         <td class="meme-type">{{ meme.type }}</td>
                         <td class="meme-description">
-                            {% set download_url = meme|get_download_url %}
-                            {% if meme.thumbnail_url %}
-                                <img src="{{ meme.thumbnail_url }}" alt="{{ meme.meme_description }}" style="max-width: 100px; max-height: 100px;" onerror="this.style.display='none';">
-                            {% elif download_url and download_url != meme.meme_url %}
-                                <a class="download-link" href="javascript:void(0)" onclick="incrementAndDownload('{{ meme.meme_id }}', '{{ download_url }}')">{{ meme.meme_description }}</a>
-                            {% else %}
-                                <a href="{{ meme.meme_url }}" target="_blank">{{ meme.meme_description }}</a>
+                            {% set download_url = meme.meme_url|get_download_url %}
+                            {{ meme.meme_description if meme.meme_description else 'No description' }}<br>
+                            {% if download_url and download_url != meme.meme_url %}
+                                <a class="download-link" href="javascript:void(0)" onclick="incrementAndDownload('{{ meme.meme_id }}', '{{ download_url }}')">Download</a>
+                            {% elif meme.meme_url %}
+                                <a href="{{ meme.meme_url }}" target="_blank">View</a>
                             {% endif %} /
                             {% set owner = users|selectattr('id', 'equalto', meme.owner)|first %}
                             {{ owner.username if owner else 'Unknown' }}
@@ -344,6 +343,7 @@
             });
         }
 
+        // Show popup for first-time guest users
         document.addEventListener('DOMContentLoaded', function() {
             const username = "{{ username }}";
             const userType = "{{ user_type }}";
@@ -360,6 +360,7 @@
             document.getElementById('popupOverlay').style.display = 'none';
         }
 
+        // Handle form submission and refresh
         document.getElementById('guestForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const formData = new FormData(this);
@@ -379,14 +380,14 @@
                     if (data.success) {
                         window.location.reload();
                     } else {
-                        closePopup();
+                        closePopup(); // Close popup on failure to allow retry
                     }
                 }
             })
             .catch(error => {
                 console.error('Error during registration:', error);
                 alert('An error occurred. Please try again.');
-                closePopup();
+                closePopup(); // Close popup on error to allow retry
             });
         });
     </script>
