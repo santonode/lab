@@ -372,18 +372,30 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    window.location.href = data.download_url; // Initiate download with the returned URL
+                    // Add a small delay to ensure the count is updated before redirect
+                    setTimeout(() => {
+                        window.location.href = data.download_url;
+                    }, 500);
                 } else if (data.error && data.error.includes('403')) {
-                    window.open(url, '_blank');
-                    alert('Download failed due to a restriction. Please complete any verification in the new tab and download manually.');
+                    // Enhanced fallback for Safari
+                    const newTab = window.open(url, '_blank');
+                    if (newTab) {
+                        alert('Download failed due to a restriction. Please complete any CAPTCHA or verification in the new tab and download manually.');
+                    } else {
+                        alert('Popup blocked. Please allow popups and try again, or download manually from: ' + url);
+                    }
                 } else {
                     throw new Error(data.error || 'Unknown error');
                 }
             })
             .catch(error => {
                 console.error('Error during download:', error);
-                alert('An error occurred. Please try again or download manually from the link: ' + url);
-                window.open(url, '_blank'); // Last resort fallback
+                const newTab = window.open(url, '_blank');
+                if (newTab) {
+                    alert('An error occurred. Please try again or download manually from the new tab: ' + url);
+                } else {
+                    alert('Popup blocked. Please allow popups and try again, or download manually from: ' + url);
+                }
             });
         }
 
