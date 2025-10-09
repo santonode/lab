@@ -123,7 +123,7 @@
             {% for meme in memes %}
                 <div class="meme-item">
                     <h3>{{ meme.meme_description }}</h3>
-                    <img src="{{ meme.thumbnail_url if meme.thumbnail_url else get_download_url(meme) }}" alt="{{ meme.meme_description }}" onerror="this.src='{{ get_download_url(meme) }}';">
+                    <img src="{{ get_download_url(meme) }}" alt="{{ meme.meme_description }}">
                     <p>Type: {{ meme.type }}</p>
                     <p>Owner: {% set owner = users|selectattr('id', 'equalto', meme.owner)|first %}{{ owner.username if owner else 'Unknown' }}</p>
                     <p>Downloads: {{ meme.meme_download_counts }}</p>
