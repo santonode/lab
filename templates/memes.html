@@ -279,7 +279,7 @@
                         <td class="meme-id">{{ meme.meme_id }}</td>
                         <td class="meme-type">{{ meme.type }}</td>
                         <td class="meme-description">
-                            {% set download_url = meme.meme_url|get_download_url %}
+                            {% set download_url = meme|get_download_url %}
                             {{ meme.meme_description if meme.meme_description else 'No description' }}<br>
                             {% if download_url and download_url != meme.meme_url %}
                                 <a class="download-link" href="javascript:void(0)" onclick="incrementAndDownload('{{ meme.meme_id }}', '{{ download_url }}')">Download</a>
