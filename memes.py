@@ -289,7 +289,6 @@ def register():
 
 # Helper function to hash password
 def hash_password(password):
-    import hashlib
     return hashlib.sha256(password.encode()).hexdigest()
 
 # Increment download count and redirect to download URL
@@ -303,6 +302,7 @@ def add_point_and_redirect(meme_id, url):
                 current_app.logger.debug(f"Incremented download count for meme_id {meme_id}")
         # Transform URL if it's a Google Drive link
         transformed_url = get_download_url(url)
+        current_app.logger.debug(f"Redirecting to: {transformed_url}")
         return redirect(transformed_url, code=302)
     except psycopg.Error as e:
         current_app.logger.error(f"Database error in add_point_and_redirect: {str(e)}")
