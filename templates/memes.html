@@ -279,13 +279,10 @@
                         <td class="meme-id">{{ meme.meme_id }}</td>
                         <td class="meme-type">{{ meme.type }}</td>
                         <td class="meme-description">
-                            {% set download_url = meme|get_download_url %}
                             {{ meme.meme_description if meme.meme_description else 'No description' }}<br>
-                            {% if download_url and download_url != meme.meme_url %}
-                                <a class="download-link" href="javascript:void(0)" onclick="incrementAndDownload('{{ meme.meme_id }}', '{{ download_url }}')">Download</a>
-                            {% elif meme.meme_url %}
-                                <a href="{{ meme.meme_url }}" target="_blank">View</a>
-                            {% endif %} /
+                            {% if meme.meme_url %}
+                                <a class="download-link" href="{{ url_for('memes.add_point_and_redirect', meme_id=meme.meme_id, url=meme.meme_url) }}" download>Download</a> /
+                            {% endif %}
                             {% set owner = users|selectattr('id', 'equalto', meme.owner)|first %}
                             {{ owner.username if owner else 'Unknown' }}
                         </td>
@@ -316,29 +313,6 @@
     <div id="popupOverlay" class="popup-overlay"></div>
 
     <script>
-        function incrementAndDownload(memeId, url) {
-            fetch(`/increment_download/${memeId}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Use server-side proxy for download
-                    window.location.href = `/download/${memeId}`;
-                } else {
-                    console.error('Failed to increment download count:', data.error);
-                    alert('Failed to update download count. Please try again.');
-                }
-            })
-            .catch(error => {
-                console.error('Error during increment and download:', error);
-                alert('An error occurred. Please try again.');
-            });
-        }
-
         // Show popup for first-time guest users
         document.addEventListener('DOMContentLoaded', function() {
             const username = "{{ username }}";
