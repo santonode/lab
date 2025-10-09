@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, session, redirect, url_fo
 import psycopg
 import os
 import re
+import requests
 from datetime import datetime
 import uuid
 
@@ -312,15 +313,51 @@ def increment_download(meme_id):
 
 # Custom filter for download URL
 def get_download_url(meme):
-    # Extract Google Drive asset ID from meme_url
     meme_url = meme.get('meme_url', '')
     if 'drive.google.com' in meme_url:
-        # Match common Google Drive URL formats
         match = re.search(r'/d/([a-zA-Z0-9-_]+)', meme_url) or re.search(r'id=([a-zA-Z0-9-_]+)', meme_url)
         if match:
             asset_id = match.group(1)
             return f"https://drive.google.com/uc?export=download&id={asset_id}"
-    return meme_url  # Fallback to original URL if not a Google Drive link
+    return meme_url
+
+memes_bp.jinja_env.filters['get_download_url'] = get_download_url
+
+# Download file route
+@memes_bp.route('/download/<int:meme_id>')
+def download_file(meme_id):
+    try:
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT meme_url FROM memes WHERE meme_id = %s', (meme_id,))
+                result = cur.fetchone()
+                if not result:
+                    return "File not found", 404
+                meme_url = result[0]
+                download_url = get_download_url({'meme_url': meme_url})
+
+        # Fetch the file from the download URL
+        response = requests.get(download_url, stream=True)
+        if response.status_code == 200:
+            # Set headers for file download
+            filename = f"{meme_id}.jpg"  # Adjust extension based on meme.type if needed
+            headers = {
+                'Content-Disposition': f'attachment; filename={filename}',
+                'Content-Type': 'application/octet-stream'
+            }
+            return response.content, 200, headers
+        else:
+            current_app.logger.error(f"Failed to fetch file from {download_url}, status: {response.status_code}")
+            return "Failed to fetch file", 500
+    except psycopg.Error as e:
+        current_app.logger.error(f"Database error in download_file: {str(e)}")
+        return "Database error", 500
+    except requests.RequestException as e:
+        current_app.logger.error(f"Request error in download_file: {str(e)}")
+        return "Failed to fetch file", 500
+    except Exception as e:
+        current_app.logger.error(f"Unexpected error in download_file: {str(e)}", exc_info=True)
+        return "Unexpected error", 500
 
 # Database initialization function (to be called in app context)
 def init_db():
