@@ -4,7 +4,6 @@ import os
 import re
 from datetime import datetime
 import uuid
-import os
 
 # Define the Blueprint
 memes_bp = Blueprint('memes', __name__)
@@ -192,21 +191,28 @@ def admin():
             elif 'upload_thumbnail' in request.form:
                 meme_id = request.form.get('meme_id')
                 thumbnail = request.files.get('thumbnail')
-                if meme_id.isdigit() and thumbnail and thumbnail.filename.endswith(('.jpg', '.jpeg')):
+                if meme_id.isdigit() and thumbnail and thumbnail.filename.lower().endswith(('.jpg', '.jpeg')):
                     try:
                         # Create thumbnails directory if it doesn't exist
                         thumbnail_dir = os.path.join(os.path.dirname(__file__), 'static', 'thumbnails')
                         os.makedirs(thumbnail_dir, exist_ok=True)
                         
-                        # Generate a unique filename to avoid conflicts
-                        unique_filename = f"{uuid.uuid4()}_{thumbnail.filename}"
-                        thumbnail_path = os.path.join(thumbnail_dir, unique_filename)
+                        # Base filename using meme_id
+                        base_filename = f"{meme_id}.jpg"
+                        filename = base_filename
+                        counter = 1
+                        
+                        # Check for existing files and append counter if needed
+                        while os.path.exists(os.path.join(thumbnail_dir, filename)):
+                            filename = f"{meme_id}_{counter}.jpg"
+                            counter += 1
                         
                         # Save the file
+                        thumbnail_path = os.path.join(thumbnail_dir, filename)
                         thumbnail.save(thumbnail_path)
                         
                         # Update meme with thumbnail URL (relative path)
-                        thumbnail_url = f"/static/thumbnails/{unique_filename}"
+                        thumbnail_url = f"/static/thumbnails/{filename}"
                         with psycopg.connect(DATABASE_URL) as conn:
                             with conn.cursor() as cur:
                                 cur.execute('UPDATE memes SET meme_url = %s WHERE meme_id = %s', (thumbnail_url, int(meme_id)))
