@@ -12,8 +12,8 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL environment variable must be set")
 
-# Admin password (should be moved to environment variable in production)
-ADMIN_PASS = "admin123"  # Replace with os.environ.get('ADMIN_PASS', 'default') for security
+# Admin password from environment variable, with fallback for local testing
+ADMIN_PASS = os.environ.get('ADMIN_PASS', 'admin123')
 
 # Function to get the next ID for a table
 def get_next_id(table_name):
@@ -94,6 +94,7 @@ def admin():
     if request.method == 'POST':
         if 'admin_pass' in request.form:
             admin_pass = request.form.get('admin_pass', '')
+            current_app.logger.debug(f"Attempted admin password: '{admin_pass}', Expected from env: '{ADMIN_PASS}'")  # Debug log
             if admin_pass == ADMIN_PASS:
                 session['admin_authenticated'] = True
                 authenticated = True
