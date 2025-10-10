@@ -27,11 +27,6 @@ def get_next_id(table_name):
         current_app.logger.error(f"Database error in get_next_id: {str(e)}")
         return 1
 
-# Custom Jinja2 filter to check if a file exists in the static folder
-def file_exists_filter(filename):
-    file_path = os.path.join(current_app.static_folder, filename)
-    return os.path.isfile(file_path)
-
 # Memes route
 @memes_bp.route('/memes')
 def memes():
