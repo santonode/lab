@@ -115,15 +115,15 @@
             background-color: #f1f1f1;
         }
         .meme-table th:nth-child(1), .meme-table td:nth-child(1) { /* ID */
-            width: 3%;
+            width: 5%;
             min-width: 40px;
         }
         .meme-table th:nth-child(2), .meme-table td:nth-child(2) { /* Type */
-            width: 3%;
+            width: 5%;
             min-width: 60px;
         }
         .meme-table th:nth-child(3), .meme-table td:nth-child(3) { /* Thumb */
-            width: 5%;
+            width: 10%;
             min-width: 80px;
         }
         .meme-table th:nth-child(4), .meme-table td:nth-child(4) { /* Description / Owner */
@@ -316,16 +316,12 @@
                         <td class="meme-id">{{ meme.meme_id }}</td>
                         <td class="meme-type">{{ meme.type }}</td>
                         <td class="meme-thumb">
-                            {% if file_exists('thumbnails/' ~ meme.meme_id|string ~ '.jpg') %}
-                                <img src="{{ url_for('static', filename='thumbnails/' ~ meme.meme_id|string ~ '.jpg') }}" alt="{{ meme.meme_description }}" class="meme-thumb-img">
-                            {% else %}
-                                -
-                            {% endif %}
+                            <img src="{{ url_for('static', filename='thumbnails/' ~ meme.meme_id|string ~ '.jpg') }}" alt="Thumbnail" class="meme-thumb-img">
                         </td>
                         <td class="meme-description">
                             {{ meme.meme_description if meme.meme_description else 'No description' }}<br>
-                            {% if meme.meme_description and file_exists('videos/' ~ meme.meme_description|replace(' ', '_')|lower ~ '.mp4') %}
-                                <a class="download-link" href="javascript:void(0)" onclick="handleDownload('{{ meme.meme_id }}', '{{ meme.meme_description|replace(' ', '_')|lower }}')">Download</a> /
+                            {% if meme.meme_description %}
+                                <a class="download-link" href="javascript:void(0)" onclick="handleDownload('{{ meme.meme_id }}', '{{ meme.meme_description }}')">Download</a> /
                             {% endif %}
                             {% set owner = users|selectattr('id', 'equalto', meme.owner)|first %}
                             {{ owner.username if owner else 'Unknown' }}
@@ -357,6 +353,7 @@
     <div id="popupOverlay" class="popup-overlay"></div>
 
     <script>
+        // Show popup for first-time guest users
         document.addEventListener('DOMContentLoaded', function() {
             const username = "{{ username }}";
             const user_type = "{{ user_type }}";
@@ -373,6 +370,7 @@
             document.getElementById('popupOverlay').style.display = 'none';
         }
 
+        // Handle form submission and refresh
         document.getElementById('guestForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const formData = new FormData(this);
@@ -380,25 +378,31 @@
                 method: 'POST',
                 body: formData
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.message) {
                     alert(data.message);
                     if (data.success) {
                         window.location.reload();
                     } else {
-                        closePopup();
+                        closePopup(); // Close popup on failure to allow retry
                     }
                 }
             })
             .catch(error => {
                 console.error('Error during registration:', error);
                 alert('An error occurred. Please try again.');
-                closePopup();
+                closePopup(); // Close popup on error to allow retry
             });
         });
 
         function handleDownload(memeId, description) {
+            // Construct video filename using the raw description and append .mp4
             const videoFilename = `${description}.mp4`;
             const videoUrl = `/static/videos/${encodeURIComponent(videoFilename)}`;
             
@@ -411,6 +415,7 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
+                    // Force download using a blob
                     fetch(videoUrl)
                         .then(response => response.blob())
                         .then(blob => {
@@ -445,6 +450,11 @@
                     alert('Popup blocked. Please allow popups and try again, or download manually from: ' + videoUrl);
                 }
             });
+        }
+
+        // Client-side get_download_url function (not needed for local files)
+        function get_download_url(url) {
+            return url; // No transformation needed for local files
         }
     </script>
 </body>
