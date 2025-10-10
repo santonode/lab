@@ -27,6 +27,14 @@ def get_next_id(table_name):
         current_app.logger.error(f"Database error in get_next_id: {str(e)}")
         return 1
 
+# Custom Jinja2 filter to check if a file exists in the static folder
+def file_exists_filter(filename):
+    file_path = os.path.join(current_app.static_folder, filename)
+    return os.path.isfile(file_path)
+
+# Register the custom filter
+memes_bp.jinja_env.filters['file_exists'] = file_exists_filter
+
 # Memes route
 @memes_bp.route('/memes')
 def memes():
@@ -319,6 +327,12 @@ def increment_download(meme_id):
     except Exception as e:
         current_app.logger.error(f"Unexpected error incrementing download count: {str(e)}")
         return jsonify({'success': False, 'error': 'Unexpected error.'}), 500
+
+# Check if a file exists in the static folder
+@memes_bp.route('/check_file/<path:filename>')
+def check_file(filename):
+    file_path = os.path.join(current_app.static_folder, filename)
+    return jsonify({'exists': os.path.isfile(file_path)})
 
 # Custom filter for download URL
 def get_download_url(url):
