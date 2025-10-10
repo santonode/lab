@@ -11,7 +11,7 @@ app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))  # Use env var or gener
 app.register_blueprint(wurdle_bp)
 app.register_blueprint(memes_bp)
 
-# Define the get_download_url function (updated to accept a URL string)
+# Define the get_download_url function
 def get_download_url(url):
     if url and 'drive.google.com/file/d/' in url:
         match = re.search(r'https://drive.google.com/file/d/([^/]+)/view\?usp=drive_link', url)
@@ -22,7 +22,7 @@ def get_download_url(url):
 
 # Register custom filters with the app's Jinja environment
 app.jinja_env.filters['get_download_url'] = get_download_url
-app.jinja_env.filters['file_exists'] = file_exists_filter
+app.jinja_env.filters['file_exists'] = file_exists_filter  # Ensure this line matches the function name
 
 # Initialize database within app context with error handling
 try:
