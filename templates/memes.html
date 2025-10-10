@@ -95,7 +95,7 @@
             border: 1px solid #ddd;
             padding: 8px;
             text-align: left;
-            vertical-align: middle; /* Align content vertically in the middle */
+            vertical-align: middle;
         }
         .meme-table th {
             background-color: #f2f2f2;
@@ -115,15 +115,15 @@
             background-color: #f1f1f1;
         }
         .meme-table th:nth-child(1), .meme-table td:nth-child(1) { /* ID */
-            width: 3%; /* Reduced 40% from 5% */
+            width: 3%;
             min-width: 40px;
         }
         .meme-table th:nth-child(2), .meme-table td:nth-child(2) { /* Type */
-            width: 3%; /* Reduced 40% from 5% */
+            width: 3%;
             min-width: 60px;
         }
         .meme-table th:nth-child(3), .meme-table td:nth-child(3) { /* Thumb */
-            width: 5%; /* Reduced 50% from 10% */
+            width: 5%;
             min-width: 80px;
         }
         .meme-table th:nth-child(4), .meme-table td:nth-child(4) { /* Description / Owner */
@@ -135,9 +135,9 @@
             min-width: 50px;
         }
         .meme-thumb img {
-            max-height: calc(1.5em + 16px); /* Adjust based on text height (1.5em) + padding (8px top + 8px bottom) */
-            width: auto; /* Maintain aspect ratio */
-            vertical-align: middle; /* Align with text */
+            max-height: calc(1.5em + 16px);
+            width: auto;
+            vertical-align: middle;
         }
         @media (max-width: 600px) {
             .content {
@@ -171,10 +171,9 @@
                 white-space: nowrap;
             }
             .meme-thumb img {
-                max-height: calc(1.2em + 4px); /* Adjusted for smaller screens */
+                max-height: calc(1.2em + 4px);
             }
         }
-        /* Safari mobile specific media query */
         @media only screen and (-webkit-min-device-pixel-ratio: 2) and (max-width: 767px) {
             .meme-table {
                 table-layout: fixed;
@@ -182,16 +181,16 @@
                 max-width: 100vw;
                 min-width: 0;
                 overflow-x: auto;
-                -webkit-overflow-scrolling: touch; /* Smooth scrolling for Safari mobile */
+                -webkit-overflow-scrolling: touch;
             }
             .meme-table th, .meme-table td {
-                width: min-content !important; /* Adjust to content width */
-                min-width: 0; /* Allow columns to shrink */
+                width: min-content !important;
+                min-width: 0;
             }
         }
         @media (max-width: 600px) {
             .footer {
-                position: relative; /* Adjust footer behavior on small screens */
+                position: relative;
             }
         }
         .footer {
@@ -219,7 +218,6 @@
         .download-link:hover {
             text-decoration: underline;
         }
-        /* Popup styles */
         .popup {
             display: none;
             position: fixed;
@@ -307,7 +305,7 @@
                 {% elif sort_key == 'type' %}
                     {% set sorted_memes = memes|sort(attribute='type', reverse=(sort_order == 'desc')) %}
                 {% elif sort_key == 'thumb' %}
-                    {% set sorted_memes = memes|sort(attribute='meme_id', reverse=(sort_order == 'desc')) %} <!-- Sort by meme_id as proxy -->
+                    {% set sorted_memes = memes|sort(attribute='meme_id', reverse=(sort_order == 'desc')) %}
                 {% elif sort_key == 'description' %}
                     {% set sorted_memes = memes|sort(attribute='meme_description', reverse=(sort_order == 'desc')) %}
                 {% else %}
@@ -319,15 +317,15 @@
                         <td class="meme-type">{{ meme.type }}</td>
                         <td class="meme-thumb">
                             {% if file_exists('thumbnails/' ~ meme.meme_id|string ~ '.jpg') %}
-                                <img src="{{ url_for('static', filename='thumbnails/' ~ meme.meme_id|string ~ '.jpg') }}" alt="Thumbnail" class="meme-thumb-img">
+                                <img src="{{ url_for('static', filename='thumbnails/' ~ meme.meme_id|string ~ '.jpg') }}" alt="{{ meme.meme_description }}" class="meme-thumb-img">
                             {% else %}
                                 -
                             {% endif %}
                         </td>
                         <td class="meme-description">
                             {{ meme.meme_description if meme.meme_description else 'No description' }}<br>
-                            {% if meme.meme_description and file_exists('videos/' ~ meme.meme_description|string ~ '.mp4') %}
-                                <a class="download-link" href="javascript:void(0)" onclick="handleDownload('{{ meme.meme_id }}', '{{ meme.meme_description }}')">Download</a> /
+                            {% if meme.meme_description and file_exists('videos/' ~ meme.meme_description|replace(' ', '_')|lower ~ '.mp4') %}
+                                <a class="download-link" href="javascript:void(0)" onclick="handleDownload('{{ meme.meme_id }}', '{{ meme.meme_description|replace(' ', '_')|lower }}')">Download</a> /
                             {% endif %}
                             {% set owner = users|selectattr('id', 'equalto', meme.owner)|first %}
                             {{ owner.username if owner else 'Unknown' }}
@@ -359,7 +357,6 @@
     <div id="popupOverlay" class="popup-overlay"></div>
 
     <script>
-        // Show popup for first-time guest users
         document.addEventListener('DOMContentLoaded', function() {
             const username = "{{ username }}";
             const user_type = "{{ user_type }}";
@@ -376,7 +373,6 @@
             document.getElementById('popupOverlay').style.display = 'none';
         }
 
-        // Handle form submission and refresh
         document.getElementById('guestForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const formData = new FormData(this);
@@ -384,31 +380,25 @@
                 method: 'POST',
                 body: formData
             })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                return response.json();
-            })
+            .then(response => response.json())
             .then(data => {
                 if (data.message) {
                     alert(data.message);
                     if (data.success) {
                         window.location.reload();
                     } else {
-                        closePopup(); // Close popup on failure to allow retry
+                        closePopup();
                     }
                 }
             })
             .catch(error => {
                 console.error('Error during registration:', error);
                 alert('An error occurred. Please try again.');
-                closePopup(); // Close popup on error to allow retry
+                closePopup();
             });
         });
 
         function handleDownload(memeId, description) {
-            // Construct video filename using the raw description and append .mp4
             const videoFilename = `${description}.mp4`;
             const videoUrl = `/static/videos/${encodeURIComponent(videoFilename)}`;
             
@@ -421,7 +411,6 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Force download using a blob
                     fetch(videoUrl)
                         .then(response => response.blob())
                         .then(blob => {
@@ -456,11 +445,6 @@
                     alert('Popup blocked. Please allow popups and try again, or download manually from: ' + videoUrl);
                 }
             });
-        }
-
-        // Client-side get_download_url function (not needed for local files)
-        function get_download_url(url) {
-            return url; // No transformation needed for local files
         }
     </script>
 </body>
