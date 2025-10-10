@@ -22,7 +22,8 @@ def get_download_url(url):
 
 # Register custom filters with the app's Jinja environment
 app.jinja_env.filters['get_download_url'] = get_download_url
-app.jinja_env.filters['file_exists'] = file_exists_filter  # Ensure this line matches the function name
+app.jinja_env.filters['file_exists'] = file_exists_filter
+print(f"Registered filters: {list(app.jinja_env.filters.keys())}")  # Debug statement
 
 # Initialize database within app context with error handling
 try:
