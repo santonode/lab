@@ -32,9 +32,6 @@ def file_exists_filter(filename):
     file_path = os.path.join(current_app.static_folder, filename)
     return os.path.isfile(file_path)
 
-# Register the custom filter
-memes_bp.jinja_env.filters['file_exists'] = file_exists_filter
-
 # Memes route
 @memes_bp.route('/memes')
 def memes():
