@@ -1,6 +1,6 @@
 from flask import Flask
 from wurdle import wurdle_bp
-from memes import memes_bp, init_db, file_exists_filter
+from memes import memes_bp, init_db
 import os
 import re
 
@@ -11,7 +11,7 @@ app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))  # Use env var or gener
 app.register_blueprint(wurdle_bp)
 app.register_blueprint(memes_bp)
 
-# Define the get_download_url function
+# Define the get_download_url function (updated to accept a URL string)
 def get_download_url(url):
     if url and 'drive.google.com/file/d/' in url:
         match = re.search(r'https://drive.google.com/file/d/([^/]+)/view\?usp=drive_link', url)
@@ -20,10 +20,8 @@ def get_download_url(url):
             return f"https://drive.google.com/uc?export=download&id={file_id}"
     return url
 
-# Register custom filters with the app's Jinja environment
+# Register the custom filter with the app's Jinja environment
 app.jinja_env.filters['get_download_url'] = get_download_url
-app.jinja_env.filters['file_exists'] = file_exists_filter
-print(f"Registered filters: {list(app.jinja_env.filters.keys())}")  # Debug statement
 
 # Initialize database within app context with error handling
 try:
