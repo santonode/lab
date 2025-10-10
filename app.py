@@ -1,6 +1,6 @@
 from flask import Flask
 from wurdle import wurdle_bp
-from memes import memes_bp, init_db
+from memes import memes_bp, init_db, file_exists_filter
 import os
 import re
 
@@ -20,8 +20,9 @@ def get_download_url(url):
             return f"https://drive.google.com/uc?export=download&id={file_id}"
     return url
 
-# Register the custom filter with the app's Jinja environment
+# Register custom filters with the app's Jinja environment
 app.jinja_env.filters['get_download_url'] = get_download_url
+app.jinja_env.filters['file_exists'] = file_exists_filter
 
 # Initialize database within app context with error handling
 try:
