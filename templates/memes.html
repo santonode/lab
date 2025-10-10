@@ -95,6 +95,7 @@
             border: 1px solid #ddd;
             padding: 8px;
             text-align: left;
+            vertical-align: middle; /* Align content vertically in the middle */
         }
         .meme-table th {
             background-color: #f2f2f2;
@@ -133,6 +134,11 @@
             width: 10%;
             min-width: 50px;
         }
+        .meme-thumb img {
+            max-height: calc(1.5em + 16px); /* Adjust based on text height (1.5em) + padding (8px top + 8px bottom) */
+            width: auto; /* Maintain aspect ratio */
+            vertical-align: middle; /* Align with text */
+        }
         @media (max-width: 600px) {
             .content {
                 padding: 0 10px;
@@ -163,6 +169,9 @@
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
+            }
+            .meme-thumb img {
+                max-height: calc(1.2em + 4px); /* Adjusted for smaller screens */
             }
         }
         .footer {
@@ -289,7 +298,7 @@
                         <td class="meme-id">{{ meme.meme_id }}</td>
                         <td class="meme-type">{{ meme.type }}</td>
                         <td class="meme-thumb">
-                            <img src="{{ url_for('static', filename='thumbnails/' ~ meme.meme_id|string ~ '.jpg') }}" alt="Thumbnail" style="max-width: 100px; max-height: 100px;" onerror="this.style.display='none';this.parentNode.innerHTML='No thumbnail';">
+                            <img src="{{ url_for('static', filename='thumbnails/' ~ meme.meme_id|string ~ '.jpg') }}" alt="Thumbnail" class="meme-thumb-img" onerror="this.style.display='none';this.parentNode.innerHTML='No thumbnail';">
                         </td>
                         <td class="meme-description">
                             {{ meme.meme_description if meme.meme_description else 'No description' }}<br>
