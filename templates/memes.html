@@ -317,9 +317,7 @@
                     <tr>
                         <td class="meme-id">{{ meme.meme_id }}</td>
                         <td class="meme-type">{{ meme.type }}</td>
-                        <td class="meme-thumb">
-                            <img src="{{ url_for('static', filename='thumbnails/' ~ meme.meme_id|string ~ '.jpg') }}" alt="Thumbnail" class="meme-thumb-img" onerror="this.style.display='none';this.parentNode.innerHTML='-';">
-                        </td>
+                        <td class="meme-thumb" data-meme-id="{{ meme.meme_id }}"></td>
                         <td class="meme-description">
                             {{ meme.meme_description if meme.meme_description else 'No description' }}<br>
                             {% if meme.meme_description %}
@@ -365,6 +363,30 @@
                 document.getElementById('popupOverlay').style.display = 'block';
                 sessionStorage.setItem('showedGuestPopup', 'true');
             }
+
+            // Check thumbnail existence and load or display "-"
+            document.querySelectorAll('.meme-thumb').forEach(cell => {
+                const memeId = cell.getAttribute('data-meme-id');
+                const img = document.createElement('img');
+                img.className = 'meme-thumb-img';
+                img.alt = 'Thumbnail';
+                const thumbUrl = `{{ url_for('static', filename='thumbnails/') }}${memeId}.jpg`;
+                fetch(thumbUrl, { method: 'HEAD', cache: 'no-cache' })
+                    .then(response => {
+                        if (response.ok) {
+                            img.src = thumbUrl;
+                            img.style.maxHeight = 'calc(1.5em + 16px)';
+                            img.style.width = 'auto';
+                            img.style.verticalAlign = 'middle';
+                            cell.appendChild(img);
+                        } else {
+                            cell.textContent = '-';
+                        }
+                    })
+                    .catch(() => {
+                        cell.textContent = '-';
+                    });
+            });
         });
 
         function closePopup() {
@@ -408,30 +430,47 @@
             const videoFilename = `${description}.mp4`;
             const videoUrl = `/static/videos/${encodeURIComponent(videoFilename)}`;
             
-            fetch(`/increment_download/${memeId}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Force download using a blob
-                    fetch(videoUrl)
-                        .then(response => response.blob())
-                        .then(blob => {
-                            const url = window.URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = videoFilename;
-                            document.body.appendChild(a);
-                            a.click();
-                            a.remove();
-                            window.URL.revokeObjectURL(url);
+            // Check if video exists with a HEAD request
+            fetch(videoUrl, { method: 'HEAD', cache: 'no-cache' })
+                .then(response => {
+                    if (response.ok) {
+                        fetch(`/increment_download/${memeId}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                // Force download using a blob
+                                fetch(videoUrl)
+                                    .then(response => response.blob())
+                                    .then(blob => {
+                                        const url = window.URL.createObjectURL(blob);
+                                        const a = document.createElement('a');
+                                        a.href = url;
+                                        a.download = videoFilename;
+                                        document.body.appendChild(a);
+                                        a.click();
+                                        a.remove();
+                                        window.URL.revokeObjectURL(url);
+                                    })
+                                    .catch(error => {
+                                        console.error('Error fetching file:', error);
+                                        const newTab = window.open(videoUrl, '_blank');
+                                        if (newTab) {
+                                            alert('An error occurred. Please try again or download manually from the new tab: ' + videoUrl);
+                                        } else {
+                                            alert('Popup blocked. Please allow popups and try again, or download manually from: ' + videoUrl);
+                                        }
+                                    });
+                            } else {
+                                throw new Error(data.error || 'Unknown error');
+                            }
                         })
                         .catch(error => {
-                            console.error('Error fetching file:', error);
+                            console.error('Error during download:', error);
                             const newTab = window.open(videoUrl, '_blank');
                             if (newTab) {
                                 alert('An error occurred. Please try again or download manually from the new tab: ' + videoUrl);
@@ -439,19 +478,14 @@
                                 alert('Popup blocked. Please allow popups and try again, or download manually from: ' + videoUrl);
                             }
                         });
-                } else {
-                    throw new Error(data.error || 'Unknown error');
-                }
-            })
-            .catch(error => {
-                console.error('Error during download:', error);
-                const newTab = window.open(videoUrl, '_blank');
-                if (newTab) {
-                    alert('An error occurred. Please try again or download manually from the new tab: ' + videoUrl);
-                } else {
-                    alert('Popup blocked. Please allow popups and try again, or download manually from: ' + videoUrl);
-                }
-            });
+                    } else {
+                        alert(`Video file "${videoFilename}" not found.`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking video existence:', error);
+                    alert(`Unable to verify video "${videoFilename}". Please try again later.`);
+                });
         }
 
         // Client-side get_download_url function (not needed for local files)
