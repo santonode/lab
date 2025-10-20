@@ -33,13 +33,13 @@ def memes():
     try:
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
-                cur.execute('SELECT meme_id, meme_url, meme_description, meme_download_counts, type, owner FROM memes ORDER BY meme_id')
+                cur.execute('SELECT meme_id, meme_url, meme_description, meme_download_counts, type, owner, thumbnail_url FROM memes ORDER BY meme_id')
                 rows = cur.fetchall()
                 current_app.logger.debug(f"Raw query results: {rows}")
                 memes = []
                 for row in rows:
-                    if not isinstance(row, tuple) or len(row) != 6:  # Adjusted to 6 columns (removed thumbnail_url)
-                        current_app.logger.error(f"Invalid row format: {row}, expected 6 columns")
+                    if not isinstance(row, tuple) or len(row) != 7:  # Adjusted to 7 columns including thumbnail_url
+                        current_app.logger.error(f"Invalid row format: {row}, expected 7 columns")
                         continue
                     memes.append({
                         'meme_id': row[0],
@@ -47,7 +47,8 @@ def memes():
                         'meme_description': row[2],
                         'meme_download_counts': row[3],
                         'type': row[4],
-                        'owner': row[5]
+                        'owner': row[5],
+                        'thumbnail_url': row[6]
                     })
                 cur.execute('SELECT id, username FROM users')
                 users = [{'id': row[0], 'username': row[1]} for row in cur.fetchall()]
@@ -160,12 +161,13 @@ def admin():
                 new_meme_url = request.form.get('new_meme_url')
                 new_owner = request.form.get('new_owner')
                 new_download_counts = request.form.get('new_download_counts')
+                new_thumbnail_url = request.form.get('new_thumbnail_url', '')  # Optional, defaults to empty
                 if meme_id.isdigit() and new_owner.isdigit():
                     try:
                         with psycopg.connect(DATABASE_URL) as conn:
                             with conn.cursor() as cur:
-                                cur.execute('UPDATE memes SET type = %s, meme_description = %s, meme_url = %s, owner = %s, meme_download_counts = %s WHERE meme_id = %s',
-                                          (new_type, new_description, new_meme_url, int(new_owner), int(new_download_counts), int(meme_id)))
+                                cur.execute('UPDATE memes SET type = %s, meme_description = %s, meme_url = %s, owner = %s, meme_download_counts = %s, thumbnail_url = %s WHERE meme_id = %s',
+                                          (new_type, new_description, new_meme_url, int(new_owner), int(new_download_counts), new_thumbnail_url, int(meme_id)))
                                 conn.commit()
                                 message = f"Meme {meme_id} updated successfully!"
                     except psycopg.Error as e:
@@ -177,12 +179,13 @@ def admin():
                 new_meme_url = request.form.get('new_meme_url')
                 new_owner = request.form.get('new_owner')
                 new_download_counts = request.form.get('new_download_counts', 0)
+                new_thumbnail_url = request.form.get('new_thumbnail_url', '')  # Optional
                 if new_meme_id.isdigit() and new_owner.isdigit():
                     try:
                         with psycopg.connect(DATABASE_URL) as conn:
                             with conn.cursor() as cur:
-                                cur.execute('INSERT INTO memes (meme_id, meme_url, meme_description, meme_download_counts, type, owner) VALUES (%s, %s, %s, %s, %s, %s)',
-                                          (int(new_meme_id), new_meme_url, new_description, int(new_download_counts), new_type, int(new_owner)))
+                                cur.execute('INSERT INTO memes (meme_id, meme_url, meme_description, meme_download_counts, type, owner, thumbnail_url) VALUES (%s, %s, %s, %s, %s, %s, %s)',
+                                          (int(new_meme_id), new_meme_url, new_description, int(new_download_counts), new_type, int(new_owner), new_thumbnail_url))
                                 conn.commit()
                                 message = f"Meme {new_meme_id} added manually successfully!"
                                 next_meme_id = get_next_id('memes')  # Update for next insertion
@@ -202,6 +205,12 @@ def admin():
                         thumbnail_path = os.path.join(thumbnail_dir, filename)
                         thumbnail.save(thumbnail_path)
                         
+                        # Update thumbnail_url in database
+                        with psycopg.connect(DATABASE_URL) as conn:
+                            with conn.cursor() as cur:
+                                cur.execute('UPDATE memes SET thumbnail_url = %s WHERE meme_id = %s',
+                                          (f"/static/thumbnails/{filename}", int(meme_id)))
+                                conn.commit()
                         message = f"Thumbnail uploaded successfully for meme {meme_id} at /static/thumbnails/{filename}"
                     except Exception as e:
                         message = f"Error uploading thumbnail: {str(e)}"
@@ -228,8 +237,8 @@ def admin():
                             new_meme_id = get_next_id('memes')
                             with psycopg.connect(DATABASE_URL) as conn:
                                 with conn.cursor() as cur:
-                                    cur.execute('INSERT INTO memes (meme_id, meme_url, meme_description, meme_download_counts, type, owner) VALUES (%s, %s, %s, %s, %s, %s)',
-                                              (new_meme_id, '', filename, 0, meme_type, 1))  # Use selected meme_type
+                                    cur.execute('INSERT INTO memes (meme_id, meme_url, meme_description, meme_download_counts, type, owner, thumbnail_url) VALUES (%s, %s, %s, %s, %s, %s, %s)',
+                                              (new_meme_id, '', filename, 0, meme_type, 3, ''))  # Default owner to 3, thumbnail_url empty
                                     conn.commit()
                                     message = f"Video uploaded successfully for meme {new_meme_id} at /static/videos/{filename}"
                                     next_meme_id = get_next_id('memes')  # Update for next insertion
@@ -242,13 +251,13 @@ def admin():
     try:
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
-                cur.execute('SELECT meme_id, meme_url, meme_description, meme_download_counts, type, owner FROM memes ORDER BY meme_id')
+                cur.execute('SELECT meme_id, meme_url, meme_description, meme_download_counts, type, owner, thumbnail_url FROM memes ORDER BY meme_id')
                 rows = cur.fetchall()
                 current_app.logger.debug(f"Raw query results for admin: {rows}")
                 memes = []
                 for row in rows:
-                    if not isinstance(row, tuple) or len(row) != 6:  # Adjusted to 6 columns
-                        current_app.logger.error(f"Invalid row format in admin: {row}, expected 6 columns")
+                    if not isinstance(row, tuple) or len(row) != 7:  # Adjusted to 7 columns
+                        current_app.logger.error(f"Invalid row format in admin: {row}, expected 7 columns")
                         continue
                     memes.append({
                         'meme_id': row[0],
@@ -256,7 +265,8 @@ def admin():
                         'meme_description': row[2],
                         'meme_download_counts': row[3],
                         'type': row[4],
-                        'owner': row[5]
+                        'owner': row[5],
+                        'thumbnail_url': row[6]
                     })
                 cur.execute('SELECT id, username, password, points FROM users')
                 users = [{'id': row[0], 'username': row[1], 'password': row[2], 'points': row[3]} for row in cur.fetchall()]
@@ -376,17 +386,18 @@ def init_db():
                         meme_url TEXT NOT NULL,
                         meme_description TEXT NOT NULL,
                         meme_download_counts INTEGER DEFAULT 0,
-                        type TEXT DEFAULT 'image',
-                        owner INTEGER DEFAULT 1,
+                        type TEXT DEFAULT 'Other',
+                        owner INTEGER DEFAULT 3,
+                        thumbnail_url TEXT,
                         UNIQUE (meme_url),
-                        CONSTRAINT memes_type_check CHECK (type IN ('image', 'GM', 'GN', 'OTHER', 'CRYPTO', 'GRAWK'))
+                        CONSTRAINT memes_type_check CHECK (type IN ('GM', 'GN', 'OTHER', 'CRYPTO', 'GRAWK'))
                     )
                 ''')
                 cur.execute('SELECT COUNT(*) FROM memes')
                 count = cur.fetchone()[0]
                 if count == 0:
-                    cur.execute('INSERT INTO memes (meme_url, meme_description, type, owner) VALUES (%s, %s, %s, %s)',
-                                ('https://drive.google.com/file/d/1abc123XYZ/view', 'Funny Cat', 'image', 1))
+                    cur.execute('INSERT INTO memes (meme_url, meme_description, type, owner, thumbnail_url) VALUES (%s, %s, %s, %s, %s)',
+                                ('https://drive.google.com/file/d/1abc123XYZ/view', 'Funny Cat', 'GM', 3, ''))
                     conn.commit()
                     current_app.logger.info(f"Initialized memes table with {count + 1} records")
                 else:
