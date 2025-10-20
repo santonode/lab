@@ -233,12 +233,13 @@ def admin():
                             video_path = os.path.join(video_dir, filename)
                             video.save(video_path)
                             
-                            # Insert into database with next meme ID and selected type
+                            # Insert into database with next meme ID and selected type, using base filename for description
                             new_meme_id = get_next_id('memes')
+                            base_description = os.path.splitext(filename)[0]  # Remove extension, keep first half
                             with psycopg.connect(DATABASE_URL) as conn:
                                 with conn.cursor() as cur:
                                     cur.execute('INSERT INTO memes (meme_id, meme_url, meme_description, meme_download_counts, type, owner, thumbnail_url) VALUES (%s, %s, %s, %s, %s, %s, %s)',
-                                              (new_meme_id, '', filename, 0, meme_type, 3, ''))  # Default owner to 3, thumbnail_url empty
+                                              (new_meme_id, '', base_description, 0, meme_type, 3, ''))
                                     conn.commit()
                                     message = f"Video uploaded successfully for meme {new_meme_id} at /static/videos/{filename}"
                                     next_meme_id = get_next_id('memes')  # Update for next insertion
@@ -358,7 +359,7 @@ def increment_download(meme_id):
         return jsonify({'success': False, 'error': 'Database error.'}), 500
     except Exception as e:
         current_app.logger.error(f"Unexpected error incrementing download count: {str(e)}")
-        return jsonify({'success': False, 'error': 'Unexpected error.'}), 500
+        return jsonify({'success': false, 'error': 'Unexpected error.'}), 500
 
 # Check if a file exists in the static folder
 @memes_bp.route('/check_file/<path:filename>')
