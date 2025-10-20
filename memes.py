@@ -184,7 +184,7 @@ def admin():
                                 cur.execute('INSERT INTO memes (meme_id, meme_url, meme_description, meme_download_counts, type, owner) VALUES (%s, %s, %s, %s, %s, %s)',
                                           (int(new_meme_id), new_meme_url, new_description, int(new_download_counts), new_type, int(new_owner)))
                                 conn.commit()
-                                message = f"Meme {new_meme_id} added successfully!"
+                                message = f"Meme {new_meme_id} added manually successfully!"
                                 next_meme_id = get_next_id('memes')  # Update for next insertion
                     except psycopg.Error as e:
                         message = f"Database error adding meme: {str(e)}"
@@ -205,6 +205,35 @@ def admin():
                         message = f"Thumbnail uploaded successfully for meme {meme_id} at /static/thumbnails/{filename}"
                     except Exception as e:
                         message = f"Error uploading thumbnail: {str(e)}"
+            elif 'upload_video' in request.form:
+                video = request.files.get('video')
+                if video and video.filename.lower().endswith('.mp4'):
+                    # Check file size (25MB limit)
+                    max_size = 25 * 1024 * 1024  # 25MB in bytes
+                    if video.content_length and video.content_length > max_size:
+                        message = "Video upload failed: File size exceeds 25MB limit."
+                    else:
+                        try:
+                            # Create videos directory if it doesn't exist
+                            video_dir = os.path.join(os.path.dirname(__file__), 'static', 'videos')
+                            os.makedirs(video_dir, exist_ok=True)
+                            
+                            # Use original filename
+                            filename = video.filename
+                            video_path = os.path.join(video_dir, filename)
+                            video.save(video_path)
+                            
+                            # Insert into database with next meme ID
+                            new_meme_id = get_next_id('memes')
+                            with psycopg.connect(DATABASE_URL) as conn:
+                                with conn.cursor() as cur:
+                                    cur.execute('INSERT INTO memes (meme_id, meme_url, meme_description, meme_download_counts, type, owner) VALUES (%s, %s, %s, %s, %s, %s)',
+                                              (new_meme_id, '', filename, 0, 'video', 1))  # Default owner ID to 1
+                                    conn.commit()
+                                    message = f"Video uploaded successfully for meme {new_meme_id} at /static/videos/{filename}"
+                                    next_meme_id = get_next_id('memes')  # Update for next insertion
+                        except Exception as e:
+                            message = f"Error uploading video: {str(e)}"
 
     if not authenticated:
         return render_template('admin.html', message=message, authenticated=authenticated, next_meme_id=next_meme_id)
