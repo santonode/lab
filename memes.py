@@ -4,6 +4,7 @@ import os
 import re
 from datetime import datetime
 import hashlib
+import cv2  # Added for video frame extraction and resizing
 
 # Define the Blueprint
 memes_bp = Blueprint('memes', __name__)
@@ -235,16 +236,42 @@ def admin():
                             
                             # Insert into database with next meme ID and selected type, using base filename for description
                             new_meme_id = get_next_id('memes')
-                            base_description = os.path.splitext(filename)[0]  # Remove extension, keep first half
+                            base_description = os.path.splitext(filename)[0]  # Remove extension
                             with psycopg.connect(DATABASE_URL) as conn:
                                 with conn.cursor() as cur:
                                     cur.execute('INSERT INTO memes (meme_id, meme_url, meme_description, meme_download_counts, type, owner, thumbnail_url) VALUES (%s, %s, %s, %s, %s, %s, %s)',
                                               (new_meme_id, '', base_description, 0, meme_type, 3, ''))
                                     conn.commit()
-                                    message = f"Video uploaded successfully for meme {new_meme_id} at /static/videos/{filename}"
-                                    next_meme_id = get_next_id('memes')  # Update for next insertion
+                                    
+                            # Generate thumbnail from the first frame
+                            cap = cv2.VideoCapture(video_path)
+                            if cap.isOpened():
+                                ret, frame = cap.read()  # Read the first frame
+                                if ret:
+                                    # Resize to 200x200 pixels
+                                    frame = cv2.resize(frame, (200, 200), interpolation=cv2.INTER_AREA)
+                                    # Create thumbnails directory if it doesn't exist
+                                    thumbnail_dir = os.path.join(os.path.dirname(__file__), 'static', 'thumbnails')
+                                    os.makedirs(thumbnail_dir, exist_ok=True)
+                                    # Save as JPG with meme_id as filename
+                                    thumbnail_path = os.path.join(thumbnail_dir, f"{new_meme_id}.jpg")
+                                    cv2.imwrite(thumbnail_path, frame)
+                                    # Update thumbnail_url in database
+                                    with psycopg.connect(DATABASE_URL) as conn:
+                                        with conn.cursor() as cur:
+                                            cur.execute('UPDATE memes SET thumbnail_url = %s WHERE meme_id = %s',
+                                                      (f"/static/thumbnails/{new_meme_id}.jpg", new_meme_id))
+                                            conn.commit()
+                                else:
+                                    current_app.logger.error(f"Could not read first frame from {video_path}")
+                                cap.release()
+                            else:
+                                current_app.logger.error(f"Could not open video file {video_path}")
+                            
+                            message = f"Video uploaded successfully for meme {new_meme_id} at /static/videos/{filename}"
+                            next_meme_id = get_next_id('memes')  # Update for next insertion
                         except Exception as e:
-                            message = f"Error uploading video: {str(e)}"
+                            message = f"Error uploading video or generating thumbnail: {str(e)}"
 
     if not authenticated:
         return render_template('admin.html', message=message, authenticated=authenticated, next_meme_id=next_meme_id)
@@ -359,7 +386,7 @@ def increment_download(meme_id):
         return jsonify({'success': False, 'error': 'Database error.'}), 500
     except Exception as e:
         current_app.logger.error(f"Unexpected error incrementing download count: {str(e)}")
-        return jsonify({'success': false, 'error': 'Unexpected error.'}), 500
+        return jsonify({'success': False, 'error': 'Unexpected error.'}), 500
 
 # Check if a file exists in the static folder
 @memes_bp.route('/check_file/<path:filename>')
