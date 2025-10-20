@@ -207,7 +207,8 @@ def admin():
                         message = f"Error uploading thumbnail: {str(e)}"
             elif 'upload_video' in request.form:
                 video = request.files.get('video')
-                if video and video.filename.lower().endswith('.mp4'):
+                meme_type = request.form.get('meme_type')
+                if video and video.filename.lower().endswith('.mp4') and meme_type in ['GM', 'GN', 'OTHER', 'CRYPTO', 'GRAWK']:
                     # Check file size (25MB limit)
                     max_size = 25 * 1024 * 1024  # 25MB in bytes
                     if video.content_length and video.content_length > max_size:
@@ -223,12 +224,12 @@ def admin():
                             video_path = os.path.join(video_dir, filename)
                             video.save(video_path)
                             
-                            # Insert into database with next meme ID
+                            # Insert into database with next meme ID and selected type
                             new_meme_id = get_next_id('memes')
                             with psycopg.connect(DATABASE_URL) as conn:
                                 with conn.cursor() as cur:
                                     cur.execute('INSERT INTO memes (meme_id, meme_url, meme_description, meme_download_counts, type, owner) VALUES (%s, %s, %s, %s, %s, %s)',
-                                              (new_meme_id, '', filename, 0, 'video', 1))  # Default owner ID to 1
+                                              (new_meme_id, '', filename, 0, meme_type, 1))  # Use selected meme_type
                                     conn.commit()
                                     message = f"Video uploaded successfully for meme {new_meme_id} at /static/videos/{filename}"
                                     next_meme_id = get_next_id('memes')  # Update for next insertion
@@ -377,7 +378,8 @@ def init_db():
                         meme_download_counts INTEGER DEFAULT 0,
                         type TEXT DEFAULT 'image',
                         owner INTEGER DEFAULT 1,
-                        UNIQUE (meme_url)
+                        UNIQUE (meme_url),
+                        CONSTRAINT memes_type_check CHECK (type IN ('image', 'GM', 'GN', 'OTHER', 'CRYPTO', 'GRAWK'))
                     )
                 ''')
                 cur.execute('SELECT COUNT(*) FROM memes')
