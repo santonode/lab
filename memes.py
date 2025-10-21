@@ -162,17 +162,26 @@ def admin():
                 new_meme_url = request.form.get('new_meme_url')
                 new_owner = request.form.get('new_owner')
                 new_download_counts = request.form.get('new_download_counts')
-                new_thumbnail_url = request.form.get('new_thumbnail_url', '')  # Optional, defaults to empty
                 if meme_id.isdigit() and new_owner.isdigit():
-                    try:
-                        with psycopg.connect(DATABASE_URL) as conn:
-                            with conn.cursor() as cur:
-                                cur.execute('UPDATE memes SET type = %s, meme_description = %s, meme_url = %s, owner = %s, meme_download_counts = %s, thumbnail_url = %s WHERE meme_id = %s',
-                                          (new_type, new_description, new_meme_url, int(new_owner), int(new_download_counts), new_thumbnail_url, int(meme_id)))
-                                conn.commit()
-                                message = f"Meme {meme_id} updated successfully!"
-                    except psycopg.Error as e:
-                        message = f"Database error updating meme: {str(e)}"
+                    if not new_meme_url or not new_meme_url.strip():
+                        message = "Meme URL/Tags cannot be empty."
+                    else:
+                        try:
+                            with psycopg.connect(DATABASE_URL) as conn:
+                                with conn.cursor() as cur:
+                                    cur.execute('UPDATE memes SET type = %s, meme_description = %s, meme_url = %s, owner = %s, meme_download_counts = %s WHERE meme_id = %s',
+                                              (new_type, new_description, new_meme_url, int(new_owner), int(new_download_counts), int(meme_id)))
+                                    if cur.rowcount == 0:
+                                        message = f"No meme found with ID {meme_id} to update."
+                                    else:
+                                        conn.commit()
+                                        message = f"Meme {meme_id} updated successfully!"
+                                        current_app.logger.info(f"Updated meme {meme_id} with URL/Tags: {new_meme_url}")
+                        except psycopg.Error as e:
+                            message = f"Database error updating meme: {str(e)}"
+                            current_app.logger.error(f"Database error updating meme {meme_id}: {str(e)}")
+                else:
+                    message = "Invalid meme ID or owner ID."
             elif 'add_meme' in request.form:
                 new_meme_id = request.form.get('new_meme_id')
                 new_type = request.form.get('new_type')
@@ -180,41 +189,20 @@ def admin():
                 new_meme_url = request.form.get('new_meme_url')
                 new_owner = request.form.get('new_owner')
                 new_download_counts = request.form.get('new_download_counts', 0)
-                new_thumbnail_url = request.form.get('new_thumbnail_url', '')  # Optional
                 if new_meme_id.isdigit() and new_owner.isdigit():
-                    try:
-                        with psycopg.connect(DATABASE_URL) as conn:
-                            with conn.cursor() as cur:
-                                cur.execute('INSERT INTO memes (meme_id, meme_url, meme_description, meme_download_counts, type, owner, thumbnail_url) VALUES (%s, %s, %s, %s, %s, %s, %s)',
-                                          (int(new_meme_id), new_meme_url, new_description, int(new_download_counts), new_type, int(new_owner), new_thumbnail_url))
-                                conn.commit()
-                                message = f"Meme {new_meme_id} added manually successfully!"
-                                next_meme_id = get_next_id('memes')  # Update for next insertion
-                    except psycopg.Error as e:
-                        message = f"Database error adding meme: {str(e)}"
-            elif 'upload_thumbnail' in request.form:
-                meme_id = request.form.get('meme_id')
-                thumbnail = request.files.get('thumbnail')
-                if meme_id.isdigit() and thumbnail and thumbnail.filename.lower().endswith(('.jpg', '.jpeg')):
-                    try:
-                        # Create thumbnails directory if it doesn't exist
-                        thumbnail_dir = os.path.join(os.path.dirname(__file__), 'static', 'thumbnails')
-                        os.makedirs(thumbnail_dir, exist_ok=True)
-                        
-                        # Base filename using meme_id
-                        filename = f"{meme_id}.jpg"
-                        thumbnail_path = os.path.join(thumbnail_dir, filename)
-                        thumbnail.save(thumbnail_path)
-                        
-                        # Update thumbnail_url in database
-                        with psycopg.connect(DATABASE_URL) as conn:
-                            with conn.cursor() as cur:
-                                cur.execute('UPDATE memes SET thumbnail_url = %s WHERE meme_id = %s',
-                                          (f"/static/thumbnails/{filename}", int(meme_id)))
-                                conn.commit()
-                        message = f"Thumbnail uploaded successfully for meme {meme_id} at /static/thumbnails/{filename}"
-                    except Exception as e:
-                        message = f"Error uploading thumbnail: {str(e)}"
+                    if not new_meme_url or not new_meme_url.strip():
+                        message = "Meme URL/Tags cannot be empty."
+                    else:
+                        try:
+                            with psycopg.connect(DATABASE_URL) as conn:
+                                with conn.cursor() as cur:
+                                    cur.execute('INSERT INTO memes (meme_id, meme_url, meme_description, meme_download_counts, type, owner, thumbnail_url) VALUES (%s, %s, %s, %s, %s, %s, %s)',
+                                              (int(new_meme_id), new_meme_url, new_description, int(new_download_counts), new_type, int(new_owner), ''))
+                                    conn.commit()
+                                    message = f"Meme {new_meme_id} added manually successfully!"
+                                    next_meme_id = get_next_id('memes')  # Update for next insertion
+                        except psycopg.Error as e:
+                            message = f"Database error adding meme: {str(e)}"
             elif 'upload_video' in request.form:
                 video = request.files.get('video')
                 meme_type = request.form.get('meme_type')
