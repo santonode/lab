@@ -162,26 +162,28 @@ def admin():
                 new_meme_url = request.form.get('new_meme_url')
                 new_owner = request.form.get('new_owner')
                 new_download_counts = request.form.get('new_download_counts')
-                if meme_id.isdigit() and new_owner.isdigit():
-                    if not new_meme_url or not new_meme_url.strip():
-                        message = "Meme URL/Tags cannot be empty."
-                    else:
-                        try:
-                            with psycopg.connect(DATABASE_URL) as conn:
-                                with conn.cursor() as cur:
-                                    cur.execute('UPDATE memes SET type = %s, meme_description = %s, meme_url = %s, owner = %s, meme_download_counts = %s WHERE meme_id = %s',
-                                              (new_type, new_description, new_meme_url, int(new_owner), int(new_download_counts), int(meme_id)))
-                                    if cur.rowcount == 0:
-                                        message = f"No meme found with ID {meme_id} to update."
-                                    else:
-                                        conn.commit()
-                                        message = f"Meme {meme_id} updated successfully!"
-                                        current_app.logger.info(f"Updated meme {meme_id} with URL/Tags: {new_meme_url}")
-                        except psycopg.Error as e:
-                            message = f"Database error updating meme: {str(e)}"
-                            current_app.logger.error(f"Database error updating meme {meme_id}: {str(e)}")
+                current_app.logger.debug(f"Received form data: meme_id={meme_id}, new_owner={new_owner}, new_type={new_type}, new_description={new_description}, new_meme_url={new_meme_url}, new_download_counts={new_download_counts}")
+                if not meme_id.isdigit():
+                    message = f"Invalid meme ID: {meme_id} is not a number."
+                elif not new_owner.isdigit():
+                    message = f"Invalid owner ID: {new_owner} is not a number."
+                elif not new_meme_url or not new_meme_url.strip():
+                    message = "Meme URL/Tags cannot be empty."
                 else:
-                    message = "Invalid meme ID or owner ID."
+                    try:
+                        with psycopg.connect(DATABASE_URL) as conn:
+                            with conn.cursor() as cur:
+                                cur.execute('UPDATE memes SET type = %s, meme_description = %s, meme_url = %s, owner = %s, meme_download_counts = %s WHERE meme_id = %s',
+                                          (new_type, new_description, new_meme_url, int(new_owner), int(new_download_counts), int(meme_id)))
+                                if cur.rowcount == 0:
+                                    message = f"No meme found with ID {meme_id} to update."
+                                else:
+                                    conn.commit()
+                                    message = f"Meme {meme_id} updated successfully!"
+                                    current_app.logger.info(f"Updated meme {meme_id} with URL/Tags: {new_meme_url}")
+                    except psycopg.Error as e:
+                        message = f"Database error updating meme: {str(e)}"
+                        current_app.logger.error(f"Database error updating meme {meme_id}: {str(e)}")
             elif 'add_meme' in request.form:
                 new_meme_id = request.form.get('new_meme_id')
                 new_type = request.form.get('new_type')
