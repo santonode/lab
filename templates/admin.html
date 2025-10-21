@@ -356,7 +356,7 @@
                                         <option value="GRAWK" {{ "selected" if meme.type == "GRAWK" }}>GRAWK</option>
                                     </select>
                                     <input type="text" name="new_description" placeholder="New Description" value="{{ meme.meme_description }}" required>
-                                    <input type="text" name="new_meme_url" placeholder="New URL" value="{{ meme.meme_url }}" required>
+                                    <input type="text" name="new_meme_url" placeholder="New Tags" value="{{ meme.meme_url }}" required>
                                     <input type="number" name="new_owner" placeholder="New Owner ID" value="{{ meme.owner }}" min="1" required>
                                     <input type="number" name="new_download_counts" placeholder="Download Counts" value="{{ meme.meme_download_counts }}" min="0" required>
                                     <button type="submit" class="save-btn" name="save_meme">Save</button>
@@ -382,7 +382,7 @@
                                     <option value="GRAWK">GRAWK</option>
                                 </select>
                                 <input type="text" name="new_description" placeholder="New Description" required>
-                                <input type="text" name="new_meme_url" placeholder="New URL" required>
+                                <input type="text" name="new_meme_url" placeholder="New Tags" required>
                                 <input type="number" name="new_owner" placeholder="Owner ID" min="1" required>
                                 <input type="number" name="new_download_counts" placeholder="Download Counts" min="0" value="0" required>
                                 <button type="submit" class="save-btn" name="save_meme">Save</button>
@@ -447,6 +447,8 @@
                         inputs[1].value = '{{ next_meme_id }}' || 1;
                     }
                 }
+                // Reset form to ensure fresh submission
+                form.querySelector('form').reset();
             }
         }
     </script>
