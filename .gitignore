@@ -1,0 +1,5 @@
+# Static files uploaded during runtime
+/static/thumbnails/*
+/static/videos/*
+!/static/thumbnails/.gitkeep  # Optional: Keep empty file to preserve directory in Git
+!/static/videos/.gitkeep       # Optional: Keep empty file to preserve directory in Git
