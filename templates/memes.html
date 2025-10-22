@@ -319,13 +319,12 @@
                         <td class="meme-id">{{ meme.meme_id }}</td>
                         <td class="meme-type">{{ meme.type }}</td>
                         <td class="meme-thumb">
-                            <!-- ✅ UPDATED: New thumbnail path -->
-                            <img src="{{ url_for('static', filename='thumbs/' ~ meme.meme_id|string ~ '.jpg') }}" alt="Thumbnail" class="meme-thumb-img">
+                            <!-- ✅ UPDATED: New thumbs path -->
+                            <img src="{{ url_for('static', filename='thumbs/' ~ meme.meme_id|string ~ '.jpg') }}" alt="{{ meme.meme_description }}" class="meme-thumb-img">
                         </td>
                         <td class="meme-description">
                             {{ meme.meme_description if meme.meme_description else 'No description' }}<br>
                             {% if meme.meme_description %}
-                                <!-- ✅ UPDATED: Pass meme_id instead of description -->
                                 <a class="download-link" href="javascript:void(0)" onclick="handleDownload('{{ meme.meme_id }}', '{{ meme.meme_description }}')">Download</a> /
                             {% endif %}
                             {% set owner = users|selectattr('id', 'equalto', meme.owner)|first %}
@@ -395,21 +394,21 @@
                     if (data.success) {
                         window.location.reload();
                     } else {
-                        closePopup();
+                        closePopup(); // Close popup on failure to allow retry
                     }
                 }
             })
             .catch(error => {
                 console.error('Error during registration:', error);
                 alert('An error occurred. Please try again.');
-                closePopup();
+                closePopup(); // Close popup on error to allow retry
             });
         });
 
-        // ✅ UPDATED: SIMPLE {ID}.mp4 DOWNLOAD LOGIC
+        // ✅ UPDATED: NEW VIDS PATH & {ID}.mp4 NAMING
         function handleDownload(memeId, description) {
             // ✅ NEW: Clean filename = {ID}.mp4
-            const videoFilename = `${memeId}.mp4`;
+            const videoFilename = `${description}.mp4`;
             // ✅ NEW: Clean path = /static/vids/{ID}.mp4
             const videoUrl = `/static/vids/${memeId}.mp4`;
             
@@ -429,8 +428,7 @@
                             const url = window.URL.createObjectURL(blob);
                             const a = document.createElement('a');
                             a.href = url;
-                            // ✅ Download with ORIGINAL description name
-                            a.download = `${description}.mp4`;
+                            a.download = videoFilename;
                             document.body.appendChild(a);
                             a.click();
                             a.remove();
@@ -458,6 +456,11 @@
                     alert('Popup blocked. Please allow popups and try again, or download manually from: ' + videoUrl);
                 }
             });
+        }
+
+        // Client-side get_download_url function (not needed for local files)
+        function get_download_url(url) {
+            return url; // No transformation needed for local files
         }
     </script>
 </body>
