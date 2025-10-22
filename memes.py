@@ -28,6 +28,30 @@ def get_next_id(table_name):
         current_app.logger.error(f"Database error in get_next_id: {str(e)}")
         return 1
 
+# Function to safely delete existing files
+def delete_existing_files(meme_id):
+    """Delete existing video and thumbnail files for a given meme_id"""
+    try:
+        video_dir = os.path.join(os.path.dirname(__file__), 'static', 'videos')
+        thumbnail_dir = os.path.join(os.path.dirname(__file__), 'static', 'thumbnails')
+        
+        video_path = os.path.join(video_dir, f"{meme_id}.mp4")
+        thumbnail_path = os.path.join(thumbnail_dir, f"{meme_id}.jpg")
+        
+        deleted_files = []
+        if os.path.exists(video_path):
+            os.remove(video_path)
+            deleted_files.append(f"video/{meme_id}.mp4")
+        if os.path.exists(thumbnail_path):
+            os.remove(thumbnail_path)
+            deleted_files.append(f"thumbnail/{meme_id}.jpg")
+        
+        current_app.logger.info(f"Deleted files for meme_id {meme_id}: {deleted_files}")
+        return deleted_files
+    except Exception as e:
+        current_app.logger.error(f"Error deleting files for meme_id {meme_id}: {str(e)}")
+        return []
+
 # Memes route
 @memes_bp.route('/memes')
 def memes():
@@ -91,7 +115,6 @@ def memes():
 def admin():
     message = None
     authenticated = session.get('admin_authenticated', False)
-
     next_meme_id = get_next_id('memes')
 
     if request.method == 'POST':
@@ -147,12 +170,14 @@ def admin():
             elif 'delete_meme_id' in request.form:
                 meme_id = request.form.get('delete_meme_id')
                 if meme_id.isdigit():
+                    # Delete associated files
+                    delete_existing_files(int(meme_id))
                     try:
                         with psycopg.connect(DATABASE_URL) as conn:
                             with conn.cursor() as cur:
                                 cur.execute('DELETE FROM memes WHERE meme_id = %s', (int(meme_id),))
                                 conn.commit()
-                                message = f"Meme {meme_id} deleted successfully!"
+                                message = f"Meme {meme_id} deleted successfully (including files)!"
                     except psycopg.Error as e:
                         message = f"Database error deleting meme: {str(e)}"
             elif 'edit_meme_id' in request.form:
@@ -207,61 +232,103 @@ def admin():
                             message = f"Database error adding meme: {str(e)}"
             elif 'upload_video' in request.form:
                 video = request.files.get('video')
+                upload_meme_id = request.form.get('upload_meme_id')
                 meme_type = request.form.get('meme_type')
-                if video and video.filename.lower().endswith('.mp4') and meme_type in ['GM', 'GN', 'OTHER', 'CRYPTO', 'GRAWK']:
+                overwrite_files = request.form.get('overwrite_files') == 'on'
+                
+                # Validation
+                if not video or not video.filename.lower().endswith('.mp4'):
+                    message = "Please select a valid MP4 video file."
+                elif not upload_meme_id.isdigit():
+                    message = "Invalid MEME ID selected."
+                elif meme_type not in ['GM', 'GN', 'OTHER', 'CRYPTO', 'GRAWK']:
+                    message = "Invalid meme type selected."
+                else:
+                    meme_id = int(upload_meme_id)
                     # Check file size (25MB limit)
                     max_size = 25 * 1024 * 1024  # 25MB in bytes
                     if video.content_length and video.content_length > max_size:
                         message = "Video upload failed: File size exceeds 25MB limit."
                     else:
                         try:
-                            # Create videos directory if it doesn't exist
-                            video_dir = os.path.join(os.path.dirname(__file__), 'static', 'videos')
-                            os.makedirs(video_dir, exist_ok=True)
+                            # Determine if this is new or overwrite
+                            is_new = meme_id == next_meme_id
+                            is_overwrite = not is_new and overwrite_files
                             
-                            # Use original filename
-                            filename = video.filename
-                            video_path = os.path.join(video_dir, filename)
+                            # Delete existing files if overwriting
+                            deleted_files = []
+                            if is_overwrite:
+                                deleted_files = delete_existing_files(meme_id)
+                            
+                            # Create directories
+                            video_dir = os.path.join(os.path.dirname(__file__), 'static', 'videos')
+                            thumbnail_dir = os.path.join(os.path.dirname(__file__), 'static', 'thumbnails')
+                            os.makedirs(video_dir, exist_ok=True)
+                            os.makedirs(thumbnail_dir, exist_ok=True)
+                            
+                            # Save video with standardized filename: {meme_id}.mp4
+                            video_path = os.path.join(video_dir, f"{meme_id}.mp4")
                             video.save(video_path)
                             
-                            # Insert into database with next meme ID and selected type, using base filename for description
-                            new_meme_id = get_next_id('memes')
-                            base_description = os.path.splitext(filename)[0]  # Remove extension
+                            # Generate description from filename
+                            base_description = os.path.splitext(video.filename)[0]
+                            
+                            # Database operation
                             with psycopg.connect(DATABASE_URL) as conn:
                                 with conn.cursor() as cur:
-                                    cur.execute('INSERT INTO memes (meme_id, meme_url, meme_description, meme_download_counts, type, owner, thumbnail_url) VALUES (%s, %s, %s, %s, %s, %s, %s)',
-                                              (new_meme_id, '', base_description, 0, meme_type, 3, ''))
+                                    if is_new:
+                                        # INSERT new record
+                                        cur.execute('''
+                                            INSERT INTO memes (meme_id, meme_url, meme_description, meme_download_counts, type, owner, thumbnail_url) 
+                                            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                        ''', (meme_id, '', base_description, 0, meme_type, 3, ''))
+                                        action = "created"
+                                    else:
+                                        # UPDATE existing record
+                                        cur.execute('''
+                                            UPDATE memes SET type = %s, meme_description = %s 
+                                            WHERE meme_id = %s
+                                        ''', (meme_type, base_description, meme_id))
+                                        if cur.rowcount == 0:
+                                            # If no record exists, create it
+                                            cur.execute('''
+                                                INSERT INTO memes (meme_id, meme_url, meme_description, meme_download_counts, type, owner, thumbnail_url) 
+                                                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                            ''', (meme_id, '', base_description, 0, meme_type, 3, ''))
+                                            action = "created"
+                                        else:
+                                            action = "updated"
                                     conn.commit()
-                                    
-                            # Generate thumbnail from the first frame
+                            
+                            # Generate thumbnail from first frame
+                            thumbnail_path = os.path.join(thumbnail_dir, f"{meme_id}.jpg")
                             cap = cv2.VideoCapture(video_path)
                             if cap.isOpened():
-                                ret, frame = cap.read()  # Read the first frame
+                                ret, frame = cap.read()
                                 if ret:
-                                    # Resize to 200x200 pixels
                                     frame = cv2.resize(frame, (200, 200), interpolation=cv2.INTER_AREA)
-                                    # Create thumbnails directory if it doesn't exist
-                                    thumbnail_dir = os.path.join(os.path.dirname(__file__), 'static', 'thumbnails')
-                                    os.makedirs(thumbnail_dir, exist_ok=True)
-                                    # Save as JPG with meme_id as filename
-                                    thumbnail_path = os.path.join(thumbnail_dir, f"{new_meme_id}.jpg")
                                     cv2.imwrite(thumbnail_path, frame)
-                                    # Update thumbnail_url in database
+                                    # Update thumbnail URL in database
                                     with psycopg.connect(DATABASE_URL) as conn:
                                         with conn.cursor() as cur:
                                             cur.execute('UPDATE memes SET thumbnail_url = %s WHERE meme_id = %s',
-                                                      (f"/static/thumbnails/{new_meme_id}.jpg", new_meme_id))
+                                                      (f"/static/thumbnails/{meme_id}.jpg", meme_id))
                                             conn.commit()
-                                else:
-                                    current_app.logger.error(f"Could not read first frame from {video_path}")
                                 cap.release()
-                            else:
-                                current_app.logger.error(f"Could not open video file {video_path}")
                             
-                            message = f"Video uploaded successfully for meme {new_meme_id} at /static/videos/{filename}"
-                            next_meme_id = get_next_id('memes')  # Update for next insertion
+                            # Build success message
+                            file_action = "replaced" if is_overwrite else "created"
+                            deleted_msg = f" (deleted: {', '.join(deleted_files)})" if deleted_files else ""
+                            message = f"✅ Video {file_action} successfully for MEME ID {meme_id}!{deleted_msg}"
+                            current_app.logger.info(f"Video upload {'NEW' if is_new else 'OVERWRITE'} - MEME ID: {meme_id}, Type: {meme_type}, Files: {video_path}, {thumbnail_path}")
+                            
+                            # Update next_meme_id if we created a new one
+                            if is_new:
+                                next_meme_id = get_next_id('memes')
+                                
                         except Exception as e:
-                            message = f"Error uploading video or generating thumbnail: {str(e)}"
+                            message = f"❌ Error uploading video or generating thumbnail: {str(e)}"
+                            current_app.logger.error(f"Video upload error for meme_id {meme_id}: {str(e)}")
 
     if not authenticated:
         return render_template('admin.html', message=message, authenticated=authenticated, next_meme_id=next_meme_id)
@@ -274,7 +341,7 @@ def admin():
                 current_app.logger.debug(f"Raw query results for admin: {rows}")
                 memes = []
                 for row in rows:
-                    if not isinstance(row, tuple) or len(row) != 7:  # Adjusted to 7 columns
+                    if not isinstance(row, tuple) or len(row) != 7:
                         current_app.logger.error(f"Invalid row format in admin: {row}, expected 7 columns")
                         continue
                     memes.append({
