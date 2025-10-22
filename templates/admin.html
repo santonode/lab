@@ -6,6 +6,7 @@
     <title>Santo - Admin</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <style>
+        /* [Previous styles remain exactly the same until upload-form section] */
         .header {
             position: fixed;
             top: 0;
@@ -291,6 +292,7 @@
     </style>
 </head>
 <body>
+    <!-- [All previous HTML content remains exactly the same until upload-form section] -->
     <div class="header">
         <h1>Santo Admin</h1>
     </div>
@@ -306,6 +308,7 @@
                 <div class="message">{{ message }}</div>
             {% endif %}
         {% else %}
+            <!-- [User table and Meme table HTML remains exactly the same] -->
             <h2>User List</h2>
             <table class="user-table">
                 <thead>
@@ -448,7 +451,7 @@
                 </tbody>
             </table>
 
-            <!-- Enhanced Video Upload Form -->
+            <!-- ✅ UPDATED Video Upload Form with NEW PATHS -->
             <div class="upload-form">
                 <h3>🎥 Video Upload (Overwrite or New)</h3>
                 <div class="meme-id-info">
@@ -497,7 +500,10 @@
                 </form>
                 
                 <div class="overwrite-warning">
-                    <strong>⚠️ Overwrite Warning:</strong> Selecting an existing MEME ID will replace both the video file (`/static/videos/{ID}.mp4`) and thumbnail (`/static/thumbnails/{ID}.jpg`).
+                    <strong>⚠️ Overwrite Warning:</strong> 
+                    Selecting an existing MEME ID will replace both:<br>
+                    📹 <code>/static/vids/{ID}.mp4</code><br>
+                    🖼️ <code>/static/thumbs/{ID}.jpg</code>
                 </div>
             </div>
 
@@ -536,7 +542,6 @@
                         if (hiddenInput) {
                             hiddenInput.value = id;
                         }
-                        console.log(`Prepopulating meme form: id=${id}, type=${typeOrUsername}, desc=${descriptionOrPassword}, url=${urlOrPoints}, owner=${ownerOrNothing}, counts=${countsOrNothing}, hiddenInput=${hiddenInput ? hiddenInput.value : 'null'}`);
                     } else {
                         inputs[1].value = typeOrUsername;
                         inputs[2].value = descriptionOrPassword;
@@ -551,19 +556,15 @@
             }
         }
 
-        // Enhanced upload form functions
         function resetUploadForm() {
             document.getElementById('videoUploadForm').reset();
             document.getElementById('upload_meme_id').value = '{{ next_meme_id }}';
             document.getElementById('overwrite_files').checked = true;
         }
 
-        // Auto-select meme type when MEME ID changes (for existing memes)
         document.getElementById('upload_meme_id').addEventListener('change', function() {
             const selectedId = this.value;
             if (selectedId !== '{{ next_meme_id }}') {
-                // For existing memes, you could pre-populate the type here via JS
-                // This would require passing meme data to JS or making an AJAX call
                 console.log('Selected existing MEME ID:', selectedId);
             }
         });
