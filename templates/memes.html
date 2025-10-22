@@ -188,7 +188,7 @@
                 min-width: 0;
             }
             .meme-thumb img {
-                max-height: calc(2.4em + 8px); /* 2x larger for mobile Safari */
+                max-height: calc(2.4em + 8px);
             }
         }
         @media (max-width: 600px) {
@@ -319,11 +319,13 @@
                         <td class="meme-id">{{ meme.meme_id }}</td>
                         <td class="meme-type">{{ meme.type }}</td>
                         <td class="meme-thumb">
-                            <img src="{{ url_for('static', filename='thumbnails/' ~ meme.meme_id|string ~ '.jpg') }}" alt="Thumbnail" class="meme-thumb-img">
+                            <!-- ✅ UPDATED: New thumbnail path -->
+                            <img src="{{ url_for('static', filename='thumbs/' ~ meme.meme_id|string ~ '.jpg') }}" alt="Thumbnail" class="meme-thumb-img">
                         </td>
                         <td class="meme-description">
                             {{ meme.meme_description if meme.meme_description else 'No description' }}<br>
                             {% if meme.meme_description %}
+                                <!-- ✅ UPDATED: Pass meme_id instead of description -->
                                 <a class="download-link" href="javascript:void(0)" onclick="handleDownload('{{ meme.meme_id }}', '{{ meme.meme_description }}')">Download</a> /
                             {% endif %}
                             {% set owner = users|selectattr('id', 'equalto', meme.owner)|first %}
@@ -393,21 +395,23 @@
                     if (data.success) {
                         window.location.reload();
                     } else {
-                        closePopup(); // Close popup on failure to allow retry
+                        closePopup();
                     }
                 }
             })
             .catch(error => {
                 console.error('Error during registration:', error);
                 alert('An error occurred. Please try again.');
-                closePopup(); // Close popup on error to allow retry
+                closePopup();
             });
         });
 
+        // ✅ UPDATED: SIMPLE {ID}.mp4 DOWNLOAD LOGIC
         function handleDownload(memeId, description) {
-            // Construct video filename using the raw description and append .mp4
-            const videoFilename = `${description}.mp4`;
-            const videoUrl = `/static/videos/${encodeURIComponent(videoFilename)}`;
+            // ✅ NEW: Clean filename = {ID}.mp4
+            const videoFilename = `${memeId}.mp4`;
+            // ✅ NEW: Clean path = /static/vids/{ID}.mp4
+            const videoUrl = `/static/vids/${memeId}.mp4`;
             
             fetch(`/increment_download/${memeId}`, {
                 method: 'POST',
@@ -425,7 +429,8 @@
                             const url = window.URL.createObjectURL(blob);
                             const a = document.createElement('a');
                             a.href = url;
-                            a.download = videoFilename;
+                            // ✅ Download with ORIGINAL description name
+                            a.download = `${description}.mp4`;
                             document.body.appendChild(a);
                             a.click();
                             a.remove();
@@ -453,11 +458,6 @@
                     alert('Popup blocked. Please allow popups and try again, or download manually from: ' + videoUrl);
                 }
             });
-        }
-
-        // Client-side get_download_url function (not needed for local files)
-        function get_download_url(url) {
-            return url; // No transformation needed for local files
         }
     </script>
 </body>
