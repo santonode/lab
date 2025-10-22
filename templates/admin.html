@@ -190,28 +190,76 @@
         }
         .upload-form {
             margin-top: 20px;
+            background-color: #e8f5e8;
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #26A69A;
+        }
+        .upload-form h3 {
+            margin-top: 0;
+            color: #263238;
+            font-size: 18px;
+        }
+        .upload-form-row {
+            display: inline-flex;
+            align-items: center;
+            margin: 10px 5px;
+            gap: 10px;
         }
         .upload-form input[type="file"] {
             padding: 5px;
             font-size: 14px;
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 5px;
         }
         .upload-form select {
-            padding: 5px;
+            padding: 8px;
             font-size: 14px;
-            width: 120px;
-            margin-right: 5px;
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            min-width: 120px;
+        }
+        .upload-form input[type="number"] {
+            padding: 8px;
+            font-size: 14px;
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            width: 100px;
         }
         .upload-form button {
-            padding: 5px 10px;
+            padding: 10px 20px;
             font-size: 14px;
             background-color: #26A69A;
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            font-weight: bold;
+            margin: 5px;
         }
         .upload-form button:hover {
             background-color: #1e7d71;
+        }
+        .meme-id-info {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 14px;
+            color: #856404;
+        }
+        .overwrite-warning {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 5px;
+            padding: 8px;
+            margin: 5px 0;
+            font-size: 12px;
+            color: #721c24;
         }
 
         @media (max-width: 600px) {
@@ -230,6 +278,14 @@
             }
             .meme-table .meme-owner {
                 width: auto;
+            }
+            .upload-form-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .upload-form select, .upload-form input[type="number"] {
+                min-width: auto;
+                width: 100%;
             }
         }
     </style>
@@ -391,19 +447,60 @@
                     </tr>
                 </tbody>
             </table>
+
+            <!-- Enhanced Video Upload Form -->
             <div class="upload-form">
-                <form method="POST" enctype="multipart/form-data">
-                    <input type="file" name="video" accept="video/mp4" required>
-                    <select name="meme_type" required>
-                        <option value="GM">GM</option>
-                        <option value="GN">GN</option>
-                        <option value="OTHER">OTHER</option>
-                        <option value="CRYPTO">CRYPTO</option>
-                        <option value="GRAWK">GRAWK</option>
-                    </select>
-                    <button type="submit" name="upload_video">Upload Video</button>
+                <h3>🎥 Video Upload (Overwrite or New)</h3>
+                <div class="meme-id-info">
+                    <strong>Next Available ID:</strong> <span id="nextMemeId">{{ next_meme_id }}</span> 
+                    | <strong>Total Memes:</strong> {{ memes|length }}
+                </div>
+                
+                <form method="POST" enctype="multipart/form-data" id="videoUploadForm">
+                    <div class="upload-form-row">
+                        <label for="upload_meme_id">MEME ID:</label>
+                        <select name="upload_meme_id" id="upload_meme_id" required>
+                            <option value="{{ next_meme_id }}">🆕 {{ next_meme_id }} (New)</option>
+                            {% for meme in memes %}
+                                <option value="{{ meme.meme_id }}">
+                                    🔄 {{ meme.meme_id }} ({{ meme.type }}: {{ meme.meme_description[:30] }}...)
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="upload-form-row">
+                        <label for="video">Video File:</label>
+                        <input type="file" name="video" id="video" accept="video/mp4" required>
+                    </div>
+                    
+                    <div class="upload-form-row">
+                        <label for="meme_type">Meme Type:</label>
+                        <select name="meme_type" id="meme_type" required>
+                            <option value="GM">GM</option>
+                            <option value="GN">GN</option>
+                            <option value="OTHER">OTHER</option>
+                            <option value="CRYPTO">CRYPTO</option>
+                            <option value="GRAWK">GRAWK</option>
+                        </select>
+                    </div>
+                    
+                    <div class="upload-form-row">
+                        <input type="checkbox" name="overwrite_files" id="overwrite_files" checked>
+                        <label for="overwrite_files">💾 Overwrite existing video & thumbnail files</label>
+                    </div>
+                    
+                    <div class="upload-form-row">
+                        <button type="submit" name="upload_video">🚀 Upload & Replace</button>
+                        <button type="button" onclick="resetUploadForm()">🔄 Reset Form</button>
+                    </div>
                 </form>
+                
+                <div class="overwrite-warning">
+                    <strong>⚠️ Overwrite Warning:</strong> Selecting an existing MEME ID will replace both the video file (`/static/videos/{ID}.mp4`) and thumbnail (`/static/thumbnails/{ID}.jpg`).
+                </div>
             </div>
+
             {% if message %}
                 <div class="message">{{ message }}</div>
             {% endif %}
@@ -430,32 +527,46 @@
                 const selects = form.getElementsByTagName('select');
                 if (!formId.includes('add')) {
                     if (formId.includes('meme')) {
-                        selects[0].value = typeOrUsername; // Set type
-                        inputs[0].value = descriptionOrPassword; // Set description
-                        inputs[1].value = urlOrPoints; // Set URL
-                        inputs[2].value = ownerOrNothing; // Set owner ID
-                        inputs[3].value = countsOrNothing; // Set download counts
-                        // Ensure hidden input matches the passed ID
+                        selects[0].value = typeOrUsername;
+                        inputs[0].value = descriptionOrPassword;
+                        inputs[1].value = urlOrPoints;
+                        inputs[2].value = ownerOrNothing;
+                        inputs[3].value = countsOrNothing;
                         const hiddenInput = form.querySelector('input[name="edit_meme_id"]');
                         if (hiddenInput) {
-                            hiddenInput.value = id; // Forcefully set the hidden input to the numeric ID
+                            hiddenInput.value = id;
                         }
                         console.log(`Prepopulating meme form: id=${id}, type=${typeOrUsername}, desc=${descriptionOrPassword}, url=${urlOrPoints}, owner=${ownerOrNothing}, counts=${countsOrNothing}, hiddenInput=${hiddenInput ? hiddenInput.value : 'null'}`);
                     } else {
-                        inputs[1].value = typeOrUsername; // Set username
-                        inputs[2].value = descriptionOrPassword; // Set password
-                        inputs[3].value = urlOrPoints; // Set points
+                        inputs[1].value = typeOrUsername;
+                        inputs[2].value = descriptionOrPassword;
+                        inputs[3].value = urlOrPoints;
                     }
                 } else if (formId === 'add-form-meme') {
-                    // Pre-populate meme_id if not already set
                     if (!inputs[1].value) {
                         inputs[1].value = '{{ next_meme_id }}' || 1;
                     }
                 }
-                // Reset form to ensure fresh submission
                 form.querySelector('form').reset();
             }
         }
+
+        // Enhanced upload form functions
+        function resetUploadForm() {
+            document.getElementById('videoUploadForm').reset();
+            document.getElementById('upload_meme_id').value = '{{ next_meme_id }}';
+            document.getElementById('overwrite_files').checked = true;
+        }
+
+        // Auto-select meme type when MEME ID changes (for existing memes)
+        document.getElementById('upload_meme_id').addEventListener('change', function() {
+            const selectedId = this.value;
+            if (selectedId !== '{{ next_meme_id }}') {
+                // For existing memes, you could pre-populate the type here via JS
+                // This would require passing meme data to JS or making an AJAX call
+                console.log('Selected existing MEME ID:', selectedId);
+            }
+        });
     </script>
 </body>
 </html>
