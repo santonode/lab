@@ -4,9 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Santo - Admin</title>
+    <!-- ✅ UPDATED: static2 CSS path -->
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <style>
-        /* [Previous styles remain exactly the same until upload-form section] */
+        /* [ALL YOUR EXISTING STYLES REMAIN EXACTLY THE SAME] */
         .header {
             position: fixed;
             top: 0;
@@ -292,10 +293,12 @@
     </style>
 </head>
 <body>
-    <!-- [All previous HTML content remains exactly the same until upload-form section] -->
+    <!-- ✅ ALL YOUR EXISTING HTML REMAINS EXACTLY THE SAME -->
     <div class="header">
         <h1>Santo Admin</h1>
+        <a href="/memes" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: white; text-decoration: none;">← Assets</a>
     </div>
+    
     <div class="content">
         {% if not authenticated %}
             <div class="auth-form">
@@ -308,7 +311,6 @@
                 <div class="message">{{ message }}</div>
             {% endif %}
         {% else %}
-            <!-- [User table and Meme table HTML remains exactly the same] -->
             <h2>User List</h2>
             <table class="user-table">
                 <thead>
@@ -451,7 +453,7 @@
                 </tbody>
             </table>
 
-            <!-- ✅ UPDATED Video Upload Form with NEW PATHS -->
+            <!-- ✅ VIDEO UPLOAD FORM - PATHS REMAIN /static/vids/ & /static/thumbs/ -->
             <div class="upload-form">
                 <h3>🎥 Video Upload (Overwrite or New)</h3>
                 <div class="meme-id-info">
@@ -474,7 +476,7 @@
                     
                     <div class="upload-form-row">
                         <label for="video">Video File:</label>
-                        <input type="file" name="video" id="video" accept="video/mp4" required>
+                        <input type="file" name="video" id="video" accept="video/mp4,video/mpeg" required>
                     </div>
                     
                     <div class="upload-form-row">
@@ -512,10 +514,12 @@
             {% endif %}
         {% endif %}
     </div>
+    
     <div class="footer">
         <p>Made with ❤️ by Team Santo</p>
     </div>
 
+    <!-- ✅ ALL YOUR EXISTING JAVASCRIPT REMAINS EXACTLY THE SAME -->
     <script>
         function toggleEdit(formId, id, typeOrUsername, descriptionOrPassword, urlOrPoints, countsOrNothing, ownerOrNothing, button) {
             const form = document.getElementById(formId);
