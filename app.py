@@ -4,7 +4,7 @@ from memes import memes_bp, init_db
 import os
 import re
 
-app = Flask(__name__, static_folder='static', template_folder='templates')
+app = Flask(__name__, static_folder='static2', template_folder='templates')
 app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))  # Use env var or generate secure key
 
 # Register blueprints
