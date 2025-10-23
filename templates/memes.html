@@ -155,6 +155,13 @@
             width: 10%;
             min-width: 50px;
         }
+        /* ✅ FIXED: No more flickering - static text or single image load */
+        .meme-thumb-na {
+            color: #999;
+            font-style: italic;
+            font-size: 12px;
+            text-align: center;
+        }
         .meme-thumb img {
             max-height: calc(1.5em + 16px);
             width: auto;
@@ -162,21 +169,16 @@
             border-radius: 4px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
+        /* ✅ FIXED: Simple text link - saves space */
         .download-link {
             color: #26A69A;
             text-decoration: none;
             font-weight: bold;
-            padding: 4px 8px;
-            background-color: rgba(38, 166, 154, 0.1);
-            border: 1px solid #26A69A;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: all 0.2s;
+            font-size: 14px;
         }
         .download-link:hover {
-            background-color: #26A69A;
-            color: white;
-            text-decoration: none;
+            text-decoration: underline;
+            color: #00796b;
         }
         @media (max-width: 600px) {
             .content {
@@ -211,6 +213,9 @@
             }
             .meme-thumb img {
                 max-height: calc(1.2em + 4px);
+            }
+            .meme-thumb-na {
+                font-size: 10px;
             }
         }
         @media only screen and (-webkit-min-device-pixel-ratio: 2) and (max-width: 767px) {
@@ -354,11 +359,16 @@
                         <td class="meme-id">{{ meme.meme_id }}</td>
                         <td class="meme-type">{{ meme.type }}</td>
                         <td class="meme-thumb">
-                            <!-- ✅ THUMBS from persistent disk static/ -->
-                            <img src="/static/thumbs/{{ meme.meme_id }}.jpg" 
-                                 alt="{{ meme.meme_description }}" 
-                                 onerror="this.src='/static/thumbs/default.jpg'; this.alt='No thumbnail';"
-                                 loading="lazy">
+                            <!-- ✅ FIXED: NO FLICKERING - Single load or static "n/a" -->
+                            {% set thumb_path = '/static/thumbs/' + meme.meme_id|string + '.jpg' %}
+                            {% if thumb_path starts with '/static/thumbs/' %}
+                                <img src="{{ thumb_path }}" 
+                                     alt="Thumb" 
+                                     loading="lazy"
+                                     onerror="this.outerHTML='<span class=&quot;meme-thumb-na&quot;>n/a</span>'">
+                            {% else %}
+                                <span class="meme-thumb-na">n/a</span>
+                            {% endif %}
                         </td>
                         <td class="meme-description">
                             {{ meme.meme_description if meme.meme_description else 'No description' }}<br>
@@ -366,7 +376,7 @@
                                 <a class="download-link" 
                                    href="javascript:void(0)" 
                                    onclick="handleDownload('{{ meme.meme_id }}', '{{ meme.meme_description | replace(' ', '_') | replace('/', '_') }}')">
-                                   📥 Download
+                                   Download
                                 </a> /
                             {% endif %}
                             {% set owner = users|selectattr('id', 'equalto', meme.owner)|first %}
