@@ -146,6 +146,7 @@
             text-align: center;
             display: block;
             line-height: 1.2;
+            padding: 8px 0;
         }
         .meme-thumb img {
             max-height: calc(1.5em + 16px);
@@ -276,11 +277,11 @@
                         <td class="meme-id">{{ meme.meme_id }}</td>
                         <td class="meme-type">{{ meme.type }}</td>
                         <td class="meme-thumb">
-                            <!-- ✅ FIXED: PROPER JINJA2 SYNTAX - NO FLICKER -->
+                            <!-- ✅ PERFECT FIX: "na" ONLY when missing, image when exists -->
                             <img src="/static/thumbs/{{ meme.meme_id }}.jpg" 
                                  alt="Thumb" 
                                  loading="lazy"
-                                 onerror="this.outerHTML='<span class=\"meme-thumb-na\">n/a</span>'">
+                                 onerror="this.parentNode.innerHTML='<span class=&quot;meme-thumb-na&quot;>na</span>'">
                         </td>
                         <td class="meme-description">
                             {{ meme.meme_description if meme.meme_description else 'No description' }}<br>
