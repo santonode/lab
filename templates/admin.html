@@ -4,10 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Santo - Admin</title>
-    <!-- ✅ UPDATED: static2 CSS path -->
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <style>
-        /* [ALL YOUR EXISTING STYLES REMAIN EXACTLY THE SAME] */
         .header {
             position: fixed;
             top: 0;
@@ -293,7 +291,6 @@
     </style>
 </head>
 <body>
-    <!-- ✅ ALL YOUR EXISTING HTML REMAINS EXACTLY THE SAME -->
     <div class="header">
         <h1>Santo Admin</h1>
         <a href="/memes" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: white; text-decoration: none;">← Assets</a>
@@ -453,8 +450,8 @@
                 </tbody>
             </table>
 
-            <!-- ✅ VIDEO UPLOAD FORM - PATHS REMAIN /static/vids/ & /static/thumbs/ -->
-            <div class="upload-form">
+            <!-- ✅ VIDEO UPLOAD FORM WITH ID FOR AUTO-SCROLL -->
+            <div class="upload-form" id="videoUploadSection">
                 <h3>🎥 Video Upload (Overwrite or New)</h3>
                 <div class="meme-id-info">
                     <strong>Next Available ID:</strong> <span id="nextMemeId">{{ next_meme_id }}</span> 
@@ -519,7 +516,6 @@
         <p>Made with ❤️ by Team Santo</p>
     </div>
 
-    <!-- ✅ ALL YOUR EXISTING JAVASCRIPT REMAINS EXACTLY THE SAME -->
     <script>
         function toggleEdit(formId, id, typeOrUsername, descriptionOrPassword, urlOrPoints, countsOrNothing, ownerOrNothing, button) {
             const form = document.getElementById(formId);
@@ -570,6 +566,25 @@
             const selectedId = this.value;
             if (selectedId !== '{{ next_meme_id }}') {
                 console.log('Selected existing MEME ID:', selectedId);
+            }
+        });
+
+        // ✅ AUTO-SCROLL TO UPLOAD FORM AFTER SUCCESSFUL UPLOAD
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check URL parameter for successful upload
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('upload_success') === 'true') {
+                // Scroll to upload form smoothly
+                const uploadSection = document.getElementById('videoUploadSection');
+                if (uploadSection) {
+                    uploadSection.scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'start',
+                        inline: 'nearest'
+                    });
+                    // Reset the URL parameter to clean it up
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
             }
         });
     </script>
