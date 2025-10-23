@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Santo - Asset List</title>
-    <!-- ✅ UPDATED: static2 CSS path -->
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <style>
         body {
@@ -135,32 +134,18 @@
         .meme-table tr:hover {
             background-color: #e3f2fd;
         }
-        .meme-table th:nth-child(1), .meme-table td:nth-child(1) { /* ID */
-            width: 5%;
-            min-width: 40px;
-        }
-        .meme-table th:nth-child(2), .meme-table td:nth-child(2) { /* Type */
-            width: 5%;
-            min-width: 60px;
-        }
-        .meme-table th:nth-child(3), .meme-table td:nth-child(3) { /* Thumb */
-            width: 10%;
-            min-width: 80px;
-        }
-        .meme-table th:nth-child(4), .meme-table td:nth-child(4) { /* Description / Owner */
-            width: 70%;
-            min-width: 150px;
-        }
-        .meme-table th:nth-child(5), .meme-table td:nth-child(5) { /* Counts */
-            width: 10%;
-            min-width: 50px;
-        }
-        /* ✅ FIXED: No more flickering - static text or single image load */
+        .meme-table th:nth-child(1), .meme-table td:nth-child(1) { width: 5%; min-width: 40px; }
+        .meme-table th:nth-child(2), .meme-table td:nth-child(2) { width: 5%; min-width: 60px; }
+        .meme-table th:nth-child(3), .meme-table td:nth-child(3) { width: 10%; min-width: 80px; }
+        .meme-table th:nth-child(4), .meme-table td:nth-child(4) { width: 70%; min-width: 150px; }
+        .meme-table th:nth-child(5), .meme-table td:nth-child(5) { width: 10%; min-width: 50px; }
         .meme-thumb-na {
             color: #999;
             font-style: italic;
             font-size: 12px;
             text-align: center;
+            display: block;
+            line-height: 1.2;
         }
         .meme-thumb img {
             max-height: calc(1.5em + 16px);
@@ -168,8 +153,9 @@
             vertical-align: middle;
             border-radius: 4px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: block;
+            margin: 0 auto;
         }
-        /* ✅ FIXED: Simple text link - saves space */
         .download-link {
             color: #26A69A;
             text-decoration: none;
@@ -181,65 +167,22 @@
             color: #00796b;
         }
         @media (max-width: 600px) {
-            .content {
-                padding: 0 10px;
-            }
-            .summary {
-                font-size: 0.9em;
-                top: 50px;
-                padding: 2px 5px;
-                margin-bottom: 2px;
-            }
-            .meme-table {
-                display: block;
-                overflow-x: auto;
-            }
-            .meme-table th, .meme-table td {
-                min-width: 40px;
-            }
-            .meme-table th:nth-child(3), .meme-table td:nth-child(3) {
-                min-width: 80px;
-            }
-            .meme-table th:nth-child(4), .meme-table td:nth-child(4) {
-                min-width: 150px;
-            }
-            .header .user-info {
-                font-size: 12px;
-                padding: 1px 3px;
-                max-width: 120px;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-            }
-            .meme-thumb img {
-                max-height: calc(1.2em + 4px);
-            }
-            .meme-thumb-na {
-                font-size: 10px;
-            }
+            .content { padding: 0 10px; }
+            .summary { font-size: 0.9em; top: 50px; padding: 2px 5px; margin-bottom: 2px; }
+            .meme-table { display: block; overflow-x: auto; }
+            .meme-table th, .meme-table td { min-width: 40px; }
+            .meme-table th:nth-child(3), .meme-table td:nth-child(3) { min-width: 80px; }
+            .meme-table th:nth-child(4), .meme-table td:nth-child(4) { min-width: 150px; }
+            .header .user-info { font-size: 12px; padding: 1px 3px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .meme-thumb img { max-height: calc(1.2em + 4px); }
+            .meme-thumb-na { font-size: 10px; }
         }
         @media only screen and (-webkit-min-device-pixel-ratio: 2) and (max-width: 767px) {
-            .meme-table {
-                table-layout: fixed;
-                width: 100%;
-                max-width: 100vw;
-                min-width: 0;
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-            }
-            .meme-table th, .meme-table td {
-                width: min-content !important;
-                min-width: 0;
-            }
-            .meme-thumb img {
-                max-height: calc(2.4em + 8px);
-            }
+            .meme-table { table-layout: fixed; width: 100%; max-width: 100vw; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .meme-table th, .meme-table td { width: min-content !important; min-width: 0; }
+            .meme-thumb img { max-height: calc(2.4em + 8px); }
         }
-        @media (max-width: 600px) {
-            .footer {
-                position: relative;
-            }
-        }
+        @media (max-width: 600px) { .footer { position: relative; } }
         .footer {
             position: fixed;
             bottom: 0;
@@ -253,10 +196,7 @@
             height: 35px;
             box-sizing: border-box;
         }
-        .footer p {
-            margin: 3px 0;
-            font-size: 12px;
-        }
+        .footer p { margin: 3px 0; font-size: 12px; }
         .popup {
             display: none;
             position: fixed;
@@ -282,35 +222,12 @@
             background: rgba(0,0,0,0.5);
             z-index: 1500;
         }
-        .popup h3 {
-            margin: 0 0 15px;
-            color: #263238;
-        }
-        .popup input {
-            width: 80%;
-            padding: 8px;
-            margin: 5px 0;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        .popup button {
-            padding: 8px 15px;
-            margin: 5px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .popup .register-btn {
-            background-color: #26A69A;
-            color: white;
-        }
-        .popup .decline-btn {
-            background-color: #FFCA28;
-            color: black;
-        }
-        .popup button:hover {
-            opacity: 0.9;
-        }
+        .popup h3 { margin: 0 0 15px; color: #263238; }
+        .popup input { width: 80%; padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; }
+        .popup button { padding: 8px 15px; margin: 5px; border: none; border-radius: 4px; cursor: pointer; }
+        .popup .register-btn { background-color: #26A69A; color: white; }
+        .popup .decline-btn { background-color: #FFCA28; color: black; }
+        .popup button:hover { opacity: 0.9; }
     </style>
 </head>
 <body>
@@ -359,16 +276,11 @@
                         <td class="meme-id">{{ meme.meme_id }}</td>
                         <td class="meme-type">{{ meme.type }}</td>
                         <td class="meme-thumb">
-                            <!-- ✅ FIXED: NO FLICKERING - Single load or static "n/a" -->
-                            {% set thumb_path = '/static/thumbs/' + meme.meme_id|string + '.jpg' %}
-                            {% if thumb_path starts with '/static/thumbs/' %}
-                                <img src="{{ thumb_path }}" 
-                                     alt="Thumb" 
-                                     loading="lazy"
-                                     onerror="this.outerHTML='<span class=&quot;meme-thumb-na&quot;>n/a</span>'">
-                            {% else %}
-                                <span class="meme-thumb-na">n/a</span>
-                            {% endif %}
+                            <!-- ✅ FIXED: PROPER JINJA2 SYNTAX - NO FLICKER -->
+                            <img src="/static/thumbs/{{ meme.meme_id }}.jpg" 
+                                 alt="Thumb" 
+                                 loading="lazy"
+                                 onerror="this.outerHTML='<span class=\"meme-thumb-na\">n/a</span>'">
                         </td>
                         <td class="meme-description">
                             {{ meme.meme_description if meme.meme_description else 'No description' }}<br>
@@ -397,7 +309,6 @@
         <p>Made with ❤️ by Team Santo</p>
     </div>
 
-    <!-- Popup for first-time guest users -->
     <div id="guestPopup" class="popup">
         <h3>🎉 Welcome to Santo!</h3>
         <p>Create a username and password to become a Member, or continue as a guest.</p>
@@ -411,7 +322,6 @@
     <div id="popupOverlay" class="popup-overlay"></div>
 
     <script>
-        // Show popup for first-time guest users
         document.addEventListener('DOMContentLoaded', function() {
             const username = "{{ username }}";
             const user_type = "{{ user_type }}";
@@ -428,43 +338,32 @@
             document.getElementById('popupOverlay').style.display = 'none';
         }
 
-        // Handle form submission and refresh
         document.getElementById('guestForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const formData = new FormData(this);
-            fetch('/memes/register', {
-                method: 'POST',
-                body: formData
-            })
+            fetch('/memes/register', { method: 'POST', body: formData })
             .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
+                if (!response.ok) throw new Error('Network response was not ok');
                 return response.json();
             })
             .then(data => {
                 if (data.message) {
                     alert(data.message);
-                    if (data.success) {
-                        window.location.reload();
-                    } else {
-                        closePopup(); // Close popup on failure to allow retry
-                    }
+                    if (data.success) window.location.reload();
+                    else closePopup();
                 }
             })
             .catch(error => {
                 console.error('Error during registration:', error);
                 alert('An error occurred. Please try again.');
-                closePopup(); // Close popup on error to allow retry
+                closePopup();
             });
         });
 
-        // ✅ PERFECTED: Download from persistent disk static/vids/
         function handleDownload(memeId, description) {
             const videoFilename = `${description}.mp4`;
             const videoUrl = `/static/vids/${memeId}.mp4`;
             
-            // Increment download count
             fetch(`/increment_download/${memeId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
@@ -472,7 +371,6 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Modern blob download (works everywhere)
                     fetch(videoUrl)
                         .then(r => {
                             if (!r.ok) throw new Error('File not found');
@@ -490,14 +388,12 @@
                         })
                         .catch(error => {
                             console.error('Download error:', error);
-                            // Fallback: direct link
                             window.open(videoUrl, '_blank');
                         });
                 }
             })
             .catch(error => {
                 console.error('Counter error:', error);
-                // Fallback download
                 window.open(videoUrl, '_blank');
             });
         }
