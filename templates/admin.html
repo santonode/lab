@@ -187,6 +187,10 @@
         .message {
             margin-top: 20px;
             color: #FFCA28;
+            padding: 10px;
+            background-color: rgba(255, 202, 40, 0.1);
+            border: 1px solid #FFCA28;
+            border-radius: 5px;
         }
         .upload-form {
             margin-top: 20px;
@@ -569,24 +573,79 @@
             }
         });
 
-        // ✅ AUTO-SCROLL TO UPLOAD FORM AFTER SUCCESSFUL UPLOAD
+        // ✅ BULLETPROOF AUTO-SCROLL - 3-LAYER DETECTION
+        function scrollToUploadForm() {
+            const uploadSection = document.getElementById('videoUploadSection');
+            if (uploadSection) {
+                // Layer 1: Smooth scroll
+                uploadSection.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'start'
+                });
+                
+                // Layer 2: Immediate fallback
+                setTimeout(() => {
+                    const offsetTop = uploadSection.getBoundingClientRect().top + window.pageYOffset - 100;
+                    window.scrollTo({
+                        top: offsetTop,
+                        behavior: 'smooth'
+                    });
+                }, 100);
+                
+                // Layer 3: Hard scroll guarantee
+                setTimeout(() => {
+                    window.scrollTo({
+                        top: uploadSection.offsetTop - 100,
+                        behavior: 'auto'
+                    });
+                }, 500);
+                
+                console.log('✅ AUTO-SCROLL TO UPLOAD FORM COMPLETE!');
+            }
+        }
+
+        // ✅ MAIN AUTO-SCROLL LOGIC
         document.addEventListener('DOMContentLoaded', function() {
-            // Check URL parameter for successful upload
+            // Method 1: URL Parameter
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('upload_success') === 'true') {
-                // Scroll to upload form smoothly
-                const uploadSection = document.getElementById('videoUploadSection');
-                if (uploadSection) {
-                    uploadSection.scrollIntoView({ 
-                        behavior: 'smooth', 
-                        block: 'start',
-                        inline: 'nearest'
-                    });
-                    // Reset the URL parameter to clean it up
-                    window.history.replaceState({}, document.title, window.location.pathname);
+                scrollToUploadForm();
+                window.history.replaceState({}, document.title, window.location.pathname);
+                return;
+            }
+
+            // Method 2: Success Message Detection
+            const messages = document.querySelectorAll('.message');
+            for (let msg of messages) {
+                const text = msg.textContent.toLowerCase();
+                if (text.includes('success') || 
+                    text.includes('uploaded') || 
+                    text.includes('complete') ||
+                    text.includes('video') ||
+                    text.includes('saved')) {
+                    scrollToUploadForm();
+                    // Auto-fade success message
+                    setTimeout(() => {
+                        msg.style.transition = 'opacity 0.5s';
+                        msg.style.opacity = '0';
+                        setTimeout(() => msg.remove(), 500);
+                    }, 2000);
+                    return;
+                }
+            }
+
+            // Method 3: Always scroll if form is below viewport
+            const uploadSection = document.getElementById('videoUploadSection');
+            if (uploadSection) {
+                const rect = uploadSection.getBoundingClientRect();
+                if (rect.top > window.innerHeight || rect.bottom > window.innerHeight) {
+                    scrollToUploadForm();
                 }
             }
         });
+
+        // ✅ MANUAL TEST FUNCTION (for debugging)
+        window.scrollToUpload = scrollToUploadForm;
     </script>
 </body>
 </html>
