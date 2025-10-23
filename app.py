@@ -1,15 +1,25 @@
-from flask import Flask
+from flask import Flask, send_from_directory
 from wurdle import wurdle_bp
 from memes import memes_bp, init_db
 import os
 import re
 
-app = Flask(__name__, static_folder='static', template_folder='templates')
-app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))  # Use env var or generate secure key
+# ✅ UPDATED: static2 for CSS + static for videos/thumbs
+app = Flask(__name__, 
+            static_folder='static2',      # ← CSS from static2
+            static_url_path='/static2',    # ← /static2/styles.css
+            template_folder='templates')
+app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))
 
 # Register blueprints
 app.register_blueprint(wurdle_bp)
 app.register_blueprint(memes_bp)
+
+# ✅ NEW: Serve videos/thumbs from original static/ (persistent disk)
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    """Serve videos/thumbs from persistent disk static/"""
+    return send_from_directory('static', filename)
 
 # Define the get_download_url function (updated to accept a URL string)
 def get_download_url(url):
@@ -32,6 +42,6 @@ except Exception as e:
     raise  # Re-raise to fail the app startup if init_db fails
 
 # Configure port for Render
-port = int(os.getenv("PORT", 5000))  # Default to 5000 if PORT not set
+port = int(os.getenv("PORT", 5000))
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=port)
