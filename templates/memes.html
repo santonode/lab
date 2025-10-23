@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Santo - Asset List</title>
+    <!-- ✅ UPDATED: static2 CSS path -->
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <style>
         body {
@@ -65,6 +66,24 @@
             padding: 2px 4px;
             border-radius: 4px;
         }
+        .header .admin-link {
+            position: absolute;
+            top: 50%;
+            right: 40px;
+            transform: translateY(-50%);
+            font-size: 14px;
+            color: #26A69A;
+            padding: 2px 8px;
+            line-height: 1;
+            text-decoration: none;
+            background-color: rgba(38, 166, 154, 0.1);
+            border: 1px solid #26A69A;
+            border-radius: 4px;
+        }
+        .header .admin-link:hover {
+            background-color: #26A69A;
+            color: white;
+        }
         .content {
             margin-top: 50px;
             margin-bottom: 0;
@@ -85,6 +104,7 @@
             padding: 5px 10px;
             width: 100%;
             box-sizing: border-box;
+            border-bottom: 3px solid #26A69A;
         }
         .meme-table {
             width: 100%;
@@ -98,11 +118,12 @@
             vertical-align: middle;
         }
         .meme-table th {
-            background-color: #f2f2f2;
+            background: linear-gradient(45deg, #263238, #37474f);
+            color: white;
             cursor: pointer;
         }
         .meme-table th a {
-            color: #000;
+            color: white;
             text-decoration: none;
         }
         .meme-table th a:hover {
@@ -112,7 +133,7 @@
             background-color: #f9f9f9;
         }
         .meme-table tr:hover {
-            background-color: #f1f1f1;
+            background-color: #e3f2fd;
         }
         .meme-table th:nth-child(1), .meme-table td:nth-child(1) { /* ID */
             width: 5%;
@@ -138,6 +159,24 @@
             max-height: calc(1.5em + 16px);
             width: auto;
             vertical-align: middle;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .download-link {
+            color: #26A69A;
+            text-decoration: none;
+            font-weight: bold;
+            padding: 4px 8px;
+            background-color: rgba(38, 166, 154, 0.1);
+            border: 1px solid #26A69A;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .download-link:hover {
+            background-color: #26A69A;
+            color: white;
+            text-decoration: none;
         }
         @media (max-width: 600px) {
             .content {
@@ -213,14 +252,6 @@
             margin: 3px 0;
             font-size: 12px;
         }
-        .download-link {
-            color: #26A69A;
-            text-decoration: none;
-            cursor: pointer;
-        }
-        .download-link:hover {
-            text-decoration: underline;
-        }
         .popup {
             display: none;
             position: fixed;
@@ -234,6 +265,7 @@
             z-index: 2000;
             width: 300px;
             text-align: center;
+            border-radius: 8px;
         }
         .popup-overlay {
             display: none;
@@ -285,9 +317,12 @@
             <a href="/" class="user-info">guest</a>
         {% endif %}
         <a href="/profile" class="gear-icon">⚙️</a>
+        <a href="/admin" class="admin-link">🔧 Admin</a>
     </div>
+    
     <div class="content">
         <div class="summary">Total Assets: {{ meme_count|default(0) }} assets / Total Downloads: {{ total_downloads|default(0) }}</div>
+        
         <table class="meme-table">
             <thead>
                 <tr>
@@ -319,40 +354,49 @@
                         <td class="meme-id">{{ meme.meme_id }}</td>
                         <td class="meme-type">{{ meme.type }}</td>
                         <td class="meme-thumb">
-                            <!-- ✅ UPDATED: New thumbs path -->
-                            <img src="{{ url_for('static', filename='thumbs/' ~ meme.meme_id|string ~ '.jpg') }}" alt="{{ meme.meme_description }}" class="meme-thumb-img">
+                            <!-- ✅ THUMBS from persistent disk static/ -->
+                            <img src="/static/thumbs/{{ meme.meme_id }}.jpg" 
+                                 alt="{{ meme.meme_description }}" 
+                                 onerror="this.src='/static/thumbs/default.jpg'; this.alt='No thumbnail';"
+                                 loading="lazy">
                         </td>
                         <td class="meme-description">
                             {{ meme.meme_description if meme.meme_description else 'No description' }}<br>
                             {% if meme.meme_description %}
-                                <a class="download-link" href="javascript:void(0)" onclick="handleDownload('{{ meme.meme_id }}', '{{ meme.meme_description }}')">Download</a> /
+                                <a class="download-link" 
+                                   href="javascript:void(0)" 
+                                   onclick="handleDownload('{{ meme.meme_id }}', '{{ meme.meme_description | replace(' ', '_') | replace('/', '_') }}')">
+                                   📥 Download
+                                </a> /
                             {% endif %}
                             {% set owner = users|selectattr('id', 'equalto', meme.owner)|first %}
-                            {{ owner.username if owner else 'Unknown' }}
+                            <small style="color: #666;">{{ owner.username if owner else 'Unknown' }}</small>
                         </td>
                         <td class="meme-download-counts">{{ meme.meme_download_counts }}</td>
                     </tr>
                 {% endfor %}
             </tbody>
         </table>
+        
         {% if message %}
             <div class="message">{{ message }}</div>
         {% endif %}
     </div>
+    
     <div class="footer">
         <p>Made with ❤️ by Team Santo</p>
     </div>
 
     <!-- Popup for first-time guest users -->
     <div id="guestPopup" class="popup">
-        <h3>Welcome to Santo!</h3>
+        <h3>🎉 Welcome to Santo!</h3>
         <p>Create a username and password to become a Member, or continue as a guest.</p>
         <form id="guestForm" method="POST" action="/memes/register">
-            <input type="text" name="register_username" placeholder="Username (1-12 alphanumeric)" required>
-            <input type="password" name="register_password" placeholder="Password" required>
-            <button type="submit" class="register-btn">Register</button>
+            <input type="text" name="register_username" placeholder="Username (1-12 alphanumeric)" required maxlength="12">
+            <input type="password" name="register_password" placeholder="Password" required minlength="4">
+            <button type="submit" class="register-btn">🚀 Register</button>
         </form>
-        <button class="decline-btn" onclick="closePopup()">Continue as Guest</button>
+        <button class="decline-btn" onclick="closePopup()">👤 Continue as Guest</button>
     </div>
     <div id="popupOverlay" class="popup-overlay"></div>
 
@@ -405,62 +449,47 @@
             });
         });
 
-        // ✅ UPDATED: NEW VIDS PATH & {ID}.mp4 NAMING
+        // ✅ PERFECTED: Download from persistent disk static/vids/
         function handleDownload(memeId, description) {
-            // ✅ NEW: Clean filename = {ID}.mp4
             const videoFilename = `${description}.mp4`;
-            // ✅ NEW: Clean path = /static/vids/{ID}.mp4
             const videoUrl = `/static/vids/${memeId}.mp4`;
             
+            // Increment download count
             fetch(`/increment_download/${memeId}`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' }
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Force download using a blob
+                    // Modern blob download (works everywhere)
                     fetch(videoUrl)
-                        .then(response => response.blob())
+                        .then(r => {
+                            if (!r.ok) throw new Error('File not found');
+                            return r.blob();
+                        })
                         .then(blob => {
-                            const url = window.URL.createObjectURL(blob);
+                            const url = URL.createObjectURL(blob);
                             const a = document.createElement('a');
                             a.href = url;
                             a.download = videoFilename;
                             document.body.appendChild(a);
                             a.click();
                             a.remove();
-                            window.URL.revokeObjectURL(url);
+                            URL.revokeObjectURL(url);
                         })
                         .catch(error => {
-                            console.error('Error fetching file:', error);
-                            const newTab = window.open(videoUrl, '_blank');
-                            if (newTab) {
-                                alert('An error occurred. Please try again or download manually from the new tab: ' + videoUrl);
-                            } else {
-                                alert('Popup blocked. Please allow popups and try again, or download manually from: ' + videoUrl);
-                            }
+                            console.error('Download error:', error);
+                            // Fallback: direct link
+                            window.open(videoUrl, '_blank');
                         });
-                } else {
-                    throw new Error(data.error || 'Unknown error');
                 }
             })
             .catch(error => {
-                console.error('Error during download:', error);
-                const newTab = window.open(videoUrl, '_blank');
-                if (newTab) {
-                    alert('An error occurred. Please try again or download manually from the new tab: ' + videoUrl);
-                } else {
-                    alert('Popup blocked. Please allow popups and try again, or download manually from: ' + videoUrl);
-                }
+                console.error('Counter error:', error);
+                // Fallback download
+                window.open(videoUrl, '_blank');
             });
-        }
-
-        // Client-side get_download_url function (not needed for local files)
-        function get_download_url(url) {
-            return url; // No transformation needed for local files
         }
     </script>
 </body>
