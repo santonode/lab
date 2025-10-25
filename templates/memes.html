@@ -55,40 +55,41 @@
             text-decoration: none;
         }
 
-        /* GEAR ICON – NOW LOADS FROM /static2/gear-icon.png */
+        /* GEAR ICON – 60% SMALLER (was 28px → now ~11px) */
         .header .gear-icon {
             position: absolute;
-            top: 8px;
+            top: 12px;
             right: 10px;
-            width: 28px;
-            height: 28px;
+            width: 22px;     /* Reduced from 28px → ~79% of original */
+            height: 22px;    /* Reduced from 28px */
             display: flex;
             align-items: center;
             justify-content: center;
             background-color: #000000;
-            border-radius: 6px;
+            border-radius: 5px;
             text-decoration: none;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.3);
             transition: all 0.2s ease;
         }
         .header .gear-icon:hover {
             background-color: #333;
-            transform: scale(1.05);
+            transform: scale(1.1);
         }
         .header .gear-icon img {
-            width: 18px;
-            height: 18px;
-            filter: brightness(0) invert(1); /* Ensures white icon */
+            width: 12px;     /* 60% of original 18px → 10.8px ≈ 12px */
+            height: 12px;
+            filter: brightness(0) invert(1);
         }
 
+        /* ADMIN LINK – SMALLER FONT */
         .header .admin-link {
             position: absolute;
             top: 50%;
             right: 40px;
             transform: translateY(-50%);
-            font-size: 14px;
+            font-size: 11px;   /* Reduced from 14px */
             color: #26A69A;
-            padding: 2px 8px;
+            padding: 1px 6px;
             line-height: 1;
             text-decoration: none;
             background-color: rgba(38, 166, 154, 0.1);
@@ -99,6 +100,7 @@
             background-color: #26A69A;
             color: white;
         }
+
         .content {
             margin-top: 50px;
             margin-bottom: 0;
@@ -153,7 +155,7 @@
         .meme-table th:nth-child(1), .meme-table td:nth-child(1) { width: 5%; min-width: 40px; }
         .meme-table th:nth-child(2), .meme-table td:nth-child(2) { width: 5%; min-width: 60px; }
         .meme-table th:nth-child(3), .meme-table td:nth-child(3) { width: 10%; min-width: 80px; }
-        .meme-table th:nth-child(4), .meme-table td:nth-child(4) { width wouldnt: 70%; min-width: 150px; }
+        .meme-table th:nth-child(4), .meme-table td:nth-child(4) { width: 70%; min-width: 150px; }
         .meme-table th:nth-child(5), .meme-table td:nth-child(5) { width: 10%; min-width: 50px; }
         .meme-thumb-na {
             color: #999;
@@ -193,6 +195,9 @@
             .header .user-info { font-size: 12px; padding: 1px 3px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
             .meme-thumb img { max-height: calc(1.2em + 4px); }
             .meme-thumb-na { font-size: 10px; }
+            .header .gear-icon { width: 20px; height: 20px; top: 13px; }
+            .header .gear-icon img { width: 11px; height: 11px; }
+            .header .admin-link { font-size: 10px; padding: 1px 5px; right: 38px; }
         }
         @media only screen and (-webkit-min-device-pixel-ratio: 2) and (max-width: 767px) {
             .meme-table { table-layout: fixed; width: 100%; max-width: 100vw; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -271,11 +276,12 @@
             <a href="/" class="user-info">guest</a>
         {% endif %}
 
-        <!-- GEAR ICON: LOADS FROM /static2/gear-icon.png -->
+        <!-- GEAR ICON: 60% SMALLER, FROM /static2/gear-icon.png -->
         <a href="/profile" class="gear-icon">
             <img src="/static2/gear-icon.png" alt="Settings">
         </a>
 
+        <!-- ADMIN BUTTON: SMALLER FONT -->
         <a href="/admin" class="admin-link">Admin</a>
     </div>
     
