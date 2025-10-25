@@ -52,6 +52,10 @@ def delete_existing_files(meme_id):
         current_app.logger.error(f"Error deleting files for meme_id {meme_id}: {str(e)}")
         return []
 
+# Helper function to hash password
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
 # Memes route
 @memes_bp.route('/memes')
 def memes():
@@ -277,12 +281,12 @@ def admin():
                             
                             file_action = "replaced" if is_overwrite else "created"
                             deleted_msg = f" (deleted: {', '.join(deleted_files)})" if deleted_files else ""
-                            message = f"✅ Video {file_action} successfully for MEME ID {meme_id}!{deleted_msg}"
+                            message = f"Video {file_action} successfully for MEME ID {meme_id}!{deleted_msg}"
                             if is_new:
                                 next_meme_id = get_next_id('memes')
                                 
                         except Exception as e:
-                            message = f"❌ Error uploading video or generating thumbnail: {str(e)}"
+                            message = f"Error uploading video or generating thumbnail: {str(e)}"
 
     if not authenticated:
         return render_template('admin.html', message=message, authenticated=authenticated, next_meme_id=next_meme_id)
@@ -314,37 +318,62 @@ def admin():
         current_app.logger.error(f"Error in admin: {str(e)}")
         return render_template('admin.html', memes=[], users=[], meme_count=0, message="Error fetching data.", authenticated=authenticated, next_meme_id=next_meme_id)
 
-# Register route
-@memes_bp.route('/register', methods=['POST'])
+# Register route (AJAX)
+@memes_bp.route('/memes/register', methods=['POST'])
 def register():
     username = request.form.get('register_username', '').strip()
     password = request.form.get('register_password', '')
-    ip_address = request.remote_addr
 
-    if username and password and all(c.isalnum() for c in username) and 1 <= len(username) <= 12:
-        try:
-            with psycopg.connect(DATABASE_URL) as conn:
-                with conn.cursor() as cur:
-                    cur.execute('SELECT 1 FROM users WHERE username = %s', (username,))
-                    if cur.fetchone():
-                        return jsonify({'message': 'Username already taken.', 'success': False})
-                    cur.execute('INSERT INTO users (ip_address, username, password, user_type, points, word_list) VALUES (%s, %s, %s, %s, %s, %s)',
-                              (ip_address, username, hash_password(password), 'Member', 0, 'words.txt'))
-                    cur.execute('INSERT INTO user_stats (user_id) VALUES (currval(\'users_id_seq\'))')
-                    conn.commit()
+    if not username or not password:
+        return jsonify({'message': 'Username and password are required.', 'success': False})
+    if not (1 <= len(username) <= 12 and username.isalnum()):
+        return jsonify({'message': 'Username must be 1-12 alphanumeric characters.', 'success': False})
+
+    try:
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT 1 FROM users WHERE username = %s', (username,))
+                if cur.fetchone():
+                    return jsonify({'message': 'Username already taken.', 'success': False})
+                cur.execute('INSERT INTO users (ip_address, username, password, user_type, points, word_list) VALUES (%s, %s, %s, %s, %s, %s)',
+                          (request.remote_addr, username, hash_password(password), 'Member', 0, 'words.txt'))
+                cur.execute('INSERT INTO user_stats (user_id) VALUES (currval(\'users_id_seq\'))')
+                conn.commit()
+                session.clear()
+                session['username'] = username
+                session['user_type'] = 'Member'
+                session['word_list'] = 'words.txt'
+                return jsonify({'message': 'Registration successful! Welcome, Member!', 'success': True})
+    except psycopg.Error as e:
+        current_app.logger.error(f"Database error during registration: {str(e)}")
+        return jsonify({'message': 'Registration failed. Try again.', 'success': False})
+
+# Login route (AJAX)
+@memes_bp.route('/memes/login', methods=['POST'])
+def login():
+    username = request.form.get('login_username', '').strip()
+    password = request.form.get('login_password', '')
+
+    if not username or not password:
+        return jsonify({'message': 'Username and password required.', 'success': False})
+
+    try:
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT password, user_type, points FROM users WHERE username = %s', (username,))
+                result = cur.fetchone()
+                if result and result[0] == hash_password(password):
                     session.clear()
                     session['username'] = username
-                    session['user_type'] = 'Member'
+                    session['user_type'] = result[1]
                     session['word_list'] = 'words.txt'
-                    return jsonify({'message': 'Registration successful! You are now a Member.', 'success': True})
-        except psycopg.Error as e:
-            current_app.logger.error(f"Database error during registration: {str(e)}")
-            return jsonify({'message': 'Error during registration.', 'success': False})
-    return jsonify({'message': 'Invalid username or password.', 'success': False})
-
-# Helper function to hash password
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+                    points = result[2]
+                    return jsonify({'message': f'Welcome back, {username}!', 'success': True})
+                else:
+                    return jsonify({'message': 'Invalid username or password.', 'success': False})
+    except psycopg.Error as e:
+        current_app.logger.error(f"Database error during login: {str(e)}")
+        return jsonify({'message': 'Login failed. Try again.', 'success': False})
 
 # Increment download count routes
 @memes_bp.route('/add_point_and_redirect/<int:meme_id>', methods=['POST'])
@@ -395,7 +424,7 @@ def get_download_url(url):
             return f"https://drive.google.com/uc?export=download&id={file_id}"
     return url
 
-# ✅ FIXED: Database initialization function (REQUIRED FOR IMPORT)
+# Database initialization function
 def init_db():
     try:
         with psycopg.connect(DATABASE_URL) as conn:
