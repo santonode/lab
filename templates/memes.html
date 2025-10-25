@@ -54,17 +54,33 @@
             line-height: 1;
             text-decoration: none;
         }
+
+        /* GEAR ICON – NOW LOADS FROM /static2/gear-icon.png */
         .header .gear-icon {
             position: absolute;
-            top: 5px;
+            top: 8px;
             right: 10px;
-            font-size: 16px;
-            text-decoration: none;
-            color: white;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             background-color: #000000;
-            padding: 2px 4px;
-            border-radius: 4px;
+            border-radius: 6px;
+            text-decoration: none;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            transition: all 0.2s ease;
         }
+        .header .gear-icon:hover {
+            background-color: #333;
+            transform: scale(1.05);
+        }
+        .header .gear-icon img {
+            width: 18px;
+            height: 18px;
+            filter: brightness(0) invert(1); /* Ensures white icon */
+        }
+
         .header .admin-link {
             position: absolute;
             top: 50%;
@@ -137,7 +153,7 @@
         .meme-table th:nth-child(1), .meme-table td:nth-child(1) { width: 5%; min-width: 40px; }
         .meme-table th:nth-child(2), .meme-table td:nth-child(2) { width: 5%; min-width: 60px; }
         .meme-table th:nth-child(3), .meme-table td:nth-child(3) { width: 10%; min-width: 80px; }
-        .meme-table th:nth-child(4), .meme-table td:nth-child(4) { width: 70%; min-width: 150px; }
+        .meme-table th:nth-child(4), .meme-table td:nth-child(4) { width wouldnt: 70%; min-width: 150px; }
         .meme-table th:nth-child(5), .meme-table td:nth-child(5) { width: 10%; min-width: 50px; }
         .meme-thumb-na {
             color: #999;
@@ -254,7 +270,12 @@
         {% elif username %}
             <a href="/" class="user-info">guest</a>
         {% endif %}
-        <a href="/profile" class="gear-icon">Settings</a>
+
+        <!-- GEAR ICON: LOADS FROM /static2/gear-icon.png -->
+        <a href="/profile" class="gear-icon">
+            <img src="/static2/gear-icon.png" alt="Settings">
+        </a>
+
         <a href="/admin" class="admin-link">Admin</a>
     </div>
     
