@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wurdle - Profile</title>
+    <title>Santo - Profile</title>
     <link rel="stylesheet" href="/static/styles.css">
     <style>
         .header {
@@ -199,7 +199,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>Wurdle</h1>
+        <h1>Santo</h1>
         {% if username and user_type == 'Member' and points is not none %}
             <a href="/" class="user-info">{{ username }} {{ points }}pts</a>
         {% elif username %}
@@ -248,7 +248,7 @@
             <div class="message">{{ message }}</div>
         {% endif %}
     </div>
-    <a href="/memes.html" class="back-button">Back to Memes</a>
+    <a href="/templates/memes.html" class="back-button">Back to Memes</a>
     <div class="footer">
         <p>Made with ❤️ by Wurdle Team</p>
         <p>Play Now and Share with Friends!</p>
