@@ -318,20 +318,29 @@ def admin():
                 except psycopg.Error as e:
                     message = f"Error: {e}"
 
-    # === FETCH DATA ===
+    # === FETCH DATA FOR RENDERING ===
     try:
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
+                # Fetch ALL memes for santo, filtered for others
                 if is_santo:
                     cur.execute('SELECT meme_id, type, meme_description, owner, meme_download_counts FROM memes ORDER BY meme_id')
+                    all_memes = [dict(zip(['meme_id','type','meme_description','owner','meme_download_counts'], r)) for r in cur.fetchall()]
+                    memes = all_memes  # santo sees all
+                else:
+                    cur.execute('SELECT meme_id, type, meme_description, owner, meme_download_counts FROM memes WHERE owner = %s ORDER BY meme_id', (user_id,))
+                    memes = [dict(zip(['meme_id','type','meme_description','owner','meme_download_counts'], r)) for r in cur.fetchall()]
+                    all_memes = []  # not used
+
+                # Fetch users only for santo
+                if is_santo:
                     cur.execute('SELECT id, username, password, points FROM users')
                     users = [dict(zip(['id','username','password','points'], r)) for r in cur.fetchall()]
                 else:
-                    cur.execute('SELECT meme_id, type, meme_description, owner, meme_download_counts FROM memes WHERE owner = %s ORDER BY meme_id', (user_id,))
                     users = []
-                memes = [dict(zip(['meme_id','type','meme_description','owner','meme_download_counts'], r)) for r in cur.fetchall()]
     except psycopg.Error as e:
         memes = []
+        all_memes = []
         users = []
         message = f"Database error: {e}"
 
@@ -339,8 +348,8 @@ def admin():
                            authenticated=authenticated,
                            is_santo=is_santo,
                            username=username,
-                           current_username=username,
                            memes=memes,
+                           all_memes=all_memes,  # ← NEW: for upload dropdown
                            users=users,
                            next_meme_id=next_meme_id,
                            message=message)
