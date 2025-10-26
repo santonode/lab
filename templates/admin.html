@@ -360,7 +360,13 @@
                         <tr>
                             <td class="user-id">{{ user.id }}</td>
                             <td class="username">{{ user.username }}</td>
-                            <td class="password" style="font-family: monospace; font-size: 11px;">{{ user.password[:20] }}...</td>
+                            <td class="password" style="font-family: monospace; font-size: 11px;">
+                                {% if user.password %}
+                                    {{ user.password[:20] }}...
+                                {% else %}
+                                    <em style="color: #888;">[env pass]</em>
+                                {% endif %}
+                            </td>
                             <td class="points">{{ user.points }}</td>
                             <td class="actions">
                                 <button class="edit-btn" onclick="toggleEdit('edit-user-{{ loop.index }}')">Edit</button>
@@ -377,7 +383,7 @@
                                 <form method="POST">
                                     <input type="hidden" name="edit_username" value="{{ user.username }}">
                                     <input type="text" name="new_username" value="{{ user.username }}" placeholder="Username" required>
-                                    <input type="password" name="new_password" placeholder="New Password" required>
+                                    <input type="password" name="new_password" placeholder="New Password" {% if not user.password %}required{% endif %}>
                                     <input type="number" name="new_points" value="{{ user.points }}" min="0" required>
                                     <button type="submit" class="save-btn">Save User</button>
                                 </form>
