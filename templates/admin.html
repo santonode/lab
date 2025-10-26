@@ -34,7 +34,7 @@
             padding: 5px 10px;
             background: linear-gradient(45deg, #26A69A, #FFCA28);
             -webkit-background-clip: text;
-<background-clip: text;
+            background-clip: text;
             color: transparent;
         }
         .footer {
@@ -263,7 +263,7 @@
             color: #721c24;
         }
         .santo-badge {
-            background: linear-gradient(45deg, #FFD700, #...
+            background: linear-gradient(45deg, #FFD700, #FFA500);
             color: #000;
             padding: 2px 6px;
             border-radius: 4px;
@@ -394,9 +394,8 @@
             </table>
             {% endif %}
 
-            <!-- MEME LIST – FIXED: SHOW ALL MEMES FOR SANTO, MY MEMES FOR OTHERS -->
+            <!-- MEME LIST -->
             <h2>{% if is_santo %}All Memes{% else %}My Memes{% endif %}</h2>
-            
             {% if not memes or memes|length == 0 %}
                 <p style="color: #666; font-style: italic;">No memes uploaded yet. Use the form below to upload your first!</p>
             {% else %}
@@ -442,7 +441,7 @@
                                         <option value="GM" {% if meme.type == "GM" %}selected{% endif %}>GM</option>
                                         <option value="GN" {% if meme.type == "GN" %}selected{% endif %}>GN</option>
                                         <option value="OTHER" {% if meme.type == "OTHER" %}selected{% endif %}>OTHER</option>
-                                        <option value="CRYPTO" {% if meme.type == "CRYPTO" %} "selected{% endif %}>CRYPTO</option>
+                                        <option value="CRYPTO" {% if meme.type == "CRYPTO" %}selected{% endif %}>CRYPTO</option>
                                         <option value="GRAWK" {% if meme.type == "GRAWK" %}selected{% endif %}>GRAWK</option>
                                     </select>
                                     <input type="text" name="new_description" value="{{ meme.meme_description }}" placeholder="Description" required>
@@ -455,7 +454,7 @@
             </table>
             {% endif %}
 
-            <!-- VIDEO UPLOAD FORM – FIXED: USES CORRECT `memes` LIST -->
+            <!-- VIDEO UPLOAD FORM – FULLY FIXED -->
             <div class="upload-form" id="videoUploadSection">
                 <h3>Video Upload (Overwrite or New)</h3>
                 <div class="meme-id-info">
@@ -483,7 +482,7 @@
                     
                     <div class="upload-form-row">
                         <label for="meme_type">Meme Type:</label>
-                        <，用于select name="meme_type" id="meme_type" required>
+                        <select name="meme_type" id="meme_type" required>
                             <option value="GM">GM</option>
                             <option value="GN">GN</option>
                             <option value="OTHER">OTHER</option>
