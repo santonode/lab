@@ -14,8 +14,8 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL environment variable must be set")
 
-# Admin password from environment variable, with fallback for local testing
-ADMIN_PASS = os.environ.get('ADMIN_PASS', 'admin123')
+# Santo superuser password from environment variable
+SANTO_PASS = os.environ.get('SANTO_PASS', 'santo123')  # Set in .env
 
 # Function to get the next ID for a table
 def get_next_id(table_name):
@@ -28,7 +28,7 @@ def get_next_id(table_name):
         current_app.logger.error(f"Database error in get_next_id: {str(e)}")
         return 1
 
-# Function to safely delete existing files (NEW PATHS)
+# Function to safely delete existing files
 def delete_existing_files(meme_id):
     """Delete existing video and thumbnail files for a given meme_id"""
     try:
@@ -108,215 +108,236 @@ def memes():
 @memes_bp.route('/admin', methods=['GET', 'POST'])
 def admin():
     message = None
-    authenticated = session.get('admin_authenticated', False)
+    username = session.get('username')
+    user_type = session.get('user_type', 'Guest')
+    authenticated = bool(username and user_type in ['Member', 'Admin'])
+    is_santo = (username == 'santo' and user_type == 'Admin')
     next_meme_id = get_next_id('memes')
 
-    if request.method == 'POST':
-        if 'admin_pass' in request.form:
-            admin_pass = request.form.get('admin_pass', '')
-            if admin_pass == ADMIN_PASS:
-                session['admin_authenticated'] = True
+    # Handle login for santo
+    if not authenticated:
+        if request.method == 'POST' and 'admin_pass' in request.form:
+            if request.form['admin_pass'] == SANTO_PASS:
+                session['username'] = 'santo'
+                session['user_type'] = 'Admin'
                 authenticated = True
-                message = "Admin authentication successful!"
+                is_santo = True
+                message = "Santo login successful!"
             else:
-                message = "Incorrect admin password."
-        elif authenticated:
-            if 'delete_username' in request.form:
-                username = request.form.get('delete_username')
+                message = "Incorrect password."
+        return render_template('admin.html', message=message, authenticated=False)
+
+    # Get current user ID
+    user_id = None
+    current_username = username
+    try:
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT id FROM users WHERE username = %s', (username,))
+                result = cur.fetchone()
+                if result:
+                    user_id = result[0]
+    except psycopg.Error as e:
+        current_app.logger.error(f"Error fetching user ID: {e}")
+        return "User not found.", 404
+
+    if not user_id:
+        return "User not found.", 404
+
+    # Handle POST actions
+    if request.method == 'POST':
+        if 'upload_video' in request.form:
+            video = request.files.get('video')
+            upload_meme_id = request.form.get('upload_meme_id')
+            meme_type = request.form.get('meme_type')
+            overwrite_files = 'overwrite_files' in request.form
+
+            if not video or not video.filename.lower().endswith('.mp4'):
+                message = "Please select a valid MP4 video file."
+            elif not upload_meme_id.isdigit():
+                message = "Invalid MEME ID selected."
+            elif meme_type not in ['GM', 'GN', 'OTHER', 'CRYPTO', 'GRAWK']:
+                message = "Invalid meme type selected."
+            else:
+                meme_id = int(upload_meme_id)
+                is_new = meme_id == next_meme_id
+
+                # Permission check for overwrite
+                if not is_new and not is_santo:
+                    try:
+                        with psycopg.connect(DATABASE_URL) as conn:
+                            with conn.cursor() as cur:
+                                cur.execute('SELECT owner FROM memes WHERE meme_id = %s', (meme_id,))
+                                row = cur.fetchone()
+                                if row and row[0] != user_id:
+                                    message = "You can only replace your own videos."
+                                    return render_template('admin.html', **locals())
+                    except psycopg.Error as e:
+                        message = f"Database error: {e}"
+                        return render_template('admin.html', **locals())
+
+                max_size = 25 * 1024 * 1024
+                if video.content_length and video.content_length > max_size:
+                    message = "File exceeds 25MB limit."
+                else:
+                    try:
+                        deleted_files = []
+                        if not is_new and overwrite_files:
+                            deleted_files = delete_existing_files(meme_id)
+
+                        video_dir = os.path.join(os.path.dirname(__file__), 'static', 'vids')
+                        thumbnail_dir = os.path.join(os.path.dirname(__file__), 'static', 'thumbs')
+                        os.makedirs(video_dir, exist_ok=True)
+                        os.makedirs(thumbnail_dir, exist_ok=True)
+                        
+                        video_path = os.path.join(video_dir, f"{meme_id}.mp4")
+                        video.save(video_path)
+                        
+                        base_description = os.path.splitext(video.filename)[0]
+                        
+                        with psycopg.connect(DATABASE_URL) as conn:
+                            with conn.cursor() as cur:
+                                if is_new:
+                                    cur.execute('''
+                                        INSERT INTO memes (meme_id, meme_url, meme_description, meme_download_counts, type, owner, thumbnail_url) 
+                                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                    ''', (meme_id, '', base_description, 0, meme_type, user_id, ''))
+                                else:
+                                    cur.execute('UPDATE memes SET type = %s, meme_description = %s WHERE meme_id = %s',
+                                              (meme_type, base_description, meme_id))
+                                    if cur.rowcount == 0:
+                                        cur.execute('''
+                                            INSERT INTO memes (meme_id, meme_url, meme_description, meme_download_counts, type, owner, thumbnail_url) 
+                                            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                        ''', (meme_id, '', base_description, 0, meme_type, user_id, ''))
+                                conn.commit()
+                        
+                        # Generate thumbnail
+                        thumbnail_path = os.path.join(thumbnail_dir, f"{meme_id}.jpg")
+                        cap = cv2.VideoCapture(video_path)
+                        if cap.isOpened():
+                            ret, frame = cap.read()
+                            if ret:
+                                frame = cv2.resize(frame, (200, 200), interpolation=cv2.INTER_AREA)
+                                cv2.imwrite(thumbnail_path, frame)
+                                with psycopg.connect(DATABASE_URL) as conn:
+                                    with conn.cursor() as cur:
+                                        cur.execute('UPDATE memes SET thumbnail_url = %s WHERE meme_id = %s',
+                                                  (f"/static/thumbs/{meme_id}.jpg", meme_id))
+                                        conn.commit()
+                            cap.release()
+                        
+                        file_action = "replaced" if not is_new else "uploaded"
+                        deleted_msg = f" (deleted: {', '.join(deleted_files)})" if deleted_files else ""
+                        message = f"Video {file_action} successfully for MEME ID {meme_id}!{deleted_msg}"
+                        if is_new:
+                            next_meme_id = get_next_id('memes')
+                        
+                        return redirect('/admin?upload_success=true')
+
+                    except Exception as e:
+                        message = f"Upload error: {str(e)}"
+
+        elif 'delete_meme_id' in request.form:
+            meme_id = request.form['delete_meme_id']
+            if meme_id.isdigit():
                 try:
                     with psycopg.connect(DATABASE_URL) as conn:
                         with conn.cursor() as cur:
-                            cur.execute('DELETE FROM users WHERE username = %s', (username,))
-                            conn.commit()
-                            message = f"User {username} deleted successfully!"
+                            cur.execute('SELECT owner FROM memes WHERE meme_id = %s', (int(meme_id),))
+                            row = cur.fetchone()
+                            if row and (row[0] == user_id or is_santo):
+                                delete_existing_files(int(meme_id))
+                                cur.execute('DELETE FROM memes WHERE meme_id = %s', (int(meme_id),))
+                                conn.commit()
+                                message = f"Meme {meme_id} deleted."
+                            else:
+                                message = "You can only delete your own memes."
                 except psycopg.Error as e:
-                    message = f"Database error deleting user: {str(e)}"
+                    message = f"Error: {e}"
+
+        elif 'edit_meme_id' in request.form and not is_santo:
+            meme_id = request.form['edit_meme_id']
+            new_type = request.form['new_type']
+            new_description = request.form['new_description']
+            if meme_id.isdigit() and new_type in ['GM', 'GN', 'OTHER', 'CRYPTO', 'GRAWK']:
+                try:
+                    with psycopg.connect(DATABASE_URL) as conn:
+                        with conn.cursor() as cur:
+                            cur.execute('SELECT owner FROM memes WHERE meme_id = %s', (int(meme_id),))
+                            row = cur.fetchone()
+                            if row and row[0] == user_id:
+                                cur.execute('UPDATE memes SET type = %s, meme_description = %s WHERE meme_id = %s',
+                                          (new_type, new_description, int(meme_id)))
+                                conn.commit()
+                                message = f"Meme {meme_id} updated."
+                            else:
+                                message = "Permission denied."
+                except psycopg.Error as e:
+                    message = f"Error: {e}"
+
+        # Santo-only actions
+        if is_santo:
+            if 'delete_username' in request.form:
+                username_to_delete = request.form['delete_username']
+                if username_to_delete != 'santo':
+                    try:
+                        with psycopg.connect(DATABASE_URL) as conn:
+                            with conn.cursor() as cur:
+                                cur.execute('DELETE FROM users WHERE uesrname = %s', (username_to_delete,))
+                                conn.commit()
+                                message = f"User {username_to_delete} deleted."
+                    except psycopg.Error as e:
+                        message = f"Error: {e}"
             elif 'edit_username' in request.form:
-                username = request.form.get('edit_username')
-                new_username = request.form.get('new_username')
-                new_password = request.form.get('new_password')
-                new_points = request.form.get('new_points')
+                old_username = request.form['edit_username']
+                new_username = request.form['new_username']
+                new_password = request.form['new_password']
+                new_points = request.form['new_points']
                 try:
                     with psycopg.connect(DATABASE_URL) as conn:
                         with conn.cursor() as cur:
                             cur.execute('UPDATE users SET username = %s, password = %s, points = %s WHERE username = %s',
-                                        (new_username, hash_password(new_password), new_points, username))
+                                      (new_username, hash_password(new_password), new_points, old_username))
                             conn.commit()
-                            message = f"User {username} updated successfully!"
+                            message = f"User {old_username} updated."
                 except psycopg.Error as e:
-                    message = f"Database error updating user: {str(e)}"
-            elif 'add_user' in request.form:
-                new_username = request.form.get('new_username')
-                new_password = request.form.get('new_password')
-                new_points = request.form.get('new_points', 0)
-                if new_username and new_password and all(c.isalnum() for c in new_username) and 1 <= len(new_username) <= 12:
-                    try:
-                        with psycopg.connect(DATABASE_URL) as conn:
-                            with conn.cursor() as cur:
-                                cur.execute('INSERT INTO users (ip_address, username, password, user_type, points, word_list) VALUES (%s, %s, %s, %s, %s, %s)',
-                                          ('0.0.0.0', new_username, hash_password(new_password), 'Member', new_points, 'words.txt'))
-                                cur.execute('INSERT INTO user_stats (user_id) VALUES (currval(\'users_id_seq\'))')
-                                conn.commit()
-                                message = f"User {new_username} added successfully!"
-                    except psycopg.Error as e:
-                        message = f"Database error adding user: {str(e)}"
-            elif 'delete_meme_id' in request.form:
-                meme_id = request.form.get('delete_meme_id')
-                if meme_id.isdigit():
-                    delete_existing_files(int(meme_id))
-                    try:
-                        with psycopg.connect(DATABASE_URL) as conn:
-                            with conn.cursor() as cur:
-                                cur.execute('DELETE FROM memes WHERE meme_id = %s', (int(meme_id),))
-                                conn.commit()
-                                message = f"Meme {meme_id} deleted successfully (including files)!"
-                    except psycopg.Error as e:
-                        message = f"Database error deleting meme: {str(e)}"
-            elif 'edit_meme_id' in request.form:
-                meme_id = request.form.get('edit_meme_id')
-                new_type = request.form.get('new_type')
-                new_description = request.form.get('new_description')
-                new_meme_url = request.form.get('new_meme_url')
-                new_owner = request.form.get('new_owner')
-                new_download_counts = request.form.get('new_download_counts')
-                if not meme_id.isdigit() or not new_owner.isdigit() or not new_meme_url or not new_meme_url.strip():
-                    message = "Invalid input data."
-                else:
-                    try:
-                        with psycopg.connect(DATABASE_URL) as conn:
-                            with conn.cursor() as cur:
-                                cur.execute('UPDATE memes SET type = %s, meme_description = %s, meme_url = %s, owner = %s, meme_download_counts = %s WHERE meme_id = %s',
-                                          (new_type, new_description, new_meme_url, int(new_owner), int(new_download_counts), int(meme_id)))
-                                if cur.rowcount == 0:
-                                    message = f"No meme found with ID {meme_id} to update."
-                                else:
-                                    conn.commit()
-                                    message = f"Meme {meme_id} updated successfully!"
-                    except psycopg.Error as e:
-                        message = f"Database error updating meme: {str(e)}"
-            elif 'add_meme' in request.form:
-                new_meme_id = request.form.get('new_meme_id')
-                new_type = request.form.get('new_type')
-                new_description = request.form.get('new_description')
-                new_meme_url = request.form.get('new_meme_url')
-                new_owner = request.form.get('new_owner')
-                new_download_counts = request.form.get('new_download_counts', 0)
-                if new_meme_id.isdigit() and new_owner.isdigit() and new_meme_url and new_meme_url.strip():
-                    try:
-                        with psycopg.connect(DATABASE_URL) as conn:
-                            with conn.cursor() as cur:
-                                cur.execute('INSERT INTO memes (meme_id, meme_url, meme_description, meme_download_counts, type, owner, thumbnail_url) VALUES (%s, %s, %s, %s, %s, %s, %s)',
-                                          (int(new_meme_id), new_meme_url, new_description, int(new_download_counts), new_type, int(new_owner), ''))
-                                conn.commit()
-                                message = f"Meme {new_meme_id} added manually successfully!"
-                                next_meme_id = get_next_id('memes')
-                    except psycopg.Error as e:
-                        message = f"Database error adding meme: {str(e)}"
-            elif 'upload_video' in request.form:
-                video = request.files.get('video')
-                upload_meme_id = request.form.get('upload_meme_id')
-                meme_type = request.form.get('meme_type')
-                overwrite_files = request.form.get('overwrite_files') == 'on'
-                
-                if not video or not video.filename.lower().endswith('.mp4'):
-                    message = "Please select a valid MP4 video file."
-                elif not upload_meme_id.isdigit():
-                    message = "Invalid MEME ID selected."
-                elif meme_type not in ['GM', 'GN', 'OTHER', 'CRYPTO', 'GRAWK']:
-                    message = "Invalid meme type selected."
-                else:
-                    meme_id = int(upload_meme_id)
-                    max_size = 25 * 1024 * 1024
-                    if video.content_length and video.content_length > max_size:
-                        message = "Video upload failed: File size exceeds 25MB limit."
-                    else:
-                        try:
-                            is_new = meme_id == next_meme_id
-                            is_overwrite = not is_new and overwrite_files
-                            
-                            deleted_files = []
-                            if is_overwrite:
-                                deleted_files = delete_existing_files(meme_id)
-                            
-                            video_dir = os.path.join(os.path.dirname(__file__), 'static', 'vids')
-                            thumbnail_dir = os.path.join(os.path.dirname(__file__), 'static', 'thumbs')
-                            os.makedirs(video_dir, exist_ok=True)
-                            os.makedirs(thumbnail_dir, exist_ok=True)
-                            
-                            video_path = os.path.join(video_dir, f"{meme_id}.mp4")
-                            video.save(video_path)
-                            
-                            base_description = os.path.splitext(video.filename)[0]
-                            
-                            with psycopg.connect(DATABASE_URL) as conn:
-                                with conn.cursor() as cur:
-                                    if is_new:
-                                        cur.execute('''
-                                            INSERT INTO memes (meme_id, meme_url, meme_description, meme_download_counts, type, owner, thumbnail_url) 
-                                            VALUES (%s, %s, %s, %s, %s, %s, %s)
-                                        ''', (meme_id, '', base_description, 0, meme_type, 3, ''))
-                                    else:
-                                        cur.execute('UPDATE memes SET type = %s, meme_description = %s WHERE meme_id = %s',
-                                                  (meme_type, base_description, meme_id))
-                                        if cur.rowcount == 0:
-                                            cur.execute('''
-                                                INSERT INTO memes (meme_id, meme_url, meme_description, meme_download_counts, type, owner, thumbnail_url) 
-                                                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                                            ''', (meme_id, '', base_description, 0, meme_type, 3, ''))
-                                    conn.commit()
-                            
-                            thumbnail_path = os.path.join(thumbnail_dir, f"{meme_id}.jpg")
-                            cap = cv2.VideoCapture(video_path)
-                            if cap.isOpened():
-                                ret, frame = cap.read()
-                                if ret:
-                                    frame = cv2.resize(frame, (200, 200), interpolation=cv2.INTER_AREA)
-                                    cv2.imwrite(thumbnail_path, frame)
-                                    with psycopg.connect(DATABASE_URL) as conn:
-                                        with conn.cursor() as cur:
-                                            cur.execute('UPDATE memes SET thumbnail_url = %s WHERE meme_id = %s',
-                                                      (f"/static/thumbs/{meme_id}.jpg", meme_id))
-                                            conn.commit()
-                                cap.release()
-                            
-                            file_action = "replaced" if is_overwrite else "created"
-                            deleted_msg = f" (deleted: {', '.join(deleted_files)})" if deleted_files else ""
-                            message = f"Video {file_action} successfully for MEME ID {meme_id}!{deleted_msg}"
-                            if is_new:
-                                next_meme_id = get_next_id('memes')
-                                
-                        except Exception as e:
-                            message = f"Error uploading video or generating thumbnail: {str(e)}"
+                    message = f"Error: {e}"
 
-    if not authenticated:
-        return render_template('admin.html', message=message, authenticated=authenticated, next_meme_id=next_meme_id)
-
+    # Fetch data
     try:
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
-                cur.execute('SELECT meme_id, meme_url, meme_description, meme_download_counts, type, owner, thumbnail_url FROM memes ORDER BY meme_id')
-                rows = cur.fetchall()
+                if is_santo:
+                    cur.execute('SELECT meme_id, type, meme_description, owner, meme_download_counts FROM memes ORDER BY meme_id')
+                    cur.execute('SELECT id, username, password, points FROM users')
+                    users = [{'id': r[0], 'username': r[1], 'password': r[2], 'points': r[3]} for r in cur.fetchall()]
+                else:
+                    cur.execute('SELECT meme_id, type, meme_description, owner, meme_download_counts FROM memes WHERE owner = %s ORDER BY meme_id', (user_id,))
+                    users = []
                 memes = []
-                for row in rows:
-                    if not isinstance(row, tuple) or len(row) != 7:
-                        continue
+                for row in cur.fetchall():
                     memes.append({
                         'meme_id': row[0],
-                        'meme_url': row[1],
+                        'type': row[1],
                         'meme_description': row[2],
-                        'meme_download_counts': row[3],
-                        'type': row[4],
-                        'owner': row[5],
-                        'thumbnail_url': row[6]
+                        'owner': row[3],
+                        'meme_download_counts': row[4]
                     })
-                cur.execute('SELECT id, username, password, points FROM users')
-                users = [{'id': row[0], 'username': row[1], 'password': row[2], 'points': row[3]} for row in cur.fetchall()]
-                cur.execute('SELECT COUNT(*) FROM memes')
-                meme_count = cur.fetchone()[0]
-        return render_template('admin.html', memes=memes, users=users, meme_count=meme_count, message=message, authenticated=authenticated, next_meme_id=next_meme_id)
-    except Exception as e:
-        current_app.logger.error(f"Error in admin: {str(e)}")
-        return render_template('admin.html', memes=[], users=[], meme_count=0, message="Error fetching data.", authenticated=authenticated, next_meme_id=next_meme_id)
+    except psycopg.Error as e:
+        memes = []
+        users = []
+        message = f"Database error: {e}"
+
+    return render_template('admin.html',
+                           authenticated=authenticated,
+                           is_santo=is_santo,
+                           username=username,
+                           current_username=current_username,
+                           memes=memes,
+                           users=users,
+                           next_meme_id=next_meme_id,
+                           message=message)
 
 # Register route (AJAX)
 @memes_bp.route('/memes/register', methods=['POST'])
