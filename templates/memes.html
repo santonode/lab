@@ -53,6 +53,7 @@
             padding: 2px 5px;
             line-height: 1;
             text-decoration: none;
+            font-weight: bold;
         }
 
         /* GEAR ICON – 60% SMALLER */
@@ -85,7 +86,7 @@
         .header .admin-link {
             position: absolute;
             top: 50%;
-            right: 60px;   /* ← Moved 20px left (40px → 60px) */
+            right: 60px;
             transform: translateY(-50%);
             font-size: 11px;
             color: #26A69A;
@@ -200,7 +201,7 @@
             .header .admin-link { 
                 font-size: 10px; 
                 padding: 1px 5px; 
-                right: 55px; /* ← Adjusted for mobile (20px gap) */
+                right: 55px;
             }
         }
         @media only screen and (-webkit-min-device-pixel-ratio: 2) and (max-width: 767px) {
@@ -274,13 +275,13 @@
 <body>
     <div class="header">
         <h1>Assets</h1>
-        {% if username and user_type == 'Member' and points is not none %}
-            <a href="/" class="user-info">{{ username }} {{ points }}pts</a>
-        {% elif username %}
-            <a href="/" class="user-info">guest</a>
+
+        <!-- POINTS REMOVED – ONLY SHOW USERNAME -->
+        {% if username %}
+            <a href="/" class="user-info">{{ username }}</a>
         {% endif %}
 
-        <!-- GEAR ICON: 60% SMALLER, FROM /static2/gear-icon.png -->
+        <!-- GEAR ICON: 60% SMALLER -->
         <a href="/profile" class="gear-icon">
             <img src="/static2/gear-icon.png" alt="Settings">
         </a>
