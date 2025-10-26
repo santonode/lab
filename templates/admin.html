@@ -359,11 +359,11 @@
                                 <form method="POST">
                                     <input type="hidden" name="edit_meme_id" value="{{ meme.meme_id }}">
                                     <select name="new_type" required>
-                                        <option value="GM" {{ "selected" if meme.type == "GM" }}>GM</option>
-                                        <option value="GN" {{ "selected" if meme.type == "GN" }}>GN</option>
-                                        <option value="OTHER" {{ "selected" if meme.type == "OTHER" }}>OTHER</option>
-                                        <option value="CRYPTO" {{ "selected if meme.type == "CRYPTO" }}">CRYPTO</option>
-                                        <option value="GRAWK" {{ "selected" if meme.type == "GRAWK" }}>GRAWK</option>
+                                        <option value="GM" {% if meme.type == "GM" %}selected{% endif %}>GM</option>
+                                        <option value="GN" {% if meme.type == "GN" %}selected{% endif %}>GN</option>
+                                        <option value="OTHER" {% if meme.type == "OTHER" %}selected{% endif %}>OTHER</option>
+                                        <option value="CRYPTO" {% if meme.type == "CRYPTO" %}selected{% endif %}>CRYPTO</option>
+                                        <option value="GRAWK" {% if meme.type == "GRAWK" %}selected{% endif %}>GRAWK</option>
                                     </select>
                                     <input type="text" name="new_description" placeholder="Description" value="{{ meme.meme_description }}" required>
                                     <button type="submit" class="save-btn" name="save_meme">Save</button>
