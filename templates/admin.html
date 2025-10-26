@@ -285,6 +285,14 @@
             color: #fff;
             text-decoration: underline;
         }
+        .password-change-section {
+            background-color: #e8f5e8;
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #26A69A;
+            margin: 20px auto;
+            max-width: 600px;
+        }
         @media (max-width: 600px) {
             .user-table, .meme-table {
                 width: 100%;
@@ -342,6 +350,19 @@
                 {% endif %}
             </p>
 
+            <!-- PASSWORD CHANGE: NON-SANTO MEMBERS -->
+            {% if not is_santo %}
+                <div class="password-change-section">
+                    <h3>Change Your Password</h3>
+                    <form method="POST">
+                        <input type="hidden" name="change_own_password" value="1">
+                        <input type="password" name="current_password" placeholder="Current Password" required>
+                        <input type="password" name="new_password" placeholder="New Password" required minlength="4">
+                        <button type="submit" class="save-btn">Update Password</button>
+                    </form>
+                </div>
+            {% endif %}
+
             <!-- USER LIST (SANTO ONLY) -->
             {% if is_santo %}
             <h2>User Management</h2>
@@ -353,7 +374,7 @@
                         <th class="password">Password (hashed)</th>
                         <th class="points">Points</th>
                         <th colspan="2" class="actions">Actions</th>
-                    </ tr>
+                    </tr>
                 </thead>
                 <tbody>
                     {% for user in users %}
