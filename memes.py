@@ -290,6 +290,34 @@ def admin():
                 except psycopg.Error as e:
                     message = f"Error: {e}"
 
+        # === CHANGE OWN PASSWORD (NON-SANTO MEMBERS ONLY) ===
+        elif 'change_own_password' in request.form and not is_santo:
+            current_password = request.form.get('current_password', '').strip()
+            new_password = request.form.get('new_password', '').strip()
+
+            if not current_password or not new_password:
+                message = "Both password fields are required."
+            elif len(new_password) < 4:
+                message = "New password must be at least 4 characters."
+            else:
+                try:
+                    with psycopg.connect(DATABASE_URL) as conn:
+                        with conn.cursor() as cur:
+                            cur.execute('SELECT password FROM users WHERE username = %s', (username,))
+                            row = cur.fetchone()
+                            if not row:
+                                message = "User not found."
+                            elif row[0] != hash_password(current_password):
+                                message = "Current password is incorrect."
+                            else:
+                                cur.execute('UPDATE users SET password = %s WHERE username = %s',
+                                          (hash_password(new_password), username))
+                                conn.commit()
+                                message = "Password updated successfully!"
+                except psycopg.Error as e:
+                    current_app.logger.error(f"Password change error: {e}")
+                    message = "Database error. Please try again."
+
         # === SANTO-ONLY: USER MANAGEMENT ===
         if is_santo:
             if 'delete_username' in request.form:
@@ -349,7 +377,7 @@ def admin():
                            is_santo=is_santo,
                            username=username,
                            memes=memes,
-                           all_memes=all_memes,  # ← NEW: for upload dropdown
+                           all_memes=all_memes,
                            users=users,
                            next_meme_id=next_meme_id,
                            message=message)
