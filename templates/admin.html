@@ -103,22 +103,7 @@
             background-color: #263238;
             color: white;
         }
-        .user-table .user-id {
-            font-weight: bold;
-            color: #263238;
-            width: 50px;
-        }
-        .user-table .username {
-            font-weight: bold;
-            width: 100px;
-        }
-        .user-table .password {
-            width: 500px;
-        }
-        .user-table .points {
-            width: 100px;
-        }
-        .meme-table .meme-id {
+        .user-table .user-id, .meme-table .meme-id {
             font-weight: bold;
             color: #263238;
             width: 50px;
@@ -130,16 +115,13 @@
             font-weight: bold;
             width: 100px;
         }
-        .meme-table .meme-url {
-            width: 300px;
-        }
         .meme-table .meme-owner {
             width: 150px;
         }
         .meme-table .meme-download-counts {
             width: 150px;
         }
-        .user-table .actions, .meme-table .actions {
+        .actions {
             width: 200px;
             text-align: center;
         }
@@ -149,17 +131,10 @@
             background-color: #e0e0e0;
             border-radius: 5px;
         }
-        .edit-form input {
+        .edit-form input, .edit-form select {
             padding: 5px;
             font-size: 16px;
             width: 200px;
-            margin-right: 5px;
-            margin-bottom: 5px;
-        }
-        .edit-form select {
-            padding: 5px;
-            font-size: 16px;
-            width: 210px;
             margin-right: 5px;
             margin-bottom: 5px;
         }
@@ -225,14 +200,6 @@
             border-radius: 5px;
             min-width: 120px;
         }
-        .upload-form input[type="number"] {
-            padding: 8px;
-            font-size: 14px;
-            background-color: white;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            width: 100px;
-        }
         .upload-form button {
             padding: 10px 20px;
             font-size: 14px;
@@ -265,53 +232,50 @@
             font-size: 12px;
             color: #721c24;
         }
-
+        .santo-badge {
+            background: linear-gradient(45deg, #FFD700, #FFA500);
+            color: #000;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-left: 5px;
+        }
         @media (max-width: 600px) {
-            .user-table, .meme-table {
-                width: 100%;
-            }
+            .user-table, .meme-table { width: 100%; }
             .user-table th, .user-table td, .meme-table th, .meme-table td {
-                padding: 3px;
-                font-size: 12px;
+                padding: 3px; font-size: 12px;
             }
-            .user-table .password, .meme-table .meme-description, .meme-table .meme-url {
-                width: auto;
-            }
-            .meme-table .meme-type {
-                width: auto;
-            }
-            .meme-table .meme-owner {
-                width: auto;
-            }
-            .upload-form-row {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .upload-form select, .upload-form input[type="number"] {
-                min-width: auto;
-                width: 100%;
-            }
+            .upload-form-row { flex-direction: column; align-items: stretch; }
+            .upload-form select, .upload-form input[type="number"] { width: 100%; }
         }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>Santo Admin</h1>
-        <a href="/memes" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: white; text-decoration: none;">← Assets</a>
+        <a href="/memes" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: white; text-decoration: none;">Assets</a>
     </div>
     
     <div class="content">
         {% if not authenticated %}
             <div class="auth-form">
                 <form method="POST">
-                    <input type="password" name="admin_pass" placeholder="Enter Admin Password" required>
-                    <button type="submit">Submit</button>
+                    <input type="password" name="admin_pass" placeholder="Enter Password" required>
+                    <button type="submit">Login</button>
                 </form>
             </div>
             {% if message %}
                 <div class="message">{{ message }}</div>
             {% endif %}
         {% else %}
+            <!-- USER INFO -->
+            <p><strong>Logged in as:</strong> {{ username }} 
+                {% if is_santo %}<span class="santo-badge">SANTO</span>{% endif %}
+            </p>
+
+            <!-- USER LIST (SANTO ONLY) -->
+            {% if is_santo %}
             <h2>User List</h2>
             <table class="user-table">
                 <thead>
@@ -352,35 +316,23 @@
                             </td>
                         </tr>
                     {% endfor %}
-                    <tr>
-                        <td colspan="6">
-                            <button class="add-btn" onclick="toggleEdit('add-form-user', '', '', '', '', this)">Add User</button>
-                        </td>
-                    </tr>
-                    <tr class="edit-form" id="add-form-user" style="display: none;">
-                        <td colspan="6">
-                            <form method="POST">
-                                <input type="hidden" name="add_user" value="true">
-                                <input type="text" name="new_username" placeholder="New Username" required>
-                                <input type="password" name="new_password" placeholder="New Password" required>
-                                <input type="number" name="new_points" placeholder="Points" min="0" value="0" required>
-                                <button type="submit" class="save-btn" name="save_user">Save</button>
-                            </form>
-                        </td>
-                    </tr>
                 </tbody>
             </table>
+            {% endif %}
 
-            <h2>Meme List</h2>
+            <!-- MEME LIST (FILTERED BY OWNER) -->
+            <h2>My Memes</h2>
+            {% if memes|length == 0 %}
+                <p><em>No memes uploaded yet. Use the form below to upload your first!</em></p>
+            {% else %}
             <table class="meme-table">
                 <thead>
                     <tr>
                         <th>ID</th>
                         <th>Type</th>
                         <th>Description</th>
-                        <th>URL</th>
                         <th>Owner</th>
-                        <th>Download Counts</th>
+                        <th>Downloads</th>
                         <th colspan="2">Actions</th>
                     </tr>
                 </thead>
@@ -390,14 +342,10 @@
                             <td class="meme-id">{{ meme.meme_id }}</td>
                             <td class="meme-type">{{ meme.type }}</td>
                             <td class="meme-description">{{ meme.meme_description }}</td>
-                            <td class="meme-url">{{ meme.meme_url }}</td>
-                            <td class="meme-owner">
-                                {% set owner = users|selectattr('id', 'equalto', meme.owner)|first %}
-                                {{ owner.username if owner else 'Unknown' }}
-                            </td>
+                            <td class="meme-owner">{{ current_username }}</td>
                             <td class="meme-download-counts">{{ meme.meme_download_counts }}</td>
                             <td>
-                                <button class="edit-btn" onclick="toggleEdit('edit-form-meme-{{ loop.index }}', '{{ meme.meme_id }}', '{{ meme.type }}', '{{ meme.meme_description }}', '{{ meme.meme_url }}', '{{ meme.meme_download_counts }}', '{{ meme.owner }}', this)">Edit</button>
+                                <button class="edit-btn" onclick="toggleEdit('edit-form-meme-{{ loop.index }}', '{{ meme.meme_id }}', '{{ meme.type }}', '{{ meme.meme_description }}', this)">Edit</button>
                             </td>
                             <td>
                                 <form method="POST" style="display: inline;">
@@ -407,81 +355,51 @@
                             </td>
                         </tr>
                         <tr class="edit-form" id="edit-form-meme-{{ loop.index }}" style="display: none;">
-                            <td colspan="8">
+                            <td colspan="7">
                                 <form method="POST">
                                     <input type="hidden" name="edit_meme_id" value="{{ meme.meme_id }}">
                                     <select name="new_type" required>
                                         <option value="GM" {{ "selected" if meme.type == "GM" }}>GM</option>
                                         <option value="GN" {{ "selected" if meme.type == "GN" }}>GN</option>
                                         <option value="OTHER" {{ "selected" if meme.type == "OTHER" }}>OTHER</option>
-                                        <option value="CRYPTO" {{ "selected" if meme.type == "CRYPTO" }}>CRYPTO</option>
+                                        <option value="CRYPTO" {{ "selected if meme.type == "CRYPTO" }}">CRYPTO</option>
                                         <option value="GRAWK" {{ "selected" if meme.type == "GRAWK" }}>GRAWK</option>
                                     </select>
-                                    <input type="text" name="new_description" placeholder="New Description" value="{{ meme.meme_description }}" required>
-                                    <input type="text" name="new_meme_url" placeholder="New Tags" value="{{ meme.meme_url }}" required>
-                                    <input type="number" name="new_owner" placeholder="New Owner ID" value="{{ meme.owner }}" min="1" required>
-                                    <input type="number" name="new_download_counts" placeholder="Download Counts" value="{{ meme.meme_download_counts }}" min="0" required>
+                                    <input type="text" name="new_description" placeholder="Description" value="{{ meme.meme_description }}" required>
                                     <button type="submit" class="save-btn" name="save_meme">Save</button>
                                 </form>
                             </td>
                         </tr>
                     {% endfor %}
-                    <tr>
-                        <td colspan="8">
-                            <button class="add-btn" onclick="toggleEdit('add-form-meme', '', '', '', '', '', '', this)">Add Meme</button>
-                        </td>
-                    </tr>
-                    <tr class="edit-form" id="add-form-meme" style="display: none;">
-                        <td colspan="8">
-                            <form method="POST">
-                                <input type="hidden" name="add_meme" value="true">
-                                <input type="number" name="new_meme_id" placeholder="Meme ID" value="{{ next_meme_id }}" required>
-                                <select name="new_type" required>
-                                    <option value="GM">GM</option>
-                                    <option value="GN">GN</option>
-                                    <option value="OTHER">OTHER</option>
-                                    <option value="CRYPTO">CRYPTO</option>
-                                    <option value="GRAWK">GRAWK</option>
-                                </select>
-                                <input type="text" name="new_description" placeholder="New Description" required>
-                                <input type="text" name="new_meme_url" placeholder="New Tags" required>
-                                <input type="number" name="new_owner" placeholder="Owner ID" min="1" required>
-                                <input type="number" name="new_download_counts" placeholder="Download Counts" min="0" value="0" required>
-                                <button type="submit" class="save-btn" name="save_meme">Save</button>
-                            </form>
-                        </td>
-                    </tr>
                 </tbody>
             </table>
+            {% endif %}
 
-            <!-- ✅ VIDEO UPLOAD FORM WITH ID FOR AUTO-SCROLL -->
+            <!-- VIDEO UPLOAD FORM -->
             <div class="upload-form" id="videoUploadSection">
-                <h3>🎥 Video Upload (Overwrite or New)</h3>
+                <h3>Upload / Replace Video</h3>
                 <div class="meme-id-info">
-                    <strong>Next Available ID:</strong> <span id="nextMemeId">{{ next_meme_id }}</span> 
-                    | <strong>Total Memes:</strong> {{ memes|length }}
+                    <strong>Next Available ID:</strong> {{ next_meme_id }} 
                 </div>
                 
                 <form method="POST" enctype="multipart/form-data" id="videoUploadForm">
                     <div class="upload-form-row">
                         <label for="upload_meme_id">MEME ID:</label>
                         <select name="upload_meme_id" id="upload_meme_id" required>
-                            <option value="{{ next_meme_id }}">🆕 {{ next_meme_id }} (New)</option>
+                            <option value="{{ next_meme_id }}">New ({{ next_meme_id }})</option>
                             {% for meme in memes %}
-                                <option value="{{ meme.meme_id }}">
-                                    🔄 {{ meme.meme_id }} ({{ meme.type }}: {{ meme.meme_description[:30] }}...)
-                                </option>
+                                <option value="{{ meme.meme_id }}">Replace {{ meme.meme_id }} ({{ meme.type }})</option>
                             {% endfor %}
                         </select>
                     </div>
                     
                     <div class="upload-form-row">
-                        <label for="video">Video File:</label>
-                        <input type="file" name="video" id="video" accept="video/mp4,video/mpeg" required>
+                        <label for="video">Video File (MP4):</label>
+                        <input type="file" name="video" id="video" accept="video/mp4" required>
                     </div>
                     
                     <div class="upload-form-row">
-                        <label for="meme_type">Meme Type:</label>
+                        <label for="meme_type">Type:</label>
                         <select name="meme_type" id="meme_type" required>
                             <option value="GM">GM</option>
                             <option value="GN">GN</option>
@@ -493,20 +411,17 @@
                     
                     <div class="upload-form-row">
                         <input type="checkbox" name="overwrite_files" id="overwrite_files" checked>
-                        <label for="overwrite_files">💾 Overwrite existing video & thumbnail files</label>
+                        <label for="overwrite_files">Overwrite existing files</label>
                     </div>
                     
                     <div class="upload-form-row">
-                        <button type="submit" name="upload_video">🚀 Upload & Replace</button>
-                        <button type="button" onclick="resetUploadForm()">🔄 Reset Form</button>
+                        <button type="submit" name="upload_video">Upload</button>
+                        <button type="button" onclick="resetUploadForm()">Reset</button>
                     </div>
                 </form>
                 
                 <div class="overwrite-warning">
-                    <strong>⚠️ Overwrite Warning:</strong> 
-                    Selecting an existing MEME ID will replace both:<br>
-                    📹 <code>/static/vids/{ID}.mp4</code><br>
-                    🖼️ <code>/static/thumbs/{ID}.jpg</code>
+                    <strong>Warning:</strong> Replacing will overwrite both video and thumbnail.
                 </div>
             </div>
 
@@ -517,46 +432,21 @@
     </div>
     
     <div class="footer">
-        <p>Made with ❤️ by Team Santo</p>
+        <p>Made with Love by Team Santo</p>
     </div>
 
     <script>
-        function toggleEdit(formId, id, typeOrUsername, descriptionOrPassword, urlOrPoints, countsOrNothing, ownerOrNothing, button) {
+        function toggleEdit(formId, id, type, desc, button) {
             const form = document.getElementById(formId);
-            const isEditing = form.style.display === 'table-row';
-
-            if (isEditing) {
+            if (form.style.display === 'table-row') {
                 form.style.display = 'none';
-                button.textContent = formId.includes('add') ? 'Add ' + (formId.includes('user') ? 'User' : 'Meme') : 'Edit';
-                button.className = formId.includes('add') ? 'add-btn' : 'edit-btn';
+                button.textContent = 'Edit';
             } else {
                 form.style.display = 'table-row';
-                button.textContent = 'Save';
-                button.className = 'save-btn';
-                const inputs = form.getElementsByTagName('input');
-                const selects = form.getElementsByTagName('select');
-                if (!formId.includes('add')) {
-                    if (formId.includes('meme')) {
-                        selects[0].value = typeOrUsername;
-                        inputs[0].value = descriptionOrPassword;
-                        inputs[1].value = urlOrPoints;
-                        inputs[2].value = ownerOrNothing;
-                        inputs[3].value = countsOrNothing;
-                        const hiddenInput = form.querySelector('input[name="edit_meme_id"]');
-                        if (hiddenInput) {
-                            hiddenInput.value = id;
-                        }
-                    } else {
-                        inputs[1].value = typeOrUsername;
-                        inputs[2].value = descriptionOrPassword;
-                        inputs[3].value = urlOrPoints;
-                    }
-                } else if (formId === 'add-form-meme') {
-                    if (!inputs[1].value) {
-                        inputs[1].value = '{{ next_meme_id }}' || 1;
-                    }
-                }
-                form.querySelector('form').reset();
+                button.textContent = 'Cancel';
+                const inputs = form.querySelectorAll('input, select');
+                if (inputs[0]) inputs[0].value = type;
+                if (inputs[1]) inputs[1].value = desc;
             }
         }
 
@@ -566,86 +456,14 @@
             document.getElementById('overwrite_files').checked = true;
         }
 
-        document.getElementById('upload_meme_id').addEventListener('change', function() {
-            const selectedId = this.value;
-            if (selectedId !== '{{ next_meme_id }}') {
-                console.log('Selected existing MEME ID:', selectedId);
-            }
-        });
-
-        // ✅ BULLETPROOF AUTO-SCROLL - 3-LAYER DETECTION
-        function scrollToUploadForm() {
-            const uploadSection = document.getElementById('videoUploadSection');
-            if (uploadSection) {
-                // Layer 1: Smooth scroll
-                uploadSection.scrollIntoView({ 
-                    behavior: 'smooth', 
-                    block: 'start'
-                });
-                
-                // Layer 2: Immediate fallback
-                setTimeout(() => {
-                    const offsetTop = uploadSection.getBoundingClientRect().top + window.pageYOffset - 100;
-                    window.scrollTo({
-                        top: offsetTop,
-                        behavior: 'smooth'
-                    });
-                }, 100);
-                
-                // Layer 3: Hard scroll guarantee
-                setTimeout(() => {
-                    window.scrollTo({
-                        top: uploadSection.offsetTop - 100,
-                        behavior: 'auto'
-                    });
-                }, 500);
-                
-                console.log('✅ AUTO-SCROLL TO UPLOAD FORM COMPLETE!');
-            }
-        }
-
-        // ✅ MAIN AUTO-SCROLL LOGIC
+        // Auto-scroll on success
         document.addEventListener('DOMContentLoaded', function() {
-            // Method 1: URL Parameter
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('upload_success') === 'true') {
-                scrollToUploadForm();
-                window.history.replaceState({}, document.title, window.location.pathname);
-                return;
-            }
-
-            // Method 2: Success Message Detection
-            const messages = document.querySelectorAll('.message');
-            for (let msg of messages) {
-                const text = msg.textContent.toLowerCase();
-                if (text.includes('success') || 
-                    text.includes('uploaded') || 
-                    text.includes('complete') ||
-                    text.includes('video') ||
-                    text.includes('saved')) {
-                    scrollToUploadForm();
-                    // Auto-fade success message
-                    setTimeout(() => {
-                        msg.style.transition = 'opacity 0.5s';
-                        msg.style.opacity = '0';
-                        setTimeout(() => msg.remove(), 500);
-                    }, 2000);
-                    return;
-                }
-            }
-
-            // Method 3: Always scroll if form is below viewport
-            const uploadSection = document.getElementById('videoUploadSection');
-            if (uploadSection) {
-                const rect = uploadSection.getBoundingClientRect();
-                if (rect.top > window.innerHeight || rect.bottom > window.innerHeight) {
-                    scrollToUploadForm();
-                }
+                document.getElementById('videoUploadSection').scrollIntoView({ behavior: 'smooth' });
+                history.replaceState({}, '', '/admin');
             }
         });
-
-        // ✅ MANUAL TEST FUNCTION (for debugging)
-        window.scrollToUpload = scrollToUploadForm;
     </script>
 </body>
 </html>
