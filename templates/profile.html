@@ -10,29 +10,29 @@
             position: fixed;
             top: 0;
             width: 100%;
-            background-color: #263238; /* Navy */
+            background-color: #263238;
             color: white;
-            padding: 5px 0; /* Reduced padding */
+            padding: 5px 0;
             text-align: center;
             z-index: 1000;
             font-family: Arial, sans-serif;
             font-weight: bold;
-            border-bottom: 2px solid #000000; /* Black border */
-            height: 45px; /* Fixed height to match content push */
-            box-sizing: border-box; /* Include padding in height */
+            border-bottom: 2px solid #000000;
+            height: 45px;
+            box-sizing: border-box;
             display: flex;
             justify-content: center;
             align-items: center;
         }
         .header h1 {
             margin: 0;
-            font-size: 28px; /* Reduced font size */
+            font-size: 28px;
             text-transform: uppercase;
             letter-spacing: 2px;
             border-radius: 10px;
             display: inline-block;
-            padding: 5px 10px; /* Reduced padding */
-            background: linear-gradient(45deg, #26A69A, #FFCA28); /* Teal to Yellow gradient */
+            padding: 5px 10px;
+            background: linear-gradient(45deg, #26A69A, #FFCA28);
             -webkit-background-clip: text;
             background-clip: text;
             color: transparent;
@@ -46,46 +46,50 @@
             color: #FFCA28;
             padding: 2px 5px;
             line-height: 1;
-            text-decoration: none; /* Remove underline from link */
-        }
-        .header .gear-icon {
-            position: absolute;
-            top: 5px;
-            right: 10px;
-            font-size: 16px; /* Reduced to ~50% of 24px */
             text-decoration: none;
-            color: white;
-            background-color: #000000; /* Black background */
-            padding: 2px 4px; /* Padding for background */
-            border-radius: 4px; /* Rounded corners */
+            font-weight: bold;
+        }
+        .logout-link {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #FFCA28;
+            font-size: 13px;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .logout-link:hover {
+            color: #fff;
+            text-decoration: underline;
         }
         .footer {
             position: fixed;
             bottom: 0;
             width: 100%;
-            background-color: #263238; /* Navy */
+            background-color: #263238;
             color: white;
-            padding: 5px 0; /* Reduced padding */
+            padding: 5px 0;
             text-align: center;
             z-index: 1000;
-            border-top: 2px solid #000000; /* Black border */
-            height: 35px; /* Fixed height to match content push */
-            box-sizing: border-box; /* Include padding in height */
+            border-top: 2px solid #000000;
+            height: 35px;
+            box-sizing: border-box;
         }
         .footer p {
             margin: 3px 0;
-            font-size: 12px; /* Reduced font size */
+            font-size: 12px;
         }
         .content {
-            margin-top: 50px; /* Increased to ensure clearance */
-            margin-bottom: 40px; /* Adjusted for footer */
-            min-height: calc(100vh - 85px); /* Adjusted for header (45px) + footer (35px) + borders (5px) */
-            padding-top: 5px; /* Additional padding to push content down */
+            margin-top: 50px;
+            margin-bottom: 40px;
+            min-height: calc(100vh - 85px);
+            padding-top: 5px;
             text-align: center;
-            padding-bottom: 60px; /* Added space for button and future content */
+            padding-bottom: 60px;
         }
         .form-group {
-            margin: 15px 0; /* Space between form groups */
+            margin: 15px 0;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -93,10 +97,10 @@
         .form-group label {
             margin-bottom: 5px;
             font-weight: bold;
-            text-align: center; /* Center the label text */
-            width: 150px; /* Fixed width for label to control offset */
-            margin-right: auto; /* Shift label to the left of centered inputs */
-            margin-left: 20px; /* Additional left offset for visual separation */
+            text-align: center;
+            width: 150px;
+            margin-right: auto;
+            margin-left: 20px;
         }
         .form-group .input-container {
             display: flex;
@@ -106,9 +110,9 @@
         .form-group input {
             padding: 5px;
             font-size: 16px;
-            width: 200px; /* Fixed width to control size */
+            width: 200px;
             box-sizing: border-box;
-            margin-bottom: 5px; /* Space between inputs */
+            margin-bottom: 5px;
         }
         .form-group button {
             padding: 5px 10px;
@@ -118,7 +122,7 @@
             border: none;
             border-radius: 5px;
             cursor: pointer;
-            width: 200px; /* Match input width */
+            width: 200px;
         }
         .form-group button:hover {
             background-color: #1e7d71;
@@ -127,15 +131,15 @@
             margin-top: 10px;
             padding: 5px 10px;
             font-size: 16px;
-            background-color: #FF4444; /* Red color for temporary feature */
+            background-color: #FF4444;
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
-            width: 200px; /* Match input width */
+            width: 200px;
         }
         .clear-session-btn:hover {
-            background-color: #CC0000; /* Darker red on hover */
+            background-color: #CC0000;
         }
         .message {
             margin-top: 10px;
@@ -143,7 +147,7 @@
         }
         .back-button {
             position: absolute;
-            bottom: 60px; /* Position above footer with space */
+            bottom: 60px;
             left: 50%;
             transform: translateX(-50%);
             padding: 10px 20px;
@@ -160,23 +164,22 @@
             background-color: #1e7d71;
         }
 
-        /* Mobile adjustments */
         @media (max-width: 600px) {
             .content {
-                padding: 0 10px; /* Prevent edge clipping */
+                padding: 0 10px;
             }
             .form-group label {
-                width: 100%; /* Full width on mobile */
-                max-width: 150px; /* Limit max width */
-                margin-left: 0; /* Remove offset on mobile for simplicity */
-                text-align: center; /* Ensure centered on mobile */
+                width: 100%;
+                max-width: 150px;
+                margin-left: 0;
+                text-align: center;
             }
             .form-group .input-container {
                 width: 100%;
             }
             .form-group input {
-                width: 100%; /* Full width on mobile */
-                max-width: 250px; /* Limit max width */
+                width: 100%;
+                max-width: 250px;
             }
             .form-group button {
                 width: 100%;
@@ -189,7 +192,7 @@
             .header .user-info {
                 font-size: 12px;
                 padding: 1px 3px;
-                max-width: 120px; /* Increased to accommodate points */
+                max-width: 120px;
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
@@ -200,17 +203,20 @@
 <body>
     <div class="header">
         <h1>Santo Profile</h1>
-        {% if username and user_type == 'Member' and points is not none %}
-            <a href="/" class="user-info">{{ username }} {{ points }}pts</a>
-        {% elif username %}
+
+        <!-- 1. ONLY USERNAME (NO POINTS) -->
+        {% if username %}
             <a href="/" class="user-info">{{ username }}</a>
         {% endif %}
-        <a href="/profile" class="gear-icon">Settings</a>
-    </div>
-    <div class="content">
-        <!-- Removed Update Username Form -->
 
-        <!-- Updated Clear Session Button as First Form -->
+        <!-- 2. LOGOUT LINK (MATCHES admin.html) -->
+        {% if username %}
+            <a href="/profile?logout=1" class="logout-link">Logout</a>
+        {% endif %}
+    </div>
+
+    <div class="content">
+        <!-- Clear Session Button -->
         <div class="form-group">
             <form method="POST" autocomplete="off">
                 <div class="input-container">
@@ -219,9 +225,9 @@
             </form>
         </div>
 
-        <!-- New Register Form -->
+        <!-- Register Form -->
         <div class="form-group">
-            <form method="POST" currently="off">
+            <form method="POST" autocomplete="off">
                 <label for="register-username">Register New User</label>
                 <div class="input-container">
                     <input type="text" id="register-username" name="register_username" placeholder="New username" required autocomplete="off">
@@ -231,14 +237,14 @@
             </form>
         </div>
 
-        <!-- New Login Form with Session Update -->
+        <!-- Login Form -->
         <div class="form-group">
             <form method="POST" autocomplete="off">
                 <label for="login-username">Login</label>
                 <div class="input-container">
                     <input type="text" id="login-username" name="login_username" placeholder="Username" required autocomplete="off">
                     <input type="password" id="login-password" name="login_password" placeholder="Password" required autocomplete="off">
-                    <input type="hidden" name="switch_user" value="1"> <!-- Hidden field to trigger session switch -->
+                    <input type="hidden" name="switch_user" value="1">
                     <button type="submit" name="login">Login</button>
                 </div>
             </form>
@@ -249,7 +255,7 @@
         {% endif %}
     </div>
 
-    <!-- FIXED: Back button now goes to /memes -->
+    <!-- Back to Memes -->
     <a href="/memes" class="back-button">Back to Memes</a>
 
     <div class="footer">
