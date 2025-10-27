@@ -256,7 +256,7 @@
             margin: 15px 0;
         }
         .thumb-modal .video-link {
-            margin-top: 15px;
+            margin-top: 10px;
             font-size: 16px;
         }
         .thumb-modal .video-link a {
@@ -268,6 +268,28 @@
         }
         .thumb-modal .video-link a:hover {
             color: #1e7d71;
+        }
+        .thumb-modal .share-btn {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background-color: #FFCA28;
+            color: #000;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background-color 0.2s;
+        }
+        .thumb-modal .share-btn:hover {
+            background-color: #FFB300;
+        }
+        .thumb-modal .share-btn svg {
+            width: 16px;
+            height: 16px;
         }
 
         @media (max-width: 600px) {
@@ -299,6 +321,10 @@
             }
             .thumb-modal .video-link a {
                 font-size: 14px;
+            }
+            .thumb-modal .share-btn {
+                font-size: 13px;
+                padding: 8px 16px;
             }
         }
         @media only screen and (-webkit-min-device-pixel-ratio: 2) and (max-width: 767px) {
@@ -424,7 +450,7 @@
                                  alt="Thumb" 
                                  loading="lazy"
                                  onerror="this.parentNode.innerHTML='<span class=&quot;meme-thumb-na&quot;>na</span>'"
-                                 onclick="openThumbModal({{ meme.meme_id }}, '{{ meme.meme_description | replace("'", "\\'") }}')">
+                                 onclick="openThumbModal({{ meme.meme_id }}, '{{ meme.meme_description | replace("'", "\\'") | default('') }}')">
                         </td>
                         <td class="meme-description">
                             {{ meme.meme_description if meme.meme_description else 'No description' }}<br>
@@ -449,7 +475,7 @@
         {% endif %}
     </div>
 
-    <!-- THUMBNAIL POPUP MODAL -->
+    <!-- THUMBNAIL POPUP MODAL WITH SHARE BUTTON -->
     <div class="thumb-modal-overlay" id="thumbModalOverlay">
         <div class="thumb-modal">
             <button class="close-btn" onclick="closeThumbModal()">X</button>
@@ -461,6 +487,13 @@
             <div class="video-link">
                 <a id="modalVideoLink" href="#" target="_blank">.../vids/1.mp4</a>
             </div>
+            <button class="share-btn" onclick="copyToClipboard()">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                Copy Meme Info
+            </button>
         </div>
     </div>
 
@@ -495,7 +528,10 @@
     </div>
 
     <script>
-        // THUMBNAIL MODAL – SHORTENED URL DISPLAY
+        // GLOBAL SHARE DATA
+        let shareData = {};
+
+        // THUMBNAIL MODAL – OPEN + SHARE SETUP
         function openThumbModal(memeId, memeDesc) {
             document.getElementById('modalMemeId').textContent = memeId;
             document.getElementById('modalMemeDesc').textContent = memeDesc || 'No description';
@@ -508,6 +544,14 @@
             link.href = fullUrl;
             link.textContent = shortUrl;
 
+            // STORE DATA FOR SHARING
+            shareData = {
+                id: memeId,
+                desc: memeDesc || 'No description',
+                thumbUrl: `https://lab.santoelectronics.com/static/thumbs/${memeId}.jpg`,
+                videoUrl: fullUrl
+            };
+
             document.getElementById('thumbModalOverlay').style.display = 'flex';
         }
 
@@ -516,10 +560,39 @@
         }
 
         document.getElementById('thumbModalOverlay').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeThumbModal();
-            }
+            if (e.target === this) closeThumbModal();
         });
+
+        // COPY TO CLIPBOARD WITH IMAGE (FALLBACK TO TEXT)
+        async function copyToClipboard() {
+            const { id, desc, thumbUrl, videoUrl } = shareData;
+
+            const text = `MEME ID: ${id}\nDescription: ${desc}\nThumbnail: ${thumbUrl}\nVideo: ${videoUrl}`;
+
+            try {
+                // Try to copy image + text using Clipboard API
+                const imgResponse = await fetch(thumbUrl);
+                const imgBlob = await imgResponse.blob();
+                const imgFile = new File([imgBlob], `meme_${id}_thumb.jpg`, { type: 'image/jpeg' });
+
+                const clipboardItem = new ClipboardItem({
+                    'text/plain': new Blob([text], { type: 'text/plain' }),
+                    'image/jpeg': imgFile
+                });
+
+                await navigator.clipboard.write([clipboardItem]);
+                alert('Copied image + info to clipboard!');
+            } catch (err) {
+                // Fallback: copy plain text only
+                try {
+                    await navigator.clipboard.writeText(text);
+                    alert('Copied meme info to clipboard!');
+                } catch (e) {
+                    alert('Failed to copy. Please select and copy manually.');
+                    console.error(e);
+                }
+            }
+        }
 
         // GUEST POPUP
         document.addEventListener('DOMContentLoaded', function() {
