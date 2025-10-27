@@ -563,34 +563,24 @@
             if (e.target === this) closeThumbModal();
         });
 
-        // COPY TO CLIPBOARD WITH IMAGE (FALLBACK TO TEXT)
+        // COPY TO CLIPBOARD – TEXT ONLY (RELIABLE ACROSS ALL BROWSERS)
         async function copyToClipboard() {
             const { id, desc, thumbUrl, videoUrl } = shareData;
 
             const text = `MEME ID: ${id}\nDescription: ${desc}\nThumbnail: ${thumbUrl}\nVideo: ${videoUrl}`;
 
             try {
-                // Try to copy image + text using Clipboard API
-                const imgResponse = await fetch(thumbUrl);
-                const imgBlob = await imgResponse.blob();
-                const imgFile = new File([imgBlob], `meme_${id}_thumb.jpg`, { type: 'image/jpeg' });
-
-                const clipboardItem = new ClipboardItem({
-                    'text/plain': new Blob([text], { type: 'text/plain' }),
-                    'image/jpeg': imgFile
-                });
-
-                await navigator.clipboard.write([clipboardItem]);
-                alert('Copied image + info to clipboard!');
+                await navigator.clipboard.writeText(text);
+                alert('Copied meme info to clipboard!\n\nPaste in Discord/Slack for sharing.');
             } catch (err) {
-                // Fallback: copy plain text only
-                try {
-                    await navigator.clipboard.writeText(text);
-                    alert('Copied meme info to clipboard!');
-                } catch (e) {
-                    alert('Failed to copy. Please select and copy manually.');
-                    console.error(e);
-                }
+                // Fallback for older browsers
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                alert('Copied meme info (fallback method)!');
             }
         }
 
