@@ -548,7 +548,6 @@
             shareData = {
                 id: memeId,
                 desc: memeDesc || 'No description',
-                thumbUrl: `https://lab.santoelectronics.com/static/thumbs/${memeId}.jpg`,
                 videoUrl: fullUrl
             };
 
@@ -563,15 +562,15 @@
             if (e.target === this) closeThumbModal();
         });
 
-        // COPY TO CLIPBOARD – TEXT ONLY (RELIABLE ACROSS ALL BROWSERS)
+        // COPY TO CLIPBOARD – ONLY ID, DESCRIPTION, VIDEO URL
         async function copyToClipboard() {
-            const { id, desc, thumbUrl, videoUrl } = shareData;
+            const { id, desc, videoUrl } = shareData;
 
-            const text = `MEME ID: ${id}\nDescription: ${desc}\nThumbnail: ${thumbUrl}\nVideo: ${videoUrl}`;
+            const text = `MEME ID: ${id}\nDescription: ${desc}\nVideo: ${videoUrl}`;
 
             try {
                 await navigator.clipboard.writeText(text);
-                alert('Copied meme info to clipboard!\n\nPaste in Discord/Slack for sharing.');
+                alert('Copied to clipboard!');
             } catch (err) {
                 // Fallback for older browsers
                 const textarea = document.createElement('textarea');
@@ -580,7 +579,7 @@
                 textarea.select();
                 document.execCommand('copy');
                 document.body.removeChild(textarea);
-                alert('Copied meme info (fallback method)!');
+                alert('Copied to clipboard!');
             }
         }
 
