@@ -175,6 +175,11 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             display: block;
             margin: 0 auto;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        .meme-thumb img:hover {
+            transform: scale(1.05);
         }
         .download-link {
             color: #26A69A;
@@ -186,6 +191,83 @@
             text-decoration: underline;
             color: #00796b;
         }
+
+        /* THUMBNAIL POPUP MODAL */
+        .thumb-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0, 0, 0, 0.75);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .thumb-modal {
+            background-color: white;
+            width: 500px;
+            height: 500px;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            box-sizing: border-box;
+            position: relative;
+        }
+        .thumb-modal .close-btn {
+            position: absolute;
+            top: 12px;
+            right: 16px;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+        }
+        .thumb-modal .close-btn:hover {
+            color: #000;
+        }
+        .thumb-modal .meme-info {
+            margin-bottom: 15px;
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+        .thumb-modal .meme-id {
+            font-size: 20px;
+            font-weight: bold;
+            color: #263238;
+            margin-bottom: 5px;
+        }
+        .thumb-modal .meme-desc {
+            font-size: 16px;
+            color: #555;
+            max-width: 90%;
+            word-wrap: break-word;
+        }
+        .thumb-modal img {
+            max-width: 300px;
+            max-height: 300px;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            margin: 15px 0;
+        }
+        .thumb-modal .video-link {
+            margin-top: 15px;
+            font-size: 16px;
+        }
+        .thumb-modal .video-link a {
+            color: #26A69A;
+            text-decoration: underline;
+            font-weight: bold;
+        }
+        .thumb-modal .video-link a:hover {
+            color: #1e7d71;
+        }
+
         @media (max-width: 600px) {
             .content { padding: 0 10px; }
             .summary { font-size: 0.9em; top: 50px; padding: 2px 5px; margin-bottom: 2px; }
@@ -202,6 +284,16 @@
                 font-size: 10px; 
                 padding: 1px 5px; 
                 right: 55px;
+            }
+            .thumb-modal {
+                width: 90%;
+                height: auto;
+                min-height: 400px;
+                padding: 15px;
+            }
+            .thumb-modal img {
+                max-width: 250px;
+                max-height: 250px;
             }
         }
         @media only screen and (-webkit-min-device-pixel-ratio: 2) and (max-width: 767px) {
@@ -224,6 +316,8 @@
             box-sizing: border-box;
         }
         .footer p { margin: 3px 0; font-size: 12px; }
+
+        /* REUSED POPUP STYLES (guest/auth) */
         .popup {
             display: none;
             position: fixed;
@@ -327,7 +421,8 @@
                             <img src="/static/thumbs/{{ meme.meme_id }}.jpg" 
                                  alt="Thumb" 
                                  loading="lazy"
-                                 onerror="this.parentNode.innerHTML='<span class=&quot;meme-thumb-na&quot;>na</span>'">
+                                 onerror="this.parentNode.innerHTML='<span class=&quot;meme-thumb-na&quot;>na</span>'"
+                                 onclick="openThumbModal({{ meme.meme_id }}, '{{ meme.meme_description | replace("'", "\\'") }}')">
                         </td>
                         <td class="meme-description">
                             {{ meme.meme_description if meme.meme_description else 'No description' }}<br>
@@ -351,12 +446,23 @@
             <div class="message">{{ message }}</div>
         {% endif %}
     </div>
-    
-    <div class="footer">
-        <p>Made with Love by Team Santo</p>
+
+    <!-- THUMBNAIL POPUP MODAL -->
+    <div class="thumb-modal-overlay" id="thumbModalOverlay">
+        <div class="thumb-modal">
+            <button class="close-btn" onclick="closeThumbModal()">X</button>
+            <div class="meme-info">
+                <div class="meme-id">MEME <span id="modalMemeId"></span></div>
+                <div class="meme-desc" id="modalMemeDesc"></div>
+            </div>
+            <img id="modalThumbImg" src="" alt="Thumbnail">
+            <div class="video-link">
+                <a id="modalVideoLink" href="#" target="_blank">Watch Video</a>
+            </div>
+        </div>
     </div>
 
-    <!-- ENHANCED POPUP: REGISTER / LOGIN / GUEST -->
+    <!-- GUEST / AUTH POPUP (unchanged) -->
     <div id="guestPopup" class="popup">
         <h3>Welcome to Santo!</h3>
         <p>Choose how you'd like to continue:</p>
@@ -386,7 +492,35 @@
     </div>
     <div id="popupOverlay" class="popup-overlay"></div>
 
+    <div class="footer">
+        <p>Made with Love by Team Santo</p>
+    </div>
+
     <script>
+        // THUMBNAIL MODAL
+        function openThumbModal(memeId, memeDesc) {
+            document.getElementById('modalMemeId').textContent = memeId;
+            document.getElementById('modalMemeDesc').textContent = memeDesc || 'No description';
+            document.getElementById('modalThumbImg').src = `/static/thumbs/${memeId}.jpg`;
+            const videoUrl = `https://lab.santoelectronics.com/static/vids/${memeId}.mp4`;
+            const link = document.getElementById('modalVideoLink');
+            link.href = videoUrl;
+            link.textContent = videoUrl;
+            document.getElementById('thumbModalOverlay').style.display = 'flex';
+        }
+
+        function closeThumbModal() {
+            document.getElementById('thumbModalOverlay').style.display = 'none';
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('thumbModalOverlay').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeThumbModal();
+            }
+        });
+
+        // GUEST POPUP (unchanged)
         document.addEventListener('DOMContentLoaded', function() {
             const username = "{{ username }}";
             const user_type = "{{ user_type }}";
@@ -403,7 +537,6 @@
             document.getElementById('popupOverlay').style.display = 'none';
         }
 
-        // TAB SWITCHING
         function showTab(tab) {
             document.getElementById('registerForm').style.display = tab === 'register' ? 'block' : 'none';
             document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
