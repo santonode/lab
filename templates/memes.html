@@ -82,7 +82,7 @@
             filter: brightness(0) invert(1);
         }
 
-        /* ADMIN BUTTON – MOVED 20px LEFT (from right: 40px → right: 60px) */
+        /* ADMIN BUTTON – MOVED 20px LEFT */
         .header .admin-link {
             position: absolute;
             top: 50%;
@@ -263,6 +263,8 @@
             color: #26A69A;
             text-decoration: underline;
             font-weight: bold;
+            font-family: monospace;
+            word-break: break-all;
         }
         .thumb-modal .video-link a:hover {
             color: #1e7d71;
@@ -295,6 +297,9 @@
                 max-width: 250px;
                 max-height: 250px;
             }
+            .thumb-modal .video-link a {
+                font-size: 14px;
+            }
         }
         @media only screen and (-webkit-min-device-pixel-ratio: 2) and (max-width: 767px) {
             .meme-table { table-layout: fixed; width: 100%; max-width: 100vw; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -317,7 +322,7 @@
         }
         .footer p { margin: 3px 0; font-size: 12px; }
 
-        /* REUSED POPUP STYLES (guest/auth) */
+        /* GUEST/AUTH POPUP */
         .popup {
             display: none;
             position: fixed;
@@ -370,17 +375,14 @@
     <div class="header">
         <h1>Assets</h1>
 
-        <!-- POINTS REMOVED – ONLY SHOW USERNAME -->
         {% if username %}
             <a href="/" class="user-info">{{ username }}</a>
         {% endif %}
 
-        <!-- GEAR ICON: 60% SMALLER -->
         <a href="/profile" class="gear-icon">
             <img src="/static2/gear-icon.png" alt="Settings">
         </a>
 
-        <!-- ADMIN BUTTON: 20px GAP FROM GEAR -->
         <a href="/admin" class="admin-link">Admin</a>
     </div>
     
@@ -457,37 +459,33 @@
             </div>
             <img id="modalThumbImg" src="" alt="Thumbnail">
             <div class="video-link">
-                <a id="modalVideoLink" href="#" target="_blank">Watch Video</a>
+                <a id="modalVideoLink" href="#" target="_blank">.../vids/1.mp4</a>
             </div>
         </div>
     </div>
 
-    <!-- GUEST / AUTH POPUP (unchanged) -->
+    <!-- GUEST / AUTH POPUP -->
     <div id="guestPopup" class="popup">
         <h3>Welcome to Santo!</h3>
         <p>Choose how you'd like to continue:</p>
 
-        <!-- TABS -->
         <div style="margin-bottom: 15px;">
             <button class="tab-btn active" onclick="showTab('register')">Register</button>
             <button class="tab-btn" onclick="showTab('login')">Login</button>
         </div>
 
-        <!-- REGISTER FORM -->
         <form id="registerForm" class="auth-form" method="POST" action="/memes/register" style="display: block;">
             <input type="text" name="register_username" placeholder="Username (1-12 chars)" required maxlength="12" pattern="[a-zA-Z0-9]+">
             <input type="password" name="register_password" placeholder="Password" required minlength="4">
             <button type="submit" class="register-btn">Register</button>
         </form>
 
-        <!-- LOGIN FORM -->
         <form id="loginForm" class="auth-form" method="POST" action="/memes/login" style="display: none;">
             <input type="text" name="login_username" placeholder="Username" required>
             <input type="password" name="login_password" placeholder="Password" required>
             <button type="submit" class="login-btn">Login</button>
         </form>
 
-        <!-- GUEST BUTTON -->
         <button class="decline-btn" onclick="closePopup()">Continue as Guest</button>
     </div>
     <div id="popupOverlay" class="popup-overlay"></div>
@@ -497,15 +495,19 @@
     </div>
 
     <script>
-        // THUMBNAIL MODAL
+        // THUMBNAIL MODAL – SHORTENED URL DISPLAY
         function openThumbModal(memeId, memeDesc) {
             document.getElementById('modalMemeId').textContent = memeId;
             document.getElementById('modalMemeDesc').textContent = memeDesc || 'No description';
             document.getElementById('modalThumbImg').src = `/static/thumbs/${memeId}.jpg`;
-            const videoUrl = `https://lab.santoelectronics.com/static/vids/${memeId}.mp4`;
+
+            const fullUrl = `https://lab.santoelectronics.com/static/vids/${memeId}.mp4`;
+            const shortUrl = `.../vids/${memeId}.mp4`;
+
             const link = document.getElementById('modalVideoLink');
-            link.href = videoUrl;
-            link.textContent = videoUrl;
+            link.href = fullUrl;
+            link.textContent = shortUrl;
+
             document.getElementById('thumbModalOverlay').style.display = 'flex';
         }
 
@@ -513,14 +515,13 @@
             document.getElementById('thumbModalOverlay').style.display = 'none';
         }
 
-        // Close modal when clicking outside
         document.getElementById('thumbModalOverlay').addEventListener('click', function(e) {
             if (e.target === this) {
                 closeThumbModal();
             }
         });
 
-        // GUEST POPUP (unchanged)
+        // GUEST POPUP
         document.addEventListener('DOMContentLoaded', function() {
             const username = "{{ username }}";
             const user_type = "{{ user_type }}";
@@ -549,7 +550,6 @@
             });
         }
 
-        // REGISTER HANDLER
         document.getElementById('registerForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const formData = new FormData(this);
@@ -562,7 +562,6 @@
             .catch(() => alert('Error. Try again.'));
         });
 
-        // LOGIN HANDLER
         document.getElementById('loginForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const formData = new FormData(this);
