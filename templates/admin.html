@@ -285,14 +285,85 @@
             color: #fff;
             text-decoration: underline;
         }
-        .password-change-section {
-            background-color: #e8f5e8;
-            padding: 15px;
-            border-radius: 10px;
-            border: 2px solid #26A69A;
-            margin: 20px auto;
-            max-width: 600px;
+        .change-password-link {
+            font-size: 14px;
+            color: #26A69A;
+            text-decoration: underline;
+            cursor: pointer;
+            margin-left: 10px;
         }
+        .change-password-link:hover {
+            color: #1e7d71;
+        }
+
+        /* MODAL STYLES */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            position: relative;
+        }
+        .modal h3 {
+            margin-top: 0;
+            color: #263238;
+            font-size: 18px;
+        }
+        .modal .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #999;
+        }
+        .modal .close-btn:hover {
+            color: #000;
+        }
+        .modal input[type="password"] {
+            width: 100%;
+            padding: 8px;
+            margin: 8px 0;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        .modal button {
+            padding: 10px 15px;
+            font-size: 14px;
+            background-color: #26A69A;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .modal button:hover {
+            background-color: #1e7d71;
+        }
+        .modal .cancel-btn {
+            background-color: #ccc;
+            margin-left: 10px;
+        }
+        .modal .cancel-btn:hover {
+            background-color: #999;
+        }
+
         @media (max-width: 600px) {
             .user-table, .meme-table {
                 width: 100%;
@@ -343,24 +414,32 @@
             {% endif %}
         {% else %}
             <!-- USER INFO -->
-            <p style="font-size: 18px; margin-bottom: 20px;">
+            <p style="font-size: 18px; margin-bottom: 5px;">
                 <strong>Logged in as:</strong> <span style="color: #26A69A;">{{ username }}</span>
                 {% if is_santo %}
                     <span class="santo-badge">SUPERUSER</span>
+                {% else %}
+                    <span class="change-password-link" onclick="openPasswordModal()">change my password</span>
                 {% endif %}
             </p>
 
-            <!-- PASSWORD CHANGE: NON-SANTO MEMBERS -->
+            <!-- PASSWORD CHANGE MODAL (MEMBERS ONLY) -->
             {% if not is_santo %}
-                <div class="password-change-section">
+            <div class="modal-overlay" id="passwordModalOverlay">
+                <div class="modal">
+                    <button class="close-btn" onclick="closePasswordModal()">×</button>
                     <h3>Change Your Password</h3>
-                    <form method="POST">
+                    <form method="POST" id="passwordChangeForm">
                         <input type="hidden" name="change_own_password" value="1">
                         <input type="password" name="current_password" placeholder="Current Password" required>
                         <input type="password" name="new_password" placeholder="New Password" required minlength="4">
-                        <button type="submit" class="save-btn">Update Password</button>
+                        <div style="text-align: center;">
+                            <button type="submit" class="save-btn">Update Password</button>
+                            <button type="button" class="cancel-btn" onclick="closePasswordModal()">Cancel</button>
+                        </div>
                     </form>
                 </div>
+            </div>
             {% endif %}
 
             <!-- USER LIST (SANTO ONLY) -->
@@ -475,7 +554,7 @@
             </table>
             {% endif %}
 
-            <!-- VIDEO UPLOAD FORM – 25 MB LIMIT ENFORCED -->
+            <!-- VIDEO UPLOAD FORM -->
             <div class="upload-form" id="videoUploadSection">
                 <h3>Video Upload (Overwrite or New)</h3>
                 <div class="meme-id-info">
@@ -558,15 +637,24 @@
             document.getElementById('overwrite_files').checked = true;
         }
 
-        // 25 MB FILE SIZE VALIDATION
         function checkFileSize(input, maxSize, maxLabel) {
             if (input.files && input.files[0]) {
                 const file = input.files[0];
                 if (file.size > maxSize) {
                     alert(`File too large: ${file.name} (${(file.size / (1024*1024)).toFixed(1)} MB)\nMaximum allowed: ${maxLabel}`);
-                    input.value = ''; // Clear selection
+                    input.value = '';
                 }
             }
+        }
+
+        // PASSWORD MODAL
+        function openPasswordModal() {
+            document.getElementById('passwordModalOverlay').style.display = 'flex';
+        }
+
+        function closePasswordModal() {
+            document.getElementById('passwordModalOverlay').style.display = 'none';
+            document.getElementById('passwordChangeForm').reset();
         }
 
         document.addEventListener('DOMContentLoaded', function() {
@@ -578,6 +666,13 @@
                 }
                 history.replaceState({}, '', '/admin');
             }
+
+            // Close modal if clicked outside
+            document.getElementById('passwordModalOverlay').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closePasswordModal();
+                }
+            });
         });
     </script>
 </body>
