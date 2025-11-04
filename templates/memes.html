@@ -140,14 +140,13 @@
             color: white;
             cursor: pointer;
             position: relative;
+            padding: 8px;
         }
         .meme-table th a {
             color: white;
             text-decoration: none;
-            display: block;
+            display: inline-block;
             width: 100%;
-            padding: 8px;
-            margin: -8px;
         }
         .meme-table th a:hover {
             text-decoration: underline;
@@ -197,14 +196,14 @@
             color: #00796b;
         }
 
-        /* TOOLTIP STYLES */
+        /* TOOLTIP STYLES – FIXED POSITIONING */
         .tooltip {
             position: relative;
-            display: inline-block;
+            display: block;
         }
         .tooltip .tooltiptext {
             visibility: hidden;
-            width: 100px;
+            width: 90px;
             background-color: #333;
             color: #fff;
             text-align: center;
@@ -214,11 +213,12 @@
             z-index: 100;
             bottom: 125%;
             left: 50%;
-            margin-left: -50px;
+            margin-left: -45px;
             opacity: 0;
             transition: opacity 0.3s;
             font-size: 12px;
             font-family: Arial, sans-serif;
+            white-space: nowrap;
         }
         .tooltip .tooltiptext::after {
             content: "";
@@ -483,7 +483,7 @@
                         <span class="tooltiptext">Click to sort</span>
                     </th>
                     <th class="tooltip">
-                        <a href="?sort=counts&order={{ 'asc' if request.args.get('sort') if request.args.get('sort') != 'counts' or request.args.get('order') == 'desc' else 'desc' }}">Counts</a>
+                        <a href="?sort=counts&order={{ 'asc' if request.args.get('sort') != 'counts' or request.args.get('order') == 'desc' else 'desc' }}">Counts</a>
                         <span class="tooltiptext">Click to sort</span>
                     </th>
                 </tr>
