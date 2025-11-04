@@ -145,8 +145,9 @@
         .meme-table th a {
             color: white;
             text-decoration: none;
-            display: inline-block;
+            display: block;
             width: 100%;
+            height: 100%;
         }
         .meme-table th a:hover {
             text-decoration: underline;
@@ -196,43 +197,37 @@
             color: #00796b;
         }
 
-        /* TOOLTIP STYLES – FIXED POSITIONING */
-        .tooltip {
-            position: relative;
-            display: block;
-        }
-        .tooltip .tooltiptext {
-            visibility: hidden;
-            width: 90px;
-            background-color: #333;
-            color: #fff;
-            text-align: center;
-            border-radius: 4px;
-            padding: 5px 8px;
-            position: absolute;
-            z-index: 100;
-            bottom: 125%;
-            left: 50%;
-            margin-left: -45px;
-            opacity: 0;
-            transition: opacity 0.3s;
-            font-size: 12px;
-            font-family: Arial, sans-serif;
-            white-space: nowrap;
-        }
-        .tooltip .tooltiptext::after {
-            content: "";
+        /* TOOLTIP – PURELY POSITIONED, NO LAYOUT IMPACT */
+        .sort-tooltip {
             position: absolute;
             top: 100%;
             left: 50%;
-            margin-left: -5px;
-            border-width: 5px;
-            border-style: solid;
-            border-color: #333 transparent transparent transparent;
+            transform: translateX(-50%);
+            background-color: #333;
+            color: #fff;
+            font-size: 11px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease;
+            z-index: 10;
+            pointer-events: none;
+            margin-top: 4px;
         }
-        .tooltip:hover .tooltiptext {
-            visibility: visible;
+        .sort-tooltip::after {
+            content: "";
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border: 5px solid transparent;
+            border-bottom-color: #333;
+        }
+        .meme-table th:hover .sort-tooltip {
             opacity: 1;
+            visibility: visible;
         }
 
         /* THUMBNAIL POPUP MODAL */
@@ -369,10 +364,9 @@
                 font-size: 13px;
                 padding: 8px 16px;
             }
-            .tooltip .tooltiptext {
-                width: 80px;
-                margin-left: -40px;
-                font-size: 11px;
+            .sort-tooltip {
+                font-size: 10px;
+                padding: 3px 6px;
             }
         }
         @media only screen and (-webkit-min-device-pixel-ratio: 2) and (max-width: 767px) {
@@ -466,25 +460,25 @@
         <table class="meme-table">
             <thead>
                 <tr>
-                    <th class="tooltip">
+                    <th>
                         <a href="?sort=id&order={{ 'asc' if request.args.get('sort') != 'id' or request.args.get('order') == 'desc' else 'desc' }}">ID</a>
-                        <span class="tooltiptext">Click to sort</span>
+                        <div class="sort-tooltip">Click to sort</div>
                     </th>
-                    <th class="tooltip">
+                    <th>
                         <a href="?sort=type&order={{ 'asc' if request.args.get('sort') != 'type' or request.args.get('order') == 'desc' else 'desc' }}">Type</a>
-                        <span class="tooltiptext">Click to sort</span>
+                        <div class="sort-tooltip">Click to sort</div>
                     </th>
-                    <th class="tooltip">
+                    <th>
                         <a href="?sort=thumb&order={{ 'asc' if request.args.get('sort') != 'thumb' or request.args.get('order') == 'desc' else 'desc' }}">Thumb</a>
-                        <span class="tooltiptext">Click to sort</span>
+                        <div class="sort-tooltip">Click to sort</div>
                     </th>
-                    <th class="tooltip">
+                    <th>
                         <a href="?sort=description&order={{ 'asc' if request.args.get('sort') != 'description' or request.args.get('order') == 'desc' else 'desc' }}">Description / Owner</a>
-                        <span class="tooltiptext">Click to sort</span>
+                        <div class="sort-tooltip">Click to sort</div>
                     </th>
-                    <th class="tooltip">
+                    <th>
                         <a href="?sort=counts&order={{ 'asc' if request.args.get('sort') != 'counts' or request.args.get('order') == 'desc' else 'desc' }}">Counts</a>
-                        <span class="tooltiptext">Click to sort</span>
+                        <div class="sort-tooltip">Click to sort</div>
                     </th>
                 </tr>
             </thead>
@@ -607,7 +601,6 @@
             link.href = fullUrl;
             link.textContent = shortUrl;
 
-            // STORE DATA FOR SHARING
             shareData = {
                 id: memeId,
                 desc: memeDesc || 'No description',
@@ -625,17 +618,14 @@
             if (e.target === this) closeThumbModal();
         });
 
-        // COPY TO CLIPBOARD – ONLY ID, DESCRIPTION, VIDEO URL
+        // COPY TO CLIPBOARD
         async function copyToClipboard() {
             const { id, desc, videoUrl } = shareData;
-
             const text = `MEME ID: ${id}\nDescription: ${desc}\nVideo: ${videoUrl}`;
-
             try {
                 await navigator.clipboard.writeText(text);
                 alert('Copied to clipboard!');
             } catch (err) {
-                // Fallback for older browsers
                 const textarea = document.createElement('textarea');
                 textarea.value = text;
                 document.body.appendChild(textarea);
@@ -666,7 +656,6 @@
         function showTab(tab) {
             document.getElementById('registerForm').style.display = tab === 'register' ? 'block' : 'none';
             document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
-            
             document.querySelectorAll('.tab-btn').forEach(btn => {
                 btn.classList.remove('active');
                 if (btn.textContent === (tab === 'register' ? 'Register' : 'Login')) {
@@ -679,7 +668,7 @@
             e.preventDefault();
             const formData = new FormData(this);
             fetch('/memes/register', { method: 'POST', body: formData })
-            .then(response => response.json())
+            .then(r => r.json())
             .then(data => {
                 alert(data.message || (data.success ? 'Registered!' : 'Failed'));
                 if (data.success) window.location.reload();
@@ -691,7 +680,7 @@
             e.preventDefault();
             const formData = new FormData(this);
             fetch('/memes/login', { method: 'POST', body: formData })
-            .then(response => response.json())
+            .then(r => r.json())
             .then(data => {
                 alert(data.message || (data.success ? 'Logged in!' : 'Failed'));
                 if (data.success) window.location.reload();
@@ -702,27 +691,18 @@
         function handleDownload(memeId, description) {
             const videoFilename = `${description}.mp4`;
             const videoUrl = `/static/vids/${memeId}.mp4`;
-            
-            fetch(`/increment_download/${memeId}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            })
-            .then(response => response.json())
+            fetch(`/increment_download/${memeId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+            .then(r => r.json())
             .then(data => {
                 if (data.success) {
                     fetch(videoUrl)
-                        .then(r => {
-                            if (!r.ok) throw new Error('File not found');
-                            return r.blob();
-                        })
+                        .then(r => r.ok ? r.blob() : Promise.reject())
                         .then(blob => {
                             const url = URL.createObjectURL(blob);
                             const a = document.createElement('a');
                             a.href = url;
                             a.download = videoFilename;
-                            document.body.appendChild(a);
                             a.click();
-                            a.remove();
                             URL.revokeObjectURL(url);
                         })
                         .catch(() => window.open(videoUrl, '_blank'));
