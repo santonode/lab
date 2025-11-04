@@ -140,34 +140,17 @@
             color: white;
             cursor: pointer;
             position: relative;
-            padding-right: 20px;
         }
         .meme-table th a {
             color: white;
             text-decoration: none;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
+            display: block;
             width: 100%;
+            padding: 8px;
+            margin: -8px;
         }
         .meme-table th a:hover {
             text-decoration: underline;
-        }
-        .meme-table th .sort-indicator {
-            font-size: 0.8em;
-            margin-left: 4px;
-            opacity: 0.6;
-            transition: opacity 0.2s;
-        }
-        .meme-table th.active .sort-indicator {
-            opacity: 1;
-            font-weight: bold;
-        }
-        .meme-table th.active.asc .sort-indicator::after {
-            content: " Up";
-        }
-        .meme-table th.active.desc .sort-indicator::after {
-            content: " Down";
         }
         .meme-table tr:nth-child(even) {
             background-color: #f9f9f9;
@@ -212,6 +195,44 @@
         .download-link:hover {
             text-decoration: underline;
             color: #00796b;
+        }
+
+        /* TOOLTIP STYLES */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 100px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 4px;
+            padding: 5px 8px;
+            position: absolute;
+            z-index: 100;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -50px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 12px;
+            font-family: Arial, sans-serif;
+        }
+        .tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #333 transparent transparent transparent;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
         }
 
         /* THUMBNAIL POPUP MODAL */
@@ -348,6 +369,11 @@
                 font-size: 13px;
                 padding: 8px 16px;
             }
+            .tooltip .tooltiptext {
+                width: 80px;
+                margin-left: -40px;
+                font-size: 11px;
+            }
         }
         @media only screen and (-webkit-min-device-pixel-ratio: 2) and (max-width: 767px) {
             .meme-table { table-layout: fixed; width: 100%; max-width: 100vw; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -440,33 +466,25 @@
         <table class="meme-table">
             <thead>
                 <tr>
-                    {% set current_sort = request.args.get('sort', 'counts') %}
-                    {% set current_order = request.args.get('order', 'desc') %}
-                    
-                    <th class="{% if current_sort == 'id' %}active {{ current_order }}{% endif %}">
-                        <a href="?sort=id&order={{ 'asc' if current_sort != 'id' or current_order == 'desc' else 'desc' }}">
-                            ID<span class="sort-indicator"></span>
-                        </a>
+                    <th class="tooltip">
+                        <a href="?sort=id&order={{ 'asc' if request.args.get('sort') != 'id' or request.args.get('order') == 'desc' else 'desc' }}">ID</a>
+                        <span class="tooltiptext">Click to sort</span>
                     </th>
-                    <th class="{% if current_sort == 'type' %}active {{ current_order }}{% endif %}">
-                        <a href="?sort=type&order={{ 'asc' if current_sort != 'type' or current_order == 'desc' else 'desc' }}">
-                            Type<span class="sort-indicator"></span>
-                        </a>
+                    <th class="tooltip">
+                        <a href="?sort=type&order={{ 'asc' if request.args.get('sort') != 'type' or request.args.get('order') == 'desc' else 'desc' }}">Type</a>
+                        <span class="tooltiptext">Click to sort</span>
                     </th>
-                    <th class="{% if current_sort == 'thumb' %}active {{ current_order }}{% endif %}">
-                        <a href="?sort=thumb&order={{ 'asc' if current_sort != 'thumb' or current_order == 'desc' else 'desc' }}">
-                            Thumb<span class="sort-indicator"></span>
-                        </a>
+                    <th class="tooltip">
+                        <a href="?sort=thumb&order={{ 'asc' if request.args.get('sort') != 'thumb' or request.args.get('order') == 'desc' else 'desc' }}">Thumb</a>
+                        <span class="tooltiptext">Click to sort</span>
                     </th>
-                    <th class="{% if current_sort == 'description' %}active {{ current_order }}{% endif %}">
-                        <a href="?sort=description&order={{ 'asc' if current_sort != 'description' or current_order == 'desc' else 'desc' }}">
-                            Description / Owner<span class="sort-indicator"></span>
-                        </a>
+                    <th class="tooltip">
+                        <a href="?sort=description&order={{ 'asc' if request.args.get('sort') != 'description' or request.args.get('order') == 'desc' else 'desc' }}">Description / Owner</a>
+                        <span class="tooltiptext">Click to sort</span>
                     </th>
-                    <th class="{% if current_sort == 'counts' %}active {{ current_order }}{% endif %}">
-                        <a href="?sort=counts&order={{ 'asc' if current_sort != 'counts' or current_order == 'desc' else 'desc' }}">
-                            Counts<span class="sort-indicator"></span>
-                        </a>
+                    <th class="tooltip">
+                        <a href="?sort=counts&order={{ 'asc' if request.args.get('sort') if request.args.get('sort') != 'counts' or request.args.get('order') == 'desc' else 'desc' }}">Counts</a>
+                        <span class="tooltiptext">Click to sort</span>
                     </th>
                 </tr>
             </thead>
