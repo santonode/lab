@@ -139,13 +139,35 @@
             background: linear-gradient(45deg, #263238, #37474f);
             color: white;
             cursor: pointer;
+            position: relative;
+            padding-right: 20px;
         }
         .meme-table th a {
             color: white;
             text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
         }
         .meme-table th a:hover {
             text-decoration: underline;
+        }
+        .meme-table th .sort-indicator {
+            font-size: 0.8em;
+            margin-left: 4px;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+        .meme-table th.active .sort-indicator {
+            opacity: 1;
+            font-weight: bold;
+        }
+        .meme-table th.active.asc .sort-indicator::after {
+            content: " Up";
+        }
+        .meme-table th.active.desc .sort-indicator::after {
+            content: " Down";
         }
         .meme-table tr:nth-child(even) {
             background-color: #f9f9f9;
@@ -418,11 +440,34 @@
         <table class="meme-table">
             <thead>
                 <tr>
-                    <th><a href="?sort=id&order={{ 'asc' if request.args.get('sort') != 'id' or request.args.get('order') == 'desc' else 'desc' }}">ID</a></th>
-                    <th><a href="?sort=type&order={{ 'asc' if request.args.get('sort') != 'type' or request.args.get('order') == 'desc' else 'desc' }}">Type</a></th>
-                    <th><a href="?sort=thumb&order={{ 'asc' if request.args.get('sort') != 'thumb' or request.args.get('order') == 'desc' else 'desc' }}">Thumb</a></th>
-                    <th><a href="?sort=description&order={{ 'asc' if request.args.get('sort') != 'description' or request.args.get('order') == 'desc' else 'desc' }}">Description / Owner</a></th>
-                    <th><a href="?sort=counts&order={{ 'asc' if request.args.get('sort') != 'counts' or request.args.get('order') == 'desc' else 'desc' }}">Counts</a></th>
+                    {% set current_sort = request.args.get('sort', 'counts') %}
+                    {% set current_order = request.args.get('order', 'desc') %}
+                    
+                    <th class="{% if current_sort == 'id' %}active {{ current_order }}{% endif %}">
+                        <a href="?sort=id&order={{ 'asc' if current_sort != 'id' or current_order == 'desc' else 'desc' }}">
+                            ID<span class="sort-indicator"></span>
+                        </a>
+                    </th>
+                    <th class="{% if current_sort == 'type' %}active {{ current_order }}{% endif %}">
+                        <a href="?sort=type&order={{ 'asc' if current_sort != 'type' or current_order == 'desc' else 'desc' }}">
+                            Type<span class="sort-indicator"></span>
+                        </a>
+                    </th>
+                    <th class="{% if current_sort == 'thumb' %}active {{ current_order }}{% endif %}">
+                        <a href="?sort=thumb&order={{ 'asc' if current_sort != 'thumb' or current_order == 'desc' else 'desc' }}">
+                            Thumb<span class="sort-indicator"></span>
+                        </a>
+                    </th>
+                    <th class="{% if current_sort == 'description' %}active {{ current_order }}{% endif %}">
+                        <a href="?sort=description&order={{ 'asc' if current_sort != 'description' or current_order == 'desc' else 'desc' }}">
+                            Description / Owner<span class="sort-indicator"></span>
+                        </a>
+                    </th>
+                    <th class="{% if current_sort == 'counts' %}active {{ current_order }}{% endif %}">
+                        <a href="?sort=counts&order={{ 'asc' if current_sort != 'counts' or current_order == 'desc' else 'desc' }}">
+                            Counts<span class="sort-indicator"></span>
+                        </a>
+                    </th>
                 </tr>
             </thead>
             <tbody>
