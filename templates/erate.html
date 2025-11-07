@@ -17,6 +17,7 @@
         .filter-form button, .action-btn { padding: 8px 16px; background: #26A69A; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px; }
         .action-btn.load-more { background: #3498db; }
         .summary { font-size: 18px; font-weight: 600; color: #263238; margin: 15px 0; text-align: center; }
+        .count-badge { background: #e74c3c; color: white; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: 600; }
         .table-container { overflow-x: auto; }
         .erate-table { width: 100%; border-collapse: collapse; font-size: 14px; border: 1px solid #ddd; }
         .erate-table th, .erate-table td { padding: 10px; border: 1px solid #ddd; text-align: left; }
@@ -47,13 +48,14 @@
                     <label for="min_date">Modified After:</label>
                     <input type="date" id="min_date" name="min_date" value="{{ filters.min_date or '2025-01-01' }}">
                 </div>
-                <button type="submit">Filter</button>
+                <button type="submit">Filter Results</button>
                 <a href="{{ url_for('erate.erate_dashboard') }}" class="action-btn">Reset</a>
             </form>
         </div>
 
+        <!-- CURRENT SEARCH RESULTS COUNT -->
         <div class="summary">
-            Showing <strong>{{ total }}</strong> records
+            Showing <strong>{{ total }}</strong> of <strong class="count-badge">{{ total_filtered }}</strong> matching records
             for <strong>{{ filters.state }}</strong> modified on or after <strong>{{ filters.min_date }}</strong>
         </div>
 
