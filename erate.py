@@ -1,5 +1,6 @@
 # erate.py
 from flask import Blueprint, render_template, request, current_app, redirect
+import requests  # ← IMPORT ADDED
 from typing import Optional
 
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate')
@@ -68,26 +69,31 @@ def erate_dashboard():
         return render_template(
             'erate.html',
             table_data=table_data,
-            filters={'state': state, 'year': year},
+            filters={'state': state, 'year': year},  # ← ALWAYS PASS
             total=offset + len(table_data),
             has_more=has_more,
             next_offset=offset + 10
         )
     except Exception as e:
         current_app.logger.error(f"E-Rate error: {e}")
-        return render_template('erate.html', error=str(e), table_data=[], total=0)
+        return render_template(
+            'erate.html',
+            error=str(e),
+            table_data=[],
+            total=0,
+            filters={},  # ← DEFAULT
+            has_more=False,
+            next_offset=0
+        )
 
 @erate_bp.route('/download')
 def download_csv():
-    """Redirect to USAC's direct CSV download (no server load)"""
     state = request.args.get('state')
     year = request.args.get('year')
 
     if not state and not year:
-        # Full dataset
         return redirect(FULL_CSV_URL)
 
-    # Filtered dataset
     params = {'$where': build_where_clause(state, year)}
     url = f"{ROWS_CSV_URL}?{requests.compat.urlencode(params)}"
     return redirect(url)
