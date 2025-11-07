@@ -1,8 +1,9 @@
 # erate.py
-from flask import Blueprint, render_template, request, current_app, redirect, Response
+from flask import Blueprint, render_template, request, current_app, redirect, Response, jsonify
 import requests
 import csv
 import os
+import threading
 from extensions import db
 from models import Erate
 from urllib.parse import quote_plus
@@ -13,31 +14,45 @@ erate_bp = Blueprint('erate', __name__, url_prefix='/erate')
 API_BASE_URL = "https://opendata.usac.org/api/views/jp7a-89nd"
 ROWS_CSV_URL = f"{API_BASE_URL}/rows.csv"
 CSV_FILE = "erate_data.csv"
+STATUS_FILE = "download_status.txt"
 
-# === STEP 1: DOWNLOAD FULL CSV ===
-def download_csv():
+# === BACKGROUND DOWNLOAD ===
+def download_csv_background():
     if os.path.exists(CSV_FILE):
-        return f"{CSV_FILE} already exists. <a href='/erate/import-interactive'>Start import</a>"
+        with open(STATUS_FILE, 'w') as f:
+            f.write("already_exists")
+        return
 
-    current_app.logger.info("Downloading full E-Rate CSV...")
+    with open(STATUS_FILE, 'w') as f:
+        f.write("downloading")
+
     url = ROWS_CSV_URL + "?accessType=DOWNLOAD"
     headers = {'Accept-Encoding': 'gzip, deflate'}
 
     try:
-        response = requests.get(url, stream=True, timeout=120, headers=headers)
+        response = requests.get(url, stream=True, timeout=300, headers=headers)
         response.raise_for_status()
         response.raw.decode_content = True
 
+        total_size = int(response.headers.get('content-length', 0))
+        downloaded = 0
+
         with open(CSV_FILE, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
+            for chunk in response.iter_content(chunk_size=1024*1024):  # 1MB
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    progress = (downloaded / total_size * 100) if total_size else 0
+                    with open(STATUS_FILE, 'w') as sf:
+                        sf.write(f"downloading:{progress:.1f}")
 
-        current_app.logger.info("CSV downloaded.")
-        return f"CSV downloaded: {CSV_FILE}<br><a href='/erate/import-interactive'>Start Interactive Import</a>"
+        with open(STATUS_FILE, 'w') as f:
+            f.write("complete")
     except Exception as e:
-        return f"Download failed: {e}"
+        with open(STATUS_FILE, 'w') as f:
+            f.write(f"error:{str(e)}")
 
-# === STEP 2: INTERACTIVE IMPORT (BROWSER) ===
+# === INTERACTIVE IMPORT GENERATOR ===
 def import_generator():
     if not os.path.exists(CSV_FILE):
         yield "Run /erate/download first.<br>"
@@ -52,10 +67,12 @@ def import_generator():
         success = error = 0
         for i, row in enumerate(reader, 1):
             yield f"<pre>\n--- Record {i}/{total} ---\n"
-            for k, v in row.items():
-                if k in ['ID', 'Billed Entity State', 'Billed Entity Name', 'Total Committed Amount', 'Last Modified Date/Time']:
-                    yield f"{k}: {v}\n"
-            yield "\nPress ENTER to import...\n</pre>"
+            yield f"ID: {row.get('ID', 'N/A')}\n"
+            yield f"State: {row.get('Billed Entity State', 'N/A')}\n"
+            yield f"Entity: {row.get('Billed Entity Name', 'N/A')}\n"
+            yield f"Amount: {row.get('Total Committed Amount', 'N/A')}\n"
+            yield f"Modified: {row.get('Last Modified Date/Time', 'N/A')}\n"
+            yield "\nType 'ok' and press Enter...\n</pre>"
 
             confirm = request.form.get('confirm')
             if not confirm:
@@ -91,12 +108,44 @@ def import_generator():
                 error += 1
                 yield f"<pre style='color:red'>ERROR: {e}</pre><hr>"
 
-        yield f"<h2>Done! Success: {success}, Errors: {error}</h2>"
+        yield f"<h2>DONE! Success: {success}, Errors: {error}</h2>"
 
 # === ROUTES ===
 @erate_bp.route('/download')
-def download_route():
-    return download_csv()
+def start_download():
+    if os.path.exists(STATUS_FILE):
+        with open(STATUS_FILE, 'r') as f:
+            status = f.read()
+        if status == "complete":
+            return f"CSV ready! <a href='/erate/import-interactive'>Start Import</a>"
+        elif status.startswith("downloading"):
+            return "Download in progress... <a href='/erate/status'>Check Status</a>"
+        elif status.startswith("error"):
+            return f"Download failed: {status.split(':',1)[1]}"
+        else:
+            return "Unknown status. <a href='/erate/download'>Retry</a>"
+
+    if os.path.exists(CSV_FILE):
+        return f"CSV exists. <a href='/erate/import-interactive'>Start Import</a>"
+
+    threading.Thread(target=download_csv_background, daemon=True).start()
+    return "Download started in background... <a href='/erate/status'>Check Status</a>"
+
+@erate_bp.route('/status')
+def download_status():
+    if not os.path.exists(STATUS_FILE):
+        return "No download in progress."
+    with open(STATUS_FILE, 'r') as f:
+        status = f.read()
+    if status == "complete":
+        return "DOWNLOAD COMPLETE! <a href='/erate/import-interactive'>Start Import</a>"
+    elif status.startswith("downloading"):
+        progress = status.split(':',1)[1]
+        return f"Downloading... {progress}%"
+    elif status.startswith("error"):
+        return f"Error: {status.split(':',1)[1]}"
+    else:
+        return "Starting..."
 
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
@@ -104,7 +153,7 @@ def import_interactive():
 
 @erate_bp.route('/')
 def dashboard():
-    # ... your dashboard code
+    # your dashboard
     pass
 
 @erate_bp.route('/download-csv')
