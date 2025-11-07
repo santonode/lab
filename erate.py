@@ -29,15 +29,26 @@ def safe_date(value):
     except Exception:
         return None
 
-# === INTERACTIVE IMPORT (STREAM FROM API) ===
+def get_unique_id(row):
+    """Generate a unique ID from available fields"""
+    frn = row.get('FRN', '').strip()
+    app_num = row.get('Application Number', '').strip()
+    if frn and app_num:
+        return f"{frn}_{app_num}"
+    elif frn:
+        return f"frn_{frn}"
+    elif app_num:
+        return f"app_{app_num}"
+    else:
+        return f"auto_{int(datetime.now().timestamp()*1000000)}"
+
+# === INTERACTIVE IMPORT ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
-    # Session state
     if 'import_progress' not in session:
         session['import_progress'] = {'index': 1, 'success': 0, 'error': 0, 'total': 2161188}
     progress = session['import_progress']
 
-    # POST: Import current record
     if request.method == 'POST':
         confirm = request.form.get('confirm')
         if confirm == 'ok':
@@ -51,8 +62,29 @@ def import_interactive():
                 reader = csv.DictReader(stream)
                 row = next(reader)
 
+                # === SKIP IF NO ID AND NO FALLBACK ===
+                raw_id = row.get('ID', '').strip()
+                if not raw_id:
+                    frn = row.get('FRN', '').strip()
+                    app_num = row.get('Application Number', '').strip()
+                    if not frn and not app_num:
+                        progress['error'] += 1
+                        progress['index'] += 1
+                        session['import_progress'] = progress
+                        return render_template('erate_import.html', row=row, progress=progress, success=False, error="Skipped: No ID, FRN, or App Number")
+
+                # === USE ID OR GENERATE ONE ===
+                record_id = raw_id if raw_id else get_unique_id(row)
+
+                # === CHECK IF ALREADY EXISTS ===
+                if db.session.get(Erate, record_id):
+                    progress['error'] += 1
+                    progress['index'] += 1
+                    session['import_progress'] = progress
+                    return render_template('erate_import.html', row=row, progress=progress, success=False, error="Skipped: Already in DB")
+
                 erate = Erate(
-                    id=row.get('ID', ''),
+                    id=record_id,
                     state=row.get('Billed Entity State', '')[:2],
                     funding_year=row.get('Funding Year', ''),
                     entity_name=row.get('Billed Entity Name', ''),
@@ -78,7 +110,6 @@ def import_interactive():
                 session['import_progress'] = progress
                 return render_template('erate_import.html', row={}, progress=progress, error=str(e))
 
-    # GET: Show current record
     if progress['index'] > progress['total']:
         return f"<h1>IMPORT COMPLETE!</h1><p>Success: {progress['success']} | Errors: {progress['error']}</p><a href='/erate'>Dashboard</a>"
 
@@ -95,17 +126,3 @@ def import_interactive():
         return f"Error fetching row: {e}"
 
     return render_template('erate_import.html', row=row, progress=progress, success=False, error=None)
-
-# === DASHBOARD ===
-@erate_bp.route('/')
-def dashboard():
-    # your dashboard code
-    pass
-
-@erate_bp.route('/download-csv')
-def download_filtered():
-    state = request.args.get('state', 'KS')
-    min_date = request.args.get('min_date', '2025-01-01')
-    where = f"`Billed Entity State` = '{state}' AND `Last Modified Date/Time` >= '{min_date}T00:00:00.000'"
-    url = f"{ROWS_CSV_URL}?$where={quote_plus(where)}&$order=`ID` ASC"
-    return redirect(url)
