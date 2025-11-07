@@ -1,5 +1,5 @@
 # erate.py
-from flask import Blueprint, render_template, request, current_app, session
+from flask import Blueprint, render_template, request, session, redirect
 import requests
 import csv
 import io
@@ -13,11 +13,11 @@ erate_bp = Blueprint('erate', __name__, url_prefix='/erate')
 API_BASE_URL = "https://opendata.usac.org/api/views/jp7a-89nd"
 ROWS_CSV_URL = f"{API_BASE_URL}/rows.csv"
 
-# === HELPER FUNCTIONS ===
+# === HELPERS ===
 def safe_float(value, default=0.0):
     try:
         return float(value) if value and str(value).strip() else default
-    except (ValueError, TypeError):
+    except:
         return default
 
 def safe_date(value):
@@ -26,11 +26,10 @@ def safe_date(value):
             clean = value.strip().replace('Z', '+00:00')
             return datetime.fromisoformat(clean).date()
         return None
-    except Exception:
+    except:
         return None
 
 def get_unique_id(row, offset):
-    """Generate a 100% unique ID using row offset as fallback"""
     raw_id = row.get('ID', '').strip()
     if raw_id:
         return raw_id
@@ -38,12 +37,12 @@ def get_unique_id(row, offset):
     app_num = row.get('Application Number', '').strip()
     if frn and app_num:
         return f"{frn}_{app_num}"
-    return f"row_{offset}"  # ← UNIQUE PER ROW
+    return f"row_{offset}"
 
 # === INTERACTIVE IMPORT ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
-    # === RESET SESSION ON FIRST VISIT (GET) ===
+    # RESET SESSION ON GET
     if request.method == 'GET':
         session.clear()
         session['import_progress'] = {
@@ -55,13 +54,13 @@ def import_interactive():
 
     progress = session['import_progress']
 
-    # === POST: IMPORT CURRENT RECORD ===
+    # POST: IMPORT
     if request.method == 'POST':
-        confirm = request.form.get('confirm')
-        if confirm == 'ok':
+        if request.form.get('confirm') == 'ok':
             try:
                 offset = progress['index'] - 1
-                url = f"{ROWS_CSV_URL}?$limit=1&$offset={offset}&accessType=DOWNLOAD"
+                cache_buster = int(datetime.now().timestamp() * 1000)
+                url = f"{ROWS_CSV_URL}?$limit=1&$offset={offset}&accessType=DOWNLOAD&_={cache_buster}"
                 response = requests.get(url, stream=True, timeout=30)
                 response.raise_for_status()
                 response.raw.decode_content = True
@@ -69,23 +68,15 @@ def import_interactive():
                 reader = csv.DictReader(stream)
                 row = next(reader)
 
-                # Generate unique ID
                 record_id = get_unique_id(row, offset)
 
-                # Skip if already exists
                 if db.session.get(Erate, record_id):
                     progress['error'] += 1
                     progress['index'] += 1
                     session['import_progress'] = progress
-                    return render_template(
-                        'erate_import.html',
-                        row=row,
-                        progress=progress,
-                        success=False,
-                        error="Skipped: Already in DB"
-                    )
+                    return render_template('erate_import.html', row=row, progress=progress,
+                                         success=False, error="Skipped: Already in DB")
 
-                # Insert new record
                 erate = Erate(
                     id=record_id,
                     state=row.get('Billed Entity State', '')[:2],
@@ -107,28 +98,16 @@ def import_interactive():
                 progress['index'] += 1
                 session['import_progress'] = progress
 
-                return render_template(
-                    'erate_import.html',
-                    row=row,
-                    progress=progress,
-                    success=True,
-                    error=None
-                )
+                return render_template('erate_import.html', row=row, progress=progress, success=True)
 
             except Exception as e:
                 db.session.rollback()
                 progress['error'] += 1
                 progress['index'] += 1
                 session['import_progress'] = progress
-                return render_template(
-                    'erate_import.html',
-                    row={},
-                    progress=progress,
-                    success=False,
-                    error=str(e)
-                )
+                return render_template('erate_import.html', row={}, progress=progress, error=str(e))
 
-    # === GET: SHOW CURRENT RECORD ===
+    # GET: SHOW RECORD
     if progress['index'] > progress['total']:
         return f"""
         <h1>IMPORT COMPLETE!</h1>
@@ -138,7 +117,8 @@ def import_interactive():
 
     try:
         offset = progress['index'] - 1
-        url = f"{ROWS_CSV_URL}?$limit=1&$offset={offset}&accessType=DOWNLOAD"
+        cache_buster = int(datetime.now().timestamp() * 1000)
+        url = f"{ROWS_CSV_URL}?$limit=1&$offset={offset}&accessType=DOWNLOAD&_={cache_buster}"
         response = requests.get(url, stream=True, timeout=30)
         response.raise_for_status()
         response.raw.decode_content = True
@@ -146,15 +126,9 @@ def import_interactive():
         reader = csv.DictReader(stream)
         row = next(reader)
     except Exception as e:
-        return f"Error fetching row: {e}"
+        return f"Error: {e}"
 
-    return render_template(
-        'erate_import.html',
-        row=row,
-        progress=progress,
-        success=False,
-        error=None
-    )
+    return render_template('erate_import.html', row=row, progress=progress, success=False, error=None)
 
 # === DASHBOARD ===
 @erate_bp.route('/')
