@@ -1,198 +1,52 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Santo - E-Rate Dashboard</title>
-    <!-- Direct path to static2 -->
-    <link rel="stylesheet" href="/static2/styles.css">
+    <title>E-Rate Dashboard</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #f8f9fa; color: #333; }
-        .header {
-            position: fixed; top: 0; left: 0; right: 0;
-            background: #263238; color: white; text-align: center;
-            padding: 12px 0; z-index: 1000; border-bottom: 3px solid #000;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
-        .content { margin-top: 70px; padding: 20px; max-width: 1400px; margin-left: auto; margin-right: auto; }
-        .card { background: white; border-radius: 10px; padding: 20px; margin-bottom: 25px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-        .filter-form {
-            display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
-            justify-content: center; margin-bottom: 10px;
-        }
-        .filter-form label { font-weight: 600; color: #263238; margin-right: 5px; }
-        .filter-form input {
-            padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; width: 140px;
-        }
-        .filter-form button, .action-btn {
-            padding: 8px 16px; background: #26A69A; color: white; border: none;
-            border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px;
-            transition: background 0.2s;
-        }
-        .filter-form button:hover, .action-btn:hover { background: #1e7d71; }
-        .action-btn.load-more { background: #3498db; }
-        .action-btn.load-more:hover { background: #2980b9; }
-        .summary { font-size: 18px; font-weight: 600; color: #263238; margin: 15px 0; text-align: center; }
-        .count-badge {
-            background: #e74c3c; color: white; padding: 4px 12px; border-radius: 20px;
-            font-size: 14px; font-weight: 600; display: inline-block; min-width: 50px;
-        }
-        .table-container { overflow-x: auto; border-radius: 8px; box-shadow: 0 1px 5px rgba(0,0,0,0.1); }
-        .erate-table {
-            width: 100%; border-collapse: collapse; font-size: 14px; background: white;
-            border: 1px solid #ddd;
-        }
-        .erate-table th, .erate-table td {
-            padding: 10px; border: 1px solid #ddd; text-align: left;
-        }
-        .erate-table th {
-            background: #263238; color: white; font-weight: 600; position: sticky; top: 0; z-index: 10;
-        }
-        .erate-table tr:hover { background: #f0f7fb; }
-        .erate-table tr:nth-child(even) { background: #f9f9f9; }
-        .error {
-            background: #ffe6e6; color: #c0392b; padding: 15px; border-radius: 8px;
-            border: 1px solid #ffcccc; margin: 20px 0; text-align: center; font-weight: 500;
-        }
-        .no-data { text-align: center; color: #777; font-style: italic; padding: 30px; }
-        .footer {
-            text-align: center; padding: 30px; color: #777; font-size: 14px; margin-top: 50px;
-        }
-        .footer a { color: #26A69A; text-decoration: none; }
-        .footer a:hover { text-decoration: underline; }
-        @media (max-width: 768px) {
-            .filter-form { flex-direction: column; }
-            .filter-form input, .filter-form button { width: 100%; }
-            .content { padding: 15px; }
-        }
+        body { font-family: Arial; margin: 40px; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background: #f4f4f4; }
+        .filters { margin: 20px 0; }
     </style>
 </head>
 <body>
-    <!-- HEADER -->
-    <div class="header">
-        <h1>E-Rate Dashboard</h1>
+    <h1>E-Rate Dashboard</h1>
+    <div class="filters">
+        <form>
+            State: <input name="state" value="{{ filters.state }}" size="3">
+            Min Date: <input name="min_date" value="{{ filters.min_date }}" type="date">
+            <button>Filter</button>
+        </form>
+        <a href="/erate/download-csv?state={{ filters.state }}&min_date={{ filters.min_date }}">Download CSV</a>
     </div>
 
-    <div class="content">
+    <p>Showing {{ total }} of {{ total_filtered }} records</p>
 
-        <!-- ERROR MESSAGE -->
-        {% if error %}
-            <div class="error">
-                <strong>Error:</strong> {{ error }}
-            </div>
-        {% endif %}
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>State</th>
+            <th>Entity</th>
+            <th>Amount</th>
+            <th>Modified</th>
+        </tr>
+        {% for row in table_data %}
+        <tr>
+            <td>{{ row.id }}</td>
+            <td>{{ row.state }}</td>
+            <td>{{ row.entity_name }}</td>
+            <td>${{ "%.2f"|format(row.amount) }}</td>
+            <td>{{ row.last_modified }}</td>
+        </tr>
+        {% endfor %}
+    </table>
 
-        <!-- FILTER CARD -->
-        <div class="card">
-            <form method="GET" class="filter-form">
-                <div>
-                    <label for="state">State:</label>
-                    <input type="text" id="state" name="state" 
-                           value="{{ filters.state or 'KS' }}" placeholder="e.g., KS" maxlength="2">
-                </div>
-                <div>
-                    <label for="min_date">Modified After:</label>
-                    <input type="date" id="min_date" name="min_date" 
-                           value="{{ filters.min_date or '2025-01-01' }}">
-                </div>
-                <button type="submit">Filter Results</button>
-                <a href="{{ url_for('erate.erate_dashboard') }}" class="action-btn">Reset</a>
-            </form>
-        </div>
+    {% if has_more %}
+    <a href="?state={{ filters.state }}&min_date={{ filters.min_date }}&offset={{ next_offset }}">Load More</a>
+    {% endif %}
 
-        <!-- SUMMARY WITH TOTAL COUNT -->
-        <div class="summary">
-            Showing <strong>{{ total }}</strong> of <strong class="count-badge">{{ total_filtered }}</strong> records
-            for <strong>{{ filters.state }}</strong> modified on or after <strong>{{ filters.min_date }}</strong>
-        </div>
-
-        <!-- RESULTS TABLE -->
-        {% if table_data %}
-            <div class="card table-container">
-                <table class="erate-table">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>State</th>
-                            <th>Funding Year</th>
-                            <th>Entity Name</th>
-                            <th>Address</th>
-                            <th>ZIP</th>
-                            <th>FRN</th>
-                            <th>App #</th>
-                            <th>Status</th>
-                            <th>Amount</th>
-                            <th>Service</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in table_data %}
-                            <tr>
-                                <td>{{ row.id }}</td>
-                                <td>{{ row.state }}</td>
-                                <td>{{ row.funding_year }}</td>
-                                <td>{{ row.entity_name }}</td>
-                                <td>{{ row.address }}</td>
-                                <td>{{ row.zip_code }}</td>
-                                <td>{{ row.frn }}</td>
-                                <td>{{ row.app_number }}</td>
-                                <td>{{ row.status }}</td>
-                                <td>
-                                    {% if row.amount %}
-                                        ${{ "%.2f"|format(row.amount) }}
-                                    {% else %}
-                                        $0.00
-                                    {% endif %}
-                                </td>
-                                <td>{{ row.description }}</td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- LOAD MORE BUTTON -->
-            {% if has_more %}
-                <div style="text-align: center; margin: 20px 0;">
-                    <a href="{{ url_for('erate.erate_dashboard',
-                        state=filters.state, min_date=filters.min_date, offset=next_offset) }}"
-                       class="action-btn load-more" style="font-size: 16px; padding: 12px 24px;">
-                       Load More ({{ next_offset }}+)
-                    </a>
-                </div>
-            {% endif %}
-
-            <!-- DOWNLOAD FILTERED CSV -->
-            <div style="text-align: center; margin: 20px 0;">
-                <a href="{{ url_for('erate.download_csv', state=filters.state, min_date=filters.min_date) }}"
-                   class="action-btn" style="font-size: 16px; padding: 12px 24px;" target="_blank">
-                   Download Filtered CSV
-                </a>
-            </div>
-
-        {% else %}
-            <div class="card no-data">
-                <p>No records found for {{ filters.state }} modified on or after {{ filters.min_date }}.</p>
-            </div>
-        {% endif %}
-
-    </div>
-
-    <!-- FOOTER -->
-    <div class="footer">
-        <p>
-            Made with Love by Team Santo |
-            Data from <a href="https://opendata.usac.org" target="_blank">USAC OpenData</a>
-        </p>
-    </div>
-
-    <script>
-        // Auto-focus first input
-        document.addEventListener('DOMContentLoaded', () => {
-            const firstInput = document.querySelector('input[name="state"], input[name="min_date"]');
-            if (firstInput && !firstInput.value) firstInput.focus();
-        });
-    </script>
+    <hr>
+    <a href="/erate/import-interactive">Import More Records</a>
 </body>
 </html>
