@@ -86,16 +86,18 @@
                 </table>
             </div>
 
+            <!-- LOAD MORE -->
             {% if has_more %}
                 <div style="text-align: center; margin: 20px 0;">
                     <a href="{{ url_for('erate.erate_dashboard',
                         state=filters.state, min_date=filters.min_date, offset=next_offset) }}"
                        class="action-btn load-more" style="font-size: 16px; padding: 12px 24px;">
-                       Load More
+                       Load More ({{ next_offset }}+)
                     </a>
                 </div>
             {% endif %}
 
+            <!-- DOWNLOAD CSV -->
             <div style="text-align: center; margin: 20px 0;">
                 <a href="{{ url_for('erate.download_csv', state=filters.state, min_date=filters.min_date) }}"
                    class="action-btn" style="font-size: 16px; padding: 12px 24px;" target="_blank">
@@ -104,7 +106,7 @@
             </div>
         {% else %}
             <div class="card no-data">
-                <p>No records found for KS modified on or after {{ filters.min_date }}.</p>
+                <p>No records found.</p>
             </div>
         {% endif %}
     </div>
