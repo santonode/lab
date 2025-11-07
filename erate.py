@@ -9,8 +9,21 @@ erate_bp = Blueprint('erate', __name__, url_prefix='/erate')
 # === CONFIG ===
 API_BASE_URL = "https://opendata.usac.org/api/views/jp7a-89nd"
 ROWS_CSV_URL = f"{API_BASE_URL}/rows.csv"
+COUNT_URL = f"{API_BASE_URL}/rows.json?$select=count(*)"
+FULL_CSV_URL = f"{API_BASE_URL}/rows.csv?accessType=DOWNLOAD"
 
 # === HELPERS ===
+def get_filtered_count(where: str) -> int:
+    try:
+        params = {'$where': where}
+        response = requests.get(COUNT_URL, params=params, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        return int(data[0]['count'])
+    except Exception as e:
+        current_app.logger.error(f"Count error: {e}")
+        return 0
+
 def fetch_erate_csv_stream(params):
     url = ROWS_CSV_URL
     try:
@@ -53,9 +66,9 @@ def parse_csv_rows(response, limit=10):
 def build_where_clause(state: Optional[str] = None, min_date: Optional[str] = None) -> str:
     conditions = []
     if state:
-        conditions.append(f"`Billed Entity State` = '{state.upper()}'")  # CORRECT
+        conditions.append(f"`Billed Entity State` = '{state.upper()}'")
     if min_date:
-        conditions.append(f"`Last Modified Date/Time` >= '{min_date}T00:00:00.000'")  # CORRECT
+        conditions.append(f"`Last Modified Date/Time` >= '{min_date}T00:00:00.000'")
     return " AND ".join(conditions) if conditions else "1=1"
 
 # === ROUTES ===
@@ -67,9 +80,11 @@ def erate_dashboard():
         offset = int(request.args.get('offset', 0))
 
         where = build_where_clause(state, min_date)
+        total_filtered = get_filtered_count(where)
+
         params = {
             '$where': where,
-            '$limit': '11',  # 10 + 1
+            '$limit': '11',
             '$offset': str(offset),
             '$order': '`ID` ASC'
         }
@@ -84,6 +99,7 @@ def erate_dashboard():
             table_data=table_data,
             filters={'state': state, 'min_date': min_date},
             total=offset + len(table_data),
+            total_filtered=total_filtered,
             has_more=has_more,
             next_offset=offset + 10
         )
@@ -94,6 +110,7 @@ def erate_dashboard():
             error=str(e),
             table_data=[],
             total=0,
+            total_filtered=0,
             filters={'state': 'KS', 'min_date': '2025-01-01'},
             has_more=False,
             next_offset=0
