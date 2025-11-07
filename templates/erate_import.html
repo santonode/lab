@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>E-Rate Interactive Import</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #333; }
+        .record { background: #f8f9fa; padding: 15px; margin: 20px 0; border-radius: 6px; border-left: 5px solid #26A69A; }
+        .record.error { border-left-color: #e74c3c; background: #fff5f5; }
+        .record.success { border-left-color: #27ae60; background: #f0fff4; }
+        .form-group { margin: 20px 0; }
+        input[type="text"] { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; }
+        button { padding: 12px 24px; background: #26A69A; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; margin: 10px; }
+        button:hover { background: #1e7d71; }
+        .progress { text-align: center; font-size: 18px; margin: 20px 0; color: #333; }
+        .footer { text-align: center; margin-top: 40px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>E-Rate Interactive Import</h1>
+        <div class="progress">
+            {{ progress.index }} of {{ progress.total }} | Success: {{ progress.success }} | Errors: {{ progress.error }}
+        </div>
+
+        {% if success %}
+            <div class="record success">
+                <h3>✅ Success!</h3>
+                <p>Record {{ progress.index - 1 }} imported.</p>
+            </div>
+        {% elif error %}
+            <div class="record error">
+                <h3>❌ Error</h3>
+                <p>{{ error }}</p>
+                <p>Record {{ progress.index - 1 }} skipped.</p>
+            </div>
+        {% else %}
+            <div class="record">
+                <h3>Record {{ progress.index }}</h3>
+                <p><strong>ID:</strong> {{ row.ID }}</p>
+                <p><strong>State:</strong> {{ row['Billed Entity State'] }}</p>
+                <p><strong>Entity:</strong> {{ row['Billed Entity Name'] }}</p>
+                <p><strong>Amount:</strong> {{ row['Total Committed Amount'] }}</p>
+                <p><strong>Modified:</strong> {{ row['Last Modified Date/Time'] }}</p>
+            </div>
+        {% endif %}
+
+        <div class="form-group">
+            <form method="post">
+                <input type="text" name="confirm" placeholder="Type 'ok' to import this record" required>
+                <button type="submit">Import Record</button>
+            </form>
+        </div>
+
+        <div style="text-align: center; margin: 20px 0;">
+            <a href="/erate" class="button">Finish & Go to Dashboard</a>
+        </div>
+    </div>
+</body>
+</html>
