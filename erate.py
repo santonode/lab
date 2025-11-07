@@ -1,5 +1,5 @@
 # erate.py
-from flask import Blueprint, render_template, request, current_app, redirect, session
+from flask import Blueprint, render_template, request, current_app, redirect, Response, session
 import requests
 import csv
 import os
@@ -15,7 +15,6 @@ erate_bp = Blueprint('erate', __name__, url_prefix='/erate')
 API_BASE_URL = "https://opendata.usac.org/api/views/jp7a-89nd"
 ROWS_CSV_URL = f"{API_BASE_URL}/rows.csv"
 CSV_FILE = "erate_data.csv"
-BATCH_SIZE = 1000
 
 # === HELPER FUNCTIONS ===
 def safe_float(value, default=0.0):
@@ -57,25 +56,27 @@ def download_csv():
         current_app.logger.error(f"Download failed: {e}")
         return f"Download failed: {str(e)}"
 
-# === INTERACTIVE IMPORT (STATEFUL WITH SESSION) ===
+# === INTERACTIVE IMPORT (GET/POST with Session State) ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     if not os.path.exists(CSV_FILE):
         return redirect('/erate/download')
 
-    # Initialize session state
+    # Session state for progress
     if 'import_progress' not in session:
         session['import_progress'] = {'index': 1, 'success': 0, 'error': 0, 'total': 0}
     progress = session['import_progress']
 
-    # Calculate total
+    # Calculate total rows if not done
     if progress['total'] == 0:
-        progress['total'] = sum(1 for _ in open(CSV_FILE)) - 1  # minus header
+        with open(CSV_FILE, 'r', encoding='utf-8') as f:
+            progress['total'] = sum(1 for _ in f) - 1  # minus header
         session['import_progress'] = progress
 
+    # Handle POST (import current record)
     if request.method == 'POST':
         confirm = request.form.get('confirm')
-        if confirm:
+        if confirm == 'ok':
             with open(CSV_FILE, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 next(reader)  # skip header
@@ -105,16 +106,17 @@ def import_interactive():
                     progress['success'] += 1
                     progress['index'] += 1
                     session['import_progress'] = progress
-                    return render_template('erate_import.html', row=row, progress=progress, success=True)
+                    return render_success(row, progress)
                 except Exception as e:
                     db.session.rollback()
                     progress['error'] += 1
                     progress['index'] += 1
                     session['import_progress'] = progress
-                    return render_template('erate_import.html', row=row, progress=progress, error=str(e))
+                    return render_error(row, progress, str(e))
 
+    # GET: Show current record
     if progress['index'] > progress['total']:
-        return f"<h2>IMPORT COMPLETE!</h2><p>Success: {progress['success']}, Errors: {progress['error']}</p><a href='/erate'>Back to Dashboard</a>"
+        return render_complete(progress)
 
     with open(CSV_FILE, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
@@ -123,7 +125,30 @@ def import_interactive():
             next(reader)
         row = next(reader)
 
-    return render_template('erate_import.html', row=row, progress=progress)
+    return render_record(row, progress)
+
+def render_record(row, progress):
+    return render_template('erate_import.html',
+        row=row, progress=progress, message=None, success=False, error=None)
+
+def render_success(row, progress):
+    return render_template('erate_import.html',
+        row=row, progress=progress, message="Imported successfully!", success=True, error=None)
+
+def render_error(row, progress, error):
+    return render_template('erate_import.html',
+        row=row, progress=progress, message=None, success=False, error=error)
+
+def render_complete(progress):
+    return f"""
+    <h1>IMPORT COMPLETE!</h1>
+    <div class="progress">
+        Success: {progress['success']} |
+        Errors: {progress['error']} |
+        Total: {progress['total']}
+    </div>
+    <a href="/erate" class="action-btn">Go to Dashboard</a>
+    """
 
 # === DASHBOARD ===
 @erate_bp.route('/')
@@ -134,7 +159,7 @@ def erate_dashboard():
         offset = int(request.args.get('offset', 0))
         limit = 10
 
-        query = db.session.query(Erate).filter(
+        query = Erate.query.filter(
             Erate.state == state.upper(),
             Erate.last_modified >= min_date
         ).order_by(Erate.id)
@@ -154,7 +179,7 @@ def erate_dashboard():
             next_offset=offset + limit
         )
     except Exception as e:
-        current_app.logger.error(f"E-Rate dashboard error: {e}")
+        current_app.logger.error(f"E-Rate error: {e}")
         return render_template(
             'erate.html',
             error=str(e),
@@ -166,7 +191,6 @@ def erate_dashboard():
             next_offset=0
         )
 
-# === DOWNLOAD CSV ===
 @erate_bp.route('/download-csv')
 def download_csv():
     state = request.args.get('state', 'KS')
@@ -175,10 +199,3 @@ def download_csv():
     encoded = quote_plus(where)
     url = f"{ROWS_CSV_URL}?$where={encoded}&$order=`ID` ASC"
     return redirect(url)
-
-# === STATUS (for background download) ===
-@erate_bp.route('/status')
-def status():
-    if not os.path.exists(CSV_FILE):
-        return "No download in progress."
-    return "CSV ready! <a href='/erate/import-interactive'>Start Import</a>"
