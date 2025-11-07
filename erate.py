@@ -1,23 +1,19 @@
 # erate.py
-from flask import Blueprint, render_template, request, current_app, send_file
-import requests
-import csv
-from io import StringIO, BytesIO
-from typing import Dict, Any, Optional
+from flask import Blueprint, render_template, request, current_app, redirect
+from typing import Optional
 
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate')
 
 # === CONFIG ===
 API_BASE_URL = "https://opendata.usac.org/api/views/jp7a-89nd"
-ROWS_CSV_URL = f"{API_BASE_URL}/rows.csv"  # CSV endpoint
+ROWS_CSV_URL = f"{API_BASE_URL}/rows.csv"
 FULL_CSV_URL = f"{API_BASE_URL}/rows.csv?accessType=DOWNLOAD"
 
 # === HELPERS ===
-def fetch_erate_csv_stream(params: Dict[str, Any]) -> requests.Response:
+def fetch_erate_csv_stream(params):
     url = ROWS_CSV_URL
-    params.setdefault('$limit', '10')  # ONLY 10 ROWS
+    params.setdefault('$limit', '10')
     params.setdefault('$offset', '0')
-
     try:
         response = requests.get(url, params=params, stream=True, timeout=15)
         response.raise_for_status()
@@ -26,28 +22,18 @@ def fetch_erate_csv_stream(params: Dict[str, Any]) -> requests.Response:
         current_app.logger.error(f"E-Rate CSV error: {e}")
         raise
 
-def parse_csv_rows(response: requests.Response, limit: int = 10) -> list:
-    """Parse only first N rows from streaming CSV."""
+def parse_csv_rows(response, limit=10):
     rows = []
     for i, line in enumerate(response.iter_lines(decode_unicode=True)):
-        if i == 0:  # Skip header
-            continue
-        if i > limit:
-            break
+        if i == 0: continue
+        if i > limit: break
         row = line.split(',')
         if len(row) >= 11:
             rows.append({
-                'id': row[0],
-                'state': row[1],
-                'funding_year': row[2],
-                'entity_name': row[3],
-                'address': row[4],
-                'zip': row[5],
-                'frn': row[6],
-                'app_number': row[7],
-                'status': row[8],
-                'amount': row[9],
-                'description': row[10]
+                'id': row[0], 'state': row[1], 'funding_year': row[2],
+                'entity_name': row[3], 'address': row[4], 'zip': row[5],
+                'frn': row[6], 'app_number': row[7], 'status': row[8],
+                'amount': row[9], 'description': row[10]
             })
     return rows
 
@@ -69,7 +55,7 @@ def erate_dashboard():
 
         params = {
             '$where': build_where_clause(state, year),
-            '$limit': '11',  # 10 + 1 to check "has more"
+            '$limit': '11',
             '$offset': str(offset),
             '$order': 'id'
         }
@@ -93,26 +79,15 @@ def erate_dashboard():
 
 @erate_bp.route('/download')
 def download_csv():
-    try:
-        state = request.args.get('state')
-        year = request.args.get('year')
-        params = {'$where': build_where_clause(state, year)}
+    """Redirect to USAC's direct CSV download (no server load)"""
+    state = request.args.get('state')
+    year = request.args.get('year')
 
-        response = requests.get(ROWS_CSV_URL, params=params, stream=True, timeout=300)
-        response.raise_for_status()
+    if not state and not year:
+        # Full dataset
+        return redirect(FULL_CSV_URL)
 
-        output = BytesIO()
-        for chunk in response.iter_content(chunk_size=8192):
-            output.write(chunk)
-        output.seek(0)
-
-        filename = f"erate_{state or 'all'}_{year or 'all'}.csv"
-        return send_file(
-            output,
-            as_attachment=True,
-            download_name=filename,
-            mimetype='text/csv'
-        )
-    except Exception as e:
-        current_app.logger.error(f"Download error: {e}")
-        return "Download failed.", 500
+    # Filtered dataset
+    params = {'$where': build_where_clause(state, year)}
+    url = f"{ROWS_CSV_URL}?{requests.compat.urlencode(params)}"
+    return redirect(url)
