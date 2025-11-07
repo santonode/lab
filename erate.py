@@ -1,5 +1,5 @@
 # erate.py
-from flask import Blueprint, render_template, request, session, redirect
+from flask import Blueprint, render_template, request, session, redirect, current_app
 import requests
 import csv
 import io
@@ -39,7 +39,7 @@ def get_unique_id(row, offset):
         return f"{frn}_{app_num}"
     return f"row_{offset}"
 
-# === INTERACTIVE IMPORT (RESUME ENABLED) ===
+# === INTERACTIVE IMPORT (RESUME + RESET) ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     # Initialize session only if not exists
@@ -53,27 +53,30 @@ def import_interactive():
 
     progress = session['import_progress']
 
-    # POST: Handle actions
+    # === POST: Handle actions ===
     if request.method == 'POST':
-        action = request.form.get('action')
+        action = request.form.get('action', '').lower()
 
-        # RESET
+        # === FORCE RESET ===
         if action == 'reset':
+            session.clear()
             session['import_progress'] = {
                 'index': 1,
                 'success': 0,
                 'error': 0,
                 'total': 2161188
             }
-            progress = session['import_progress']
+            current_app.logger.info("Session reset to record 1")
             return redirect('/erate/import-interactive')
 
-        # IMPORT
+        # === IMPORT RECORD ===
         if action == 'import' and request.form.get('confirm') == 'ok':
             try:
                 offset = progress['index'] - 1
                 cache_buster = int(datetime.now().timestamp() * 1000)
                 url = f"{ROWS_CSV_URL}?$limit=1&$offset={offset}&accessType=DOWNLOAD&_={cache_buster}"
+                current_app.logger.debug(f"Fetching: {url}")
+
                 response = requests.get(url, stream=True, timeout=30)
                 response.raise_for_status()
                 response.raw.decode_content = True
@@ -118,9 +121,10 @@ def import_interactive():
                 progress['error'] += 1
                 progress['index'] += 1
                 session['import_progress'] = progress
+                current_app.logger.error(f"Import error: {e}")
                 return render_template('erate_import.html', row={}, progress=progress, error=str(e))
 
-    # GET: Show current record
+    # === GET: SHOW CURRENT RECORD ===
     if progress['index'] > progress['total']:
         return f"""
         <h1>IMPORT COMPLETE!</h1>
@@ -132,6 +136,8 @@ def import_interactive():
         offset = progress['index'] - 1
         cache_buster = int(datetime.now().timestamp() * 1000)
         url = f"{ROWS_CSV_URL}?$limit=1&$offset={offset}&accessType=DOWNLOAD&_={cache_buster}"
+        current_app.logger.debug(f"GET Fetching: {url}")
+
         response = requests.get(url, stream=True, timeout=30)
         response.raise_for_status()
         response.raw.decode_content = True
@@ -139,6 +145,7 @@ def import_interactive():
         reader = csv.DictReader(stream)
         row = next(reader)
     except Exception as e:
+        current_app.logger.error(f"GET error: {e}")
         return f"Error fetching record: {e}"
 
     return render_template('erate_import.html', row=row, progress=progress, success=False, error=None)
