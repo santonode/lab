@@ -1,8 +1,7 @@
 # erate.py
-from flask import Blueprint, render_template, request, current_app, redirect, jsonify, Response
+from flask import Blueprint, render_template, request, current_app, redirect, Response
 import requests
 import csv
-import io
 import os
 from extensions import db
 from models import Erate
@@ -11,176 +10,107 @@ from datetime import datetime
 
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate')
 
-# === CONFIG ===
 API_BASE_URL = "https://opendata.usac.org/api/views/jp7a-89nd"
 ROWS_CSV_URL = f"{API_BASE_URL}/rows.csv"
-CSV_FILE = "erate_data.csv"  # Saved on Render server
+CSV_FILE = "erate_data.csv"
 
-# === HELPER FUNCTIONS ===
-def safe_float(value, default=0.0):
-    try:
-        return float(value) if value and str(value).strip() else default
-    except (ValueError, TypeError):
-        return default
-
-def safe_date(value):
-    try:
-        if value and str(value).strip():
-            clean = value.strip().replace('Z', '+00:00')
-            return datetime.fromisoformat(clean).date()
-        return None
-    except Exception:
-        return None
-
-# === STEP 1: DOWNLOAD CSV ONCE ===
+# === STEP 1: DOWNLOAD FULL CSV ===
 def download_csv():
     if os.path.exists(CSV_FILE):
-        return f"{CSV_FILE} already exists. Skipping download."
-    
-    current_app.logger.info("Starting CSV download...")
+        return f"{CSV_FILE} already exists. <a href='/erate/import-interactive'>Start import</a>"
+
+    current_app.logger.info("Downloading full E-Rate CSV...")
     url = ROWS_CSV_URL + "?accessType=DOWNLOAD"
     headers = {'Accept-Encoding': 'gzip, deflate'}
-    
+
     try:
         response = requests.get(url, stream=True, timeout=120, headers=headers)
         response.raise_for_status()
         response.raw.decode_content = True
-        
+
         with open(CSV_FILE, 'wb') as f:
             for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
-                    f.write(chunk)
-        
-        current_app.logger.info(f"Downloaded {CSV_FILE}")
-        return f"CSV downloaded successfully: {CSV_FILE}<br>Now go to <a href='/erate/import-interactive'>/erate/import-interactive</a>"
-    except Exception as e:
-        current_app.logger.error(f"Download failed: {e}")
-        return f"Download failed: {str(e)}"
+                f.write(chunk)
 
-# === STEP 2: INTERACTIVE IMPORT (ONE BY ONE) ===
-def interactive_import_generator():
+        current_app.logger.info("CSV downloaded.")
+        return f"CSV downloaded: {CSV_FILE}<br><a href='/erate/import-interactive'>Start Interactive Import</a>"
+    except Exception as e:
+        return f"Download failed: {e}"
+
+# === STEP 2: INTERACTIVE IMPORT (BROWSER) ===
+def import_generator():
     if not os.path.exists(CSV_FILE):
-        yield "ERROR: CSV not found. Run /erate/download first.<br>"
+        yield "Run /erate/download first.<br>"
         return
 
     with open(CSV_FILE, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
-        total_rows = sum(1 for _ in open(CSV_FILE, 'r', encoding='utf-8')) - 1
+        total = sum(1 for _ in open(CSV_FILE)) - 1
         f.seek(0)
-        next(reader)  # skip header
+        next(reader)
 
-        success = 0
-        error = 0
-
-        yield f"<pre>Starting interactive import... Total rows: {total_rows}\n"
-        yield "Press ENTER in browser console (F12) to import each record.\n\n</pre>"
-
+        success = error = 0
         for i, row in enumerate(reader, 1):
-            # Show record
-            yield f"<pre>\n--- Record {i}/{total_rows} ---\n"
-            yield f"ID: {row.get('ID', 'N/A')}\n"
-            yield f"State: {row.get('Billed Entity State', 'N/A')}\n"
-            yield f"Entity: {row.get('Billed Entity Name', 'N/A')}\n"
-            yield f"Amount: {row.get('Total Committed Amount', 'N/A')}\n"
-            yield f"Modified: {row.get('Last Modified Date/Time', 'N/A')}\n"
-            yield "\n<i>Waiting for you to press ENTER...</i>\n</pre>"
+            yield f"<pre>\n--- Record {i}/{total} ---\n"
+            for k, v in row.items():
+                if k in ['ID', 'Billed Entity State', 'Billed Entity Name', 'Total Committed Amount', 'Last Modified Date/Time']:
+                    yield f"{k}: {v}\n"
+            yield "\nPress ENTER to import...\n</pre>"
 
-            # Wait for user input via JS
-            user_input = request.form.get('confirm')
-            if not user_input:
-                yield "<script>setTimeout(() => { document.getElementById('confirm').focus(); }, 100);</script>"
+            confirm = request.form.get('confirm')
+            if not confirm:
                 yield """
                 <form method="post">
-                    <input type="text" id="confirm" name="confirm" placeholder="Type anything and press Enter" style="width:100%;padding:10px;font-size:16px;">
+                    <input name="confirm" placeholder="Type 'ok' and press Enter" style="width:100%;padding:10px;font-size:16px;">
                 </form>
-                <script>document.getElementById('confirm').focus();</script>
+                <script>document.querySelector('input').focus();</script>
                 """
                 return
 
-            # Import record
             try:
                 erate = Erate(
-                    id=str(row.get('ID', '')).strip(),
-                    state=str(row.get('Billed Entity State', '')).strip()[:2],
-                    funding_year=str(row.get('Funding Year', '')).strip(),
-                    entity_name=str(row.get('Billed Entity Name', '')).strip(),
-                    address=str(row.get('Billed Entity Address', '')).strip(),
-                    zip_code=str(row.get('Billed Entity ZIP Code', '')).strip(),
-                    frn=str(row.get('FRN', '')).strip(),
-                    app_number=str(row.get('Application Number', '')).strip(),
-                    status=str(row.get('FRN Status', '')).strip(),
-                    amount=safe_float(row.get('Total Committed Amount')),
-                    description=str(row.get('Service Type', '')).strip(),
-                    last_modified=safe_date(row.get('Last Modified Date/Time'))
+                    id=row.get('ID', ''),
+                    state=row.get('Billed Entity State', '')[:2],
+                    funding_year=row.get('Funding Year', ''),
+                    entity_name=row.get('Billed Entity Name', ''),
+                    address=row.get('Billed Entity Address', ''),
+                    zip_code=row.get('Billed Entity ZIP Code', ''),
+                    frn=row.get('FRN', ''),
+                    app_number=row.get('Application Number', ''),
+                    status=row.get('FRN Status', ''),
+                    amount=float(row.get('Total Committed Amount', 0) or 0),
+                    description=row.get('Service Type', ''),
+                    last_modified=datetime.fromisoformat(row.get('Last Modified Date/Time', '').replace('Z', '+00:00')).date() if row.get('Last Modified Date/Time') else None
                 )
                 db.session.add(erate)
                 db.session.commit()
                 success += 1
-                yield f"<pre style='color:green;'>IMPORTED! Success: {success}</pre>"
+                yield f"<pre style='color:green'>IMPORTED! ({success})</pre><hr>"
             except Exception as e:
                 db.session.rollback()
                 error += 1
-                current_app.logger.error(f"Row {i} failed: {e}")
-                yield f"<pre style='color:red;'>ERROR: {e}\nSkipped. Errors: {error}</pre>"
+                yield f"<pre style='color:red'>ERROR: {e}</pre><hr>"
 
-            yield "<hr>"
-
-        yield f"<pre><strong>IMPORT COMPLETE!</strong><br>Success: {success}<br>Errors: {error}</pre>"
+        yield f"<h2>Done! Success: {success}, Errors: {error}</h2>"
 
 # === ROUTES ===
 @erate_bp.route('/download')
-def download_data():
+def download_route():
     return download_csv()
 
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
-    return Response(interactive_import_generator(), mimetype='text/html')
+    return Response(import_generator(), mimetype='text/html')
 
 @erate_bp.route('/')
-def erate_dashboard():
-    try:
-        state = request.args.get('state', 'KS').strip().upper()
-        min_date = request.args.get('min_date', '2025-01-01')
-        offset = max(int(request.args.get('offset', 0)), 0)
-        limit = 10
-
-        query = Erate.query.filter(
-            Erate.state == state,
-            Erate.last_modified >= min_date
-        ).order_by(Erate.id)
-
-        total_filtered = query.count()
-        data = query.offset(offset).limit(limit + 1).all()
-        has_more = len(data) > limit
-        table_data = data[:limit]
-
-        return render_template(
-            'erate.html',
-            table_data=table_data,
-            filters={'state': state, 'min_date': min_date},
-            total=offset + len(table_data),
-            total_filtered=total_filtered,
-            has_more=has_more,
-            next_offset=offset + limit
-        )
-    except Exception as e:
-        current_app.logger.error(f"Dashboard error: {e}")
-        return render_template(
-            'erate.html',
-            error=str(e),
-            table_data=[],
-            total=0,
-            total_filtered=0,
-            filters={'state': 'KS', 'min_date': '2025-01-01'},
-            has_more=False,
-            next_offset=0
-        )
+def dashboard():
+    # ... your dashboard code
+    pass
 
 @erate_bp.route('/download-csv')
-def download_csv():
-    state = request.args.get('state', 'KS').strip().upper()
+def download_filtered():
+    state = request.args.get('state', 'KS')
     min_date = request.args.get('min_date', '2025-01-01')
     where = f"`Billed Entity State` = '{state}' AND `Last Modified Date/Time` >= '{min_date}T00:00:00.000'"
-    encoded = quote_plus(where)
-    url = f"{ROWS_CSV_URL}?$where={encoded}&$order=`ID` ASC"
+    url = f"{ROWS_CSV_URL}?$where={quote_plus(where)}&$order=`ID` ASC"
     return redirect(url)
