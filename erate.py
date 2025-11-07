@@ -36,7 +36,7 @@ def parse_csv_rows(response, limit=10):
         row = dict(zip(header, values))
         rows.append({
             'id': row.get('ID', ''),
-            'state': row.get('Billed Entity State', ''),
+            'state': row.get('Contact State', ''),  # CORRECT FIELD
             'funding_year': row.get('Funding Year', ''),
             'entity_name': row.get('Billed Entity Name', ''),
             'address': row.get('Billed Entity Address', ''),
@@ -54,9 +54,9 @@ def parse_csv_rows(response, limit=10):
 def build_where_clause(state: Optional[str] = None, min_date: Optional[str] = None) -> str:
     conditions = []
     if state:
-        conditions.append(f"`Billed Entity State` = '{state.upper()}'")
+        conditions.append(f"`Contact State` = '{state.upper()}'")  # CORRECT FIELD
     if min_date:
-        conditions.append(f"`Last Modified Date/Time` >= '{min_date}T00:00:00.000'")
+        conditions.append(f"`Last Modified Date/Time` >= '{min_date}T00:00:00.000'")  # CORRECT FIELD
     return " AND ".join(conditions) if conditions else "1=1"
 
 # === ROUTES ===
@@ -70,7 +70,7 @@ def erate_dashboard():
         where = build_where_clause(state, min_date)
         params = {
             '$where': where,
-            '$limit': '11',
+            '$limit': '11',  # 10 + 1 to check if more exist
             '$offset': str(offset),
             '$order': '`ID` ASC'
         }
@@ -105,9 +105,6 @@ def download_csv():
     state = request.args.get('state', 'KS')
     min_date = request.args.get('min_date', '2025-01-01')
     where = build_where_clause(state, min_date)
-
-    # FIX: Manual URL encoding to preserve backticks and quotes
     encoded_where = quote_plus(where)
     url = f"{ROWS_CSV_URL}?$where={encoded_where}&$order=`ID` ASC"
-
     return redirect(url)
