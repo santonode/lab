@@ -1,12 +1,116 @@
-<!-- erate.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>erate</title>
+    <title>Santo - E-Rate Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        .header { position: fixed; top: 0; width: 100%; background: #263238; color: white; text-align: center; z-index: 1000; padding: 10px 0; border-bottom: 2px solid #000; }
+        .content { margin-top: 60px; padding: 20px; text-align: center; }
+        .filter-form { margin: 20px 0; padding: 15px; background: #f5f5f5; border-radius: 8px; display: inline-block; }
+        .filter-form label { margin-right: 10px; font-weight: bold; }
+        .filter-form input { margin-right: 10px; padding: 5px; border: 1px solid #ddd; border-radius: 4px; }
+        .filter-form button { padding: 5px 15px; background: #26A69A; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .summary { font-size: 18px; margin: 20px 0; color: #333; }
+        .erate-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        .erate-table th, .erate-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .erate-table th { background: #f0f0f0; font-weight: bold; }
+        .error { color: red; padding: 10px; background: #ffe6e6; border: 1px solid #ffcccc; border-radius: 4px; margin: 20px 0; }
+        .download-btn { display: inline-block; padding: 10px 20px; background: #26A69A; color: white; text-decoration: none; border-radius: 4px; margin: 20px 0; }
+        .download-btn:hover { background: #1e7d71; }
+        .footer { margin-top: 40px; padding: 20px; text-align: center; color: #666; }
+    </style>
 </head>
 <body>
-    <!-- Content will be added later -->
+    <div class="header">
+        <h1>E-Rate Dashboard</h1>
+    </div>
+
+    <div class="content">
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
+
+        <!-- FILTER FORM -->
+        <form method="GET" class="filter-form">
+            <label for="state">State:</label>
+            <input type="text" id="state" name="state" value="{{ filters.state or '' }}" placeholder="e.g., KS">
+            <label for="year">Year:</label>
+            <input type="text" id="year" name="year" value="{{ filters.year or '' }}" placeholder="e.g., 2025">
+            <button type="submit">Filter</button>
+            <a href="{{ url_for('erate.erate_dashboard') }}" class="download-btn">Clear Filters</a>
+        </form>
+
+        <!-- RESULTS SUMMARY -->
+        <p class="summary">Total Records Found: {{ total }}</p>
+
+        <!-- RESULTS TABLE -->
+        {% if table_data %}
+            <table class="erate-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>State</th>
+                        <th>Funding Year</th>
+                        <th>Entity Name</th>
+                        <th>Address</th>
+                        <th>ZIP</th>
+                        <th>FRN</th>
+                        <th>Application Number</th>
+                        <th>Status</th>
+                        <th>Amount</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in table_data %}
+                        <tr>
+                            <td>{{ row.id }}</td>
+                            <td>{{ row.state }}</td>
+                            <td>{{ row.funding_year }}</td>
+                            <td>{{ row.entity_name }}</td>
+                            <td>{{ row.address }}</td>
+                            <td>{{ row.zip }}</td>
+                            <td>{{ row.frn }}</td>
+                            <td>{{ row.app_number }}</td>
+                            <td>{{ row.status }}</td>
+                            <td>${{ "%.2f"|format(row.amount) if row.amount else '0.00' }}</td>
+                            <td>{{ row.description }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <!-- DOWNLOAD BUTTON -->
+            <a href="{{ url_for('erate.download_csv', state=filters.state, year=filters.year) }}" class="download-btn">Download as CSV</a>
+        {% else %}
+            <p>No data found. Try adjusting filters.</p>
+        {% endif %}
+    </div>
+
+    <div class="footer">
+        <p>Made with Love by Team Santo | Data from <a href="https://opendata.usac.org">USAC OpenData</a></p>
+    </div>
+
+    <script>
+        // Optional: Auto-reload on filter change (AJAX)
+        document.querySelector('.filter-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            fetch('/erate/api/search?' + new URLSearchParams(formData))
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        // Update table dynamically
+                        let tbody = document.querySelector('.erate-table tbody');
+                        tbody.innerHTML = '';
+                        data.data.forEach(row => {
+                            tbody.innerHTML += `<tr><td>${row.id}</td><td>${row.state}</td>...</tr>`;
+                        });
+                    }
+                });
+        });
+    </script>
 </body>
 </html>
