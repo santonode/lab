@@ -1,6 +1,6 @@
 # erate.py
 from flask import Blueprint, render_template, request, current_app, redirect
-import requests  # ← IMPORT ADDED
+import requests
 from typing import Optional
 
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate')
@@ -38,24 +38,26 @@ def parse_csv_rows(response, limit=10):
             })
     return rows
 
-def build_where_clause(state: Optional[str] = None, year: Optional[str] = None) -> str:
+def build_where_clause(state: Optional[str] = None, min_date: Optional[str] = None) -> str:
     conditions = []
     if state:
-        conditions.append(f"state = '{state.upper()}'")
-    if year:
-        conditions.append(f"funding_year = {year}")
+        conditions.append(f"billed_entity_state = '{state.upper()}'")
+    if min_date:
+        # Socrata ISO format: 2025-01-01T00:00:00
+        conditions.append(f"last_modified_date_time >= '{min_date}T00:00:00'")
     return " AND ".join(conditions) if conditions else "1=1"
 
 # === ROUTES ===
 @erate_bp.route('/')
 def erate_dashboard():
     try:
-        state = request.args.get('state')
-        year = request.args.get('year')
+        state = request.args.get('state', 'KS')  # Default KS
+        min_date = request.args.get('min_date', '2025-01-01')  # Default Jan 1, 2025
+
         offset = int(request.args.get('offset', 0))
 
         params = {
-            '$where': build_where_clause(state, year),
+            '$where': build_where_clause(state, min_date),
             '$limit': '11',
             '$offset': str(offset),
             '$order': 'id'
@@ -69,7 +71,7 @@ def erate_dashboard():
         return render_template(
             'erate.html',
             table_data=table_data,
-            filters={'state': state, 'year': year},  # ← ALWAYS PASS
+            filters={'state': state, 'min_date': min_date},
             total=offset + len(table_data),
             has_more=has_more,
             next_offset=offset + 10
@@ -81,19 +83,16 @@ def erate_dashboard():
             error=str(e),
             table_data=[],
             total=0,
-            filters={},  # ← DEFAULT
+            filters={'state': 'KS', 'min_date': '2025-01-01'},
             has_more=False,
             next_offset=0
         )
 
 @erate_bp.route('/download')
 def download_csv():
-    state = request.args.get('state')
-    year = request.args.get('year')
+    state = request.args.get('state', 'KS')
+    min_date = request.args.get('min_date', '2025-01-01')
 
-    if not state and not year:
-        return redirect(FULL_CSV_URL)
-
-    params = {'$where': build_where_clause(state, year)}
+    params = {'$where': build_where_clause(state, min_date)}
     url = f"{ROWS_CSV_URL}?{requests.compat.urlencode(params)}"
     return redirect(url)
