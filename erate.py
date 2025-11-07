@@ -9,7 +9,6 @@ erate_bp = Blueprint('erate', __name__, url_prefix='/erate')
 # === CONFIG ===
 API_BASE_URL = "https://opendata.usac.org/api/views/jp7a-89nd"
 ROWS_CSV_URL = f"{API_BASE_URL}/rows.csv"
-FULL_CSV_URL = f"{API_BASE_URL}/rows.csv?accessType=DOWNLOAD"
 
 # === HELPERS ===
 def fetch_erate_csv_stream(params):
@@ -31,12 +30,12 @@ def parse_csv_rows(response, limit=10):
             continue
         line = line_bytes.decode('utf-8').strip()
         if not line: continue
-        values = line.split(',')
+        values = [v.strip('"') for v in line.split(',')]
         if len(values) < len(header): continue
         row = dict(zip(header, values))
         rows.append({
             'id': row.get('ID', ''),
-            'state': row.get('Contact State', ''),  # CORRECT FIELD
+            'state': row.get('Billed Entity State', ''),
             'funding_year': row.get('Funding Year', ''),
             'entity_name': row.get('Billed Entity Name', ''),
             'address': row.get('Billed Entity Address', ''),
@@ -54,9 +53,9 @@ def parse_csv_rows(response, limit=10):
 def build_where_clause(state: Optional[str] = None, min_date: Optional[str] = None) -> str:
     conditions = []
     if state:
-        conditions.append(f"`Contact State` = '{state.upper()}'")  # CORRECT FIELD
+        conditions.append(f"`Billed Entity State` = '{state.upper()}'")  # CORRECT
     if min_date:
-        conditions.append(f"`Last Modified Date/Time` >= '{min_date}T00:00:00.000'")  # CORRECT FIELD
+        conditions.append(f"`Last Modified Date/Time` >= '{min_date}T00:00:00.000'")  # CORRECT
     return " AND ".join(conditions) if conditions else "1=1"
 
 # === ROUTES ===
@@ -70,7 +69,7 @@ def erate_dashboard():
         where = build_where_clause(state, min_date)
         params = {
             '$where': where,
-            '$limit': '11',  # 10 + 1 to check if more exist
+            '$limit': '11',  # 10 + 1
             '$offset': str(offset),
             '$order': '`ID` ASC'
         }
