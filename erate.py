@@ -1,6 +1,7 @@
 # erate.py
 from flask import Blueprint, render_template, request, current_app, redirect
 import requests
+from urllib.parse import quote_plus
 from typing import Optional
 
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate')
@@ -13,8 +14,6 @@ FULL_CSV_URL = f"{API_BASE_URL}/rows.csv?accessType=DOWNLOAD"
 # === HELPERS ===
 def fetch_erate_csv_stream(params):
     url = ROWS_CSV_URL
-    params.setdefault('$limit', '10')
-    params.setdefault('$offset', '0')
     try:
         response = requests.get(url, params=params, stream=True, timeout=15)
         response.raise_for_status()
@@ -31,12 +30,9 @@ def parse_csv_rows(response, limit=10):
             header = line_bytes.decode('utf-8').strip().split(',')
             continue
         line = line_bytes.decode('utf-8').strip()
-        if not line:
-            continue
+        if not line: continue
         values = line.split(',')
-        if len(values) < len(header):
-            continue
-
+        if len(values) < len(header): continue
         row = dict(zip(header, values))
         rows.append({
             'id': row.get('ID', ''),
@@ -71,9 +67,10 @@ def erate_dashboard():
         min_date = request.args.get('min_date', '2025-01-01')
         offset = int(request.args.get('offset', 0))
 
+        where = build_where_clause(state, min_date)
         params = {
-            '$where': build_where_clause(state, min_date),
-            '$limit': '11',  # 10 + 1 to check if more exist
+            '$where': where,
+            '$limit': '11',
             '$offset': str(offset),
             '$order': '`ID` ASC'
         }
@@ -107,6 +104,10 @@ def erate_dashboard():
 def download_csv():
     state = request.args.get('state', 'KS')
     min_date = request.args.get('min_date', '2025-01-01')
-    params = {'$where': build_where_clause(state, min_date)}
-    url = f"{ROWS_CSV_URL}?{requests.compat.urlencode(params)}"
+    where = build_where_clause(state, min_date)
+
+    # FIX: Manual URL encoding to preserve backticks and quotes
+    encoded_where = quote_plus(where)
+    url = f"{ROWS_CSV_URL}?$where={encoded_where}&$order=`ID` ASC"
+
     return redirect(url)
