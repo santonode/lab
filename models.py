@@ -15,7 +15,7 @@ class Erate(db.Model):
     status = db.Column(db.String(50))
     amount = db.Column(db.Float)
     description = db.Column(db.Text)
-    last_modified = db.Column(db.DateTime)
+    last_modified = db.Column(db.Date)  # ← CHANGED TO DATE
 
     def __repr__(self):
         return f"<Erate {self.frn}>"
