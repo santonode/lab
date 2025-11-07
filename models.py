@@ -3,7 +3,7 @@ from extensions import db
 
 class Erate(db.Model):
     __tablename__ = 'erate'
-    id = db.Column(db.String(100), primary_key=True)  # ← Increased size
+    id = db.Column(db.String(100), primary_key=True)
     state = db.Column(db.String(2))
     funding_year = db.Column(db.String(10))
     entity_name = db.Column(db.Text)
