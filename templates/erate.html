@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Santo - E-Rate Dashboard</title>
-    <!-- Direct path to static2 -->
     <link rel="stylesheet" href="/static2/styles.css">
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #f8f9fa; color: #333; }
@@ -37,12 +36,14 @@
         .table-container { overflow-x: auto; border-radius: 8px; box-shadow: 0 1px 5px rgba(0,0,0,0.1); }
         .erate-table {
             width: 100%; border-collapse: collapse; font-size: 14px; background: white;
+            border: 1px solid #ddd;
+        }
+        .erate-table th, .erate-table td {
+            padding: 10px; border: 1px solid #ddd; text-align: left;
         }
         .erate-table th {
-            background: #263238; color: white; padding: 12px 10px; text-align: left;
-            font-weight: 600; position: sticky; top: 0; z-index: 10;
+            background: #263238; color: white; font-weight: 600; position: sticky; top: 0; z-index: 10;
         }
-        .erate-table td { padding: 10px; border-bottom: 1px solid #eee; }
         .erate-table tr:hover { background: #f0f7fb; }
         .erate-table tr:nth-child(even) { background: #f9f9f9; }
         .error {
