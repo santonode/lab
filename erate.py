@@ -25,42 +25,57 @@ def fetch_erate_csv_stream(params):
 
 def parse_csv_rows(response, limit=10):
     rows = []
-    for i, line in enumerate(response.iter_lines(decode_unicode=True)):
-        if i == 0: continue
-        if i > limit: break
-        row = line.split(',')
-        if len(row) >= 11:
-            rows.append({
-                'id': row[0], 'state': row[1], 'funding_year': row[2],
-                'entity_name': row[3], 'address': row[4], 'zip': row[5],
-                'frn': row[6], 'app_number': row[7], 'status': row[8],
-                'amount': row[9], 'description': row[10]
-            })
+    header = None
+    for i, line_bytes in enumerate(response.iter_lines()):
+        if i == 0:
+            header = line_bytes.decode('utf-8').strip().split(',')
+            continue
+        line = line_bytes.decode('utf-8').strip()
+        if not line:
+            continue
+        values = line.split(',')
+        if len(values) < len(header):
+            continue
+
+        row = dict(zip(header, values))
+        rows.append({
+            'id': row.get('ID', ''),
+            'state': row.get('Billed Entity State', ''),
+            'funding_year': row.get('Funding Year', ''),
+            'entity_name': row.get('Billed Entity Name', ''),
+            'address': row.get('Billed Entity Address', ''),
+            'zip': row.get('Billed Entity ZIP Code', ''),
+            'frn': row.get('FRN', ''),
+            'app_number': row.get('Application Number', ''),
+            'status': row.get('FRN Status', ''),
+            'amount': row.get('Total Committed Amount', ''),
+            'description': row.get('Service Type', '')
+        })
+        if len(rows) >= limit:
+            break
     return rows
 
 def build_where_clause(state: Optional[str] = None, min_date: Optional[str] = None) -> str:
     conditions = []
     if state:
-        conditions.append(f"billed_entity_state = '{state.upper()}'")
+        conditions.append(f"`Billed Entity State` = '{state.upper()}'")
     if min_date:
-        # Socrata ISO format: 2025-01-01T00:00:00
-        conditions.append(f"last_modified_date_time >= '{min_date}T00:00:00'")
+        conditions.append(f"`Last Modified Date/Time` >= '{min_date}T00:00:00.000'")
     return " AND ".join(conditions) if conditions else "1=1"
 
 # === ROUTES ===
 @erate_bp.route('/')
 def erate_dashboard():
     try:
-        state = request.args.get('state', 'KS')  # Default KS
-        min_date = request.args.get('min_date', '2025-01-01')  # Default Jan 1, 2025
-
+        state = request.args.get('state', 'KS')
+        min_date = request.args.get('min_date', '2025-01-01')
         offset = int(request.args.get('offset', 0))
 
         params = {
             '$where': build_where_clause(state, min_date),
-            '$limit': '11',
+            '$limit': '11',  # 10 + 1 to check if more exist
             '$offset': str(offset),
-            '$order': 'id'
+            '$order': '`ID` ASC'
         }
 
         response = fetch_erate_csv_stream(params)
@@ -92,7 +107,6 @@ def erate_dashboard():
 def download_csv():
     state = request.args.get('state', 'KS')
     min_date = request.args.get('min_date', '2025-01-01')
-
     params = {'$where': build_where_clause(state, min_date)}
     url = f"{ROWS_CSV_URL}?{requests.compat.urlencode(params)}"
     return redirect(url)
