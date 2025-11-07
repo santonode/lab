@@ -1,31 +1,26 @@
-# erate.py
 from flask import Blueprint, render_template, request, current_app
 import requests
-import os
 from typing import Dict, Any, Optional
+from io import StringIO
+import csv
 
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate')
 
 # === CONFIG ===
-API_BASE_URL = "https://opendata.usac.org/api/v3/views/jp7a-89nd"  # ← ADDED /v3
-QUERY_URL = f"{API_BASE_URL}/query.json"
-FULL_DATA_URL = f"{API_BASE_URL}/rows.json?accessType=DOWNLOAD"
-
-ERATE_USERNAME = os.environ.get('ERATE_USERNAME', '')
-ERATE_PASSWORD = os.environ.get('ERATE_PASSWORD', '')
+API_BASE_URL = "https://opendata.usac.org/api/views/jp7a-89nd"
+QUERY_URL = f"{API_BASE_URL}/query.json"  # For filtered queries
+FULL_DATA_URL = f"{API_BASE_URL}/rows.csv?accessType=DOWNLOAD"  # For bulk CSV (no auth needed)
 
 # === HELPERS ===
 def fetch_erate_data(params: Dict[str, Any] = None) -> Dict[str, Any]:
+    """Fetch filtered data (open – no auth needed)."""
     url = QUERY_URL
     if params is None:
         params = {}
-    params['accessType'] = 'DOWNLOAD'
-    params.setdefault('$limit', '1000')
-
-    auth = (ERATE_USERNAME, ERATE_PASSWORD) if ERATE_USERNAME and ERATE_PASSWORD else None
+    params.setdefault('$limit', '1000')  # Safe default (avoids bulk limits)
 
     try:
-        response = requests.get(url, params=params, auth=auth, timeout=30)
+        response = requests.get(url, params=params, timeout=30)
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
@@ -33,28 +28,35 @@ def fetch_erate_data(params: Dict[str, Any] = None) -> Dict[str, Any]:
         raise
 
 def format_table_data(data: Dict[str, Any]) -> list:
+    """Format API response for table (based on Socrata schema)."""
     rows = data.get('data', [])
     if not rows:
         return []
 
-    formatted = []
-    for row in rows:
-        formatted.append({
-            'id': row[0] if len(row) > 0 else '',
-            'state': row[1] if len(row) > 1 else '',
-            'funding_year': row[2] if len(row) > 2 else '',
-            'entity_name': row[3] if len(row) > 3 else '',
-            'address': row[4] if len(row) > 4 else '',
-            'zip': row[5] if len(row) > 5 else '',
-            'frn': row[6] if len(row) > 6 else '',
-            'app_number': row[7] if len(row) > 7 else '',
-            'status': row[8] if len(row) > 8 else '',
-            'amount': row[9] if len(row) > 9 else '',
-            'description': row[10] if len(row) > 10 else ''
+    # Socrata schema: First row is headers, rest data
+    headers = rows[0] if rows else []
+    formatted_rows = []
+    for row in rows[1:]:  # Skip header
+        if len(row) < len(headers):
+            continue
+        row_dict = dict(zip(headers, row))
+        formatted_rows.append({
+            'id': row_dict.get('id', ''),
+            'state': row_dict.get('state', ''),
+            'funding_year': row_dict.get('funding_year', ''),
+            'entity_name': row_dict.get('entity_name', ''),
+            'address': row_dict.get('address', ''),
+            'zip': row_dict.get('zip', ''),
+            'frn': row_dict.get('frn', ''),
+            'app_number': row_dict.get('app_number', ''),
+            'status': row_dict.get('status', ''),
+            'amount': row_dict.get('amount', ''),
+            'description': row_dict.get('description', '')
         })
-    return formatted
+    return formatted_rows
 
 def build_where_clause(state: Optional[str] = None, year: Optional[str] = None) -> str:
+    """Build Socrata $where clause."""
     conditions = []
     if state:
         conditions.append(f"state='{state.upper()}'")
@@ -65,19 +67,17 @@ def build_where_clause(state: Optional[str] = None, year: Optional[str] = None) 
 # === ROUTES ===
 @erate_bp.route('/')
 def erate_dashboard():
+    """Main dashboard (filtered by default)."""
     try:
         state = request.args.get('state')
         year = request.args.get('year')
         load_all = request.args.get('load_all') == '1'
 
-        params = {}
-        where = build_where_clause(state, year)
-        params['$where'] = where
-
+        params = {'$where': build_where_clause(state, year)}
         if load_all and not state and not year:
-            params.pop('$limit', None)
+            params.pop('$limit', None)  # Full load
         else:
-            params['$limit'] = '1000'
+            params['$limit'] = '1000'  # Safe default
 
         data = fetch_erate_data(params)
         table_data = format_table_data(data)
@@ -92,3 +92,63 @@ def erate_dashboard():
     except Exception as e:
         current_app.logger.error(f"E-Rate error: {e}")
         return render_template('erate.html', error=str(e), table_data=[], total=0, filters={}, load_all=False)
+
+@erate_bp.route('/download')
+def download_csv():
+    """Download filtered or full CSV (streaming for large files)."""
+    try:
+        state = request.args.get('state')
+        year = request.args.get('year')
+        full = request.args.get('full') == '1'
+
+        params = {}
+        where = build_where_clause(state, year)
+        if where != '1=1':
+            params['$where'] = where
+
+        if full and not state and not year:
+            # Full bulk CSV (no auth, direct download)
+            response = requests.get(FULL_DATA_URL, stream=True, timeout=300)
+            response.raise_for_status()
+            
+            filename = f"erate_full_dataset_{int(time.time())}.csv"
+            return send_file(
+                io.BytesIO(response.content),
+                as_attachment=True,
+                download_name=filename,
+                mimetype='text/csv'
+            )
+        else:
+            # Filtered query, then to CSV
+            data = fetch_erate_data(params)
+            rows = data.get('data', [])
+            
+            output = StringIO()
+            writer = csv.writer(output)
+            writer.writerow(['ID', 'State', 'Funding Year', 'Entity Name', 'Address', 'ZIP', 'FRN', 'App Number', 'Status', 'Amount', 'Description'])
+            
+            for row in rows:
+                writer.writerow(row)  # Raw rows (adjust if needed)
+            
+            output.seek(0)
+            filename = f"erate_{state or 'all'}_{year or 'all'}.csv"
+            return send_file(
+                StringIO(output.getvalue()),
+                as_attachment=True,
+                download_name=filename,
+                mimetype='text/csv'
+            )
+    except Exception as e:
+        current_app.logger.error(f"Download error: {e}")
+        return "Download failed.", 500
+
+@erate_bp.route('/api/search')
+def api_search():
+    """AJAX for dynamic filtering."""
+    try:
+        params = request.args.to_dict()
+        data = fetch_erate_data(params)
+        table_data = format_table_data(data)
+        return jsonify({'success': True, 'data': table_data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
