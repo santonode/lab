@@ -16,10 +16,16 @@ def dashboard():
             rows = cur.fetchall()
     return render_template('erate.html', table_data=rows)
 
-@erate_bp.route('/import-interactive')
+@erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     if not os.path.exists(CSV_FILE):
         return "CSV not found", 404
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'reset':
+            session.clear()
+            return redirect(url_for('erate.import_interactive'))
 
     with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
         total = sum(1 for _ in f) - 1
