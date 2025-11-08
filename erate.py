@@ -316,7 +316,7 @@ def import_interactive():
                             form_version=row.get('Form Version', '')
                         )
                         db.session.add(erate)
-                       imported += 1
+                        imported += 1  # ← CORRECT INDENTATION
 
                         if imported % 100 == 0:
                             db.session.commit()
