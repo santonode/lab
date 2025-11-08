@@ -12,6 +12,7 @@ def get_conn():
 def init_db():
     with get_conn() as conn:
         with conn.cursor() as cur:
+            # === ERATE TABLE ===
             cur.execute('''
                 CREATE TABLE IF NOT EXISTS erate (
                     app_number TEXT PRIMARY KEY,
@@ -46,7 +47,7 @@ def init_db():
                     phone_ext TEXT,
                     num_eligible INTEGER,
                     contact_name TEXT,
-                    contact_address1_functions TEXT,
+                    contact_address1 TEXT,
                     contact_address2 TEXT,
                     contact_city TEXT,
                     contact_state TEXT,
@@ -86,6 +87,8 @@ def init_db():
                     form_version TEXT
                 )
             ''')
+
+            # === MEMES TABLE (with id) ===
             cur.execute('''
                 CREATE TABLE IF NOT EXISTS memes (
                     id SERIAL PRIMARY KEY,
@@ -98,6 +101,8 @@ def init_db():
                     dislikes INTEGER DEFAULT 0
                 )
             ''')
+
+            # === VOTES TABLE ===
             cur.execute('''
                 CREATE TABLE IF NOT EXISTS votes (
                     id SERIAL PRIMARY KEY,
@@ -107,4 +112,5 @@ def init_db():
                     FOREIGN KEY (meme_id) REFERENCES memes(id) ON DELETE CASCADE
                 )
             ''')
+
             conn.commit()
