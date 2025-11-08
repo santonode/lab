@@ -2,6 +2,7 @@
 <html>
 <head>
     <title>E-Rate Import</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background: #f9f9f9; color: #333; }
         .box { max-width: 700px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
@@ -24,50 +25,61 @@
         .footer { text-align: center; margin-top: 40px; color: #777; font-size: 14px; }
         .footer a { color: #26A69A; text-decoration: none; }
         .footer a:hover { text-decoration: underline; }
+        .complete { text-align: center; font-size: 1.4em; color: #27ae60; margin: 30px 0; }
     </style>
 </head>
 <body>
 <div class="box">
     <h1>E-Rate Interactive Import</h1>
 
-    <!-- DYNAMIC PROGRESS -->
+    <!-- PROGRESS -->
     <div class="progress">
-        Progress: <strong>{{ progress.index }}</strong> / <strong>{{ progress.total }}</strong> 
-        | Success: <strong style="color:#27ae60;">{{ progress.success }}</strong> 
+        Progress: <strong>{{ progress.index }}</strong> / <strong>{{ progress.total }}</strong>
+        | Success: <strong style="color:#27ae60;">{{ progress.success }}</strong>
         | Errors: <strong style="color:#dc3545;">{{ progress.error }}</strong>
     </div>
 
-    <!-- CURRENT RECORD -->
-    <div class="record">
-        <h3>Record {{ progress.index }}</h3>
-        <p><strong>Application #:</strong> {{ row['Application Number'] or 'N/A' }}</p>
-        <p><strong>State:</strong> {{ row['Billed Entity State'] or 'N/A' }}</p>
-        <p><strong>Entity:</strong> {{ row['Billed Entity Name'] or 'N/A' }}</p>
-        <p><strong>Amount:</strong> {{ row['Total Committed Amount'] or 'N/A' }}</p>
-        <p><strong>Modified:</strong> {{ row['Last Modified Date/Time'] or 'N/A' }}</p>
-    </div>
+    <!-- COMPLETE MESSAGE -->
+    {% if progress.index > progress.total %}
+        <div class="complete">
+            <strong>IMPORT COMPLETE!</strong><br>
+            {{ progress.success }} imported | {{ progress.error }} skipped
+        </div>
+    {% else %}
 
-    <!-- STATUS MESSAGES -->
-    {% if success %}
-        <div class="record success"><strong>Imported!</strong></div>
-    {% elif error %}
-        <div class="record error"><strong>Error:</strong> {{ error }}</div>
+        <!-- CURRENT RECORD -->
+        <div class="record">
+            <h3>Record {{ progress.index }}</h3>
+            <p><strong>Application #:</strong> {{ row['Application Number'] or 'N/A' }}</p>
+            <p><strong>State:</strong> {{ row['Billed Entity State'] or 'N/A' }}</p>
+            <p><strong>Entity:</strong> {{ row['Billed Entity Name'] or 'N/A' }}</p>
+            <p><strong>Amount:</strong> {{ row['Total Committed Amount'] or 'N/A' }}</p>
+            <p><strong>Modified:</strong> {{ row['Last Modified Date/Time'] or 'N/A' }}</p>
+        </div>
+
+        <!-- STATUS -->
+        {% if success %}
+            <div class="record success"><strong>Imported!</strong></div>
+        {% elif error %}
+            <div class="record error"><strong>Error:</strong> {{ error }}</div>
+        {% endif %}
+
+        <!-- IMPORT ONE -->
+        <form method="post">
+            <input type="hidden" name="action" value="import">
+            <input type="text" name="confirm" placeholder="Type 'ok' to import" required autocomplete="off">
+            <button type="submit" class="import">Import This Record</button>
+        </form>
+
+        <!-- BULK IMPORT -->
+        <form method="post" onsubmit="return confirm('Import ALL {{ progress.total - progress.index + 1 }} remaining records?');">
+            <input type="hidden" name="action" value="import_all">
+            <button type="submit" class="bulk">
+                Import All Remaining ({{ progress.total - progress.index + 1 }})
+            </button>
+        </form>
+
     {% endif %}
-
-    <!-- IMPORT ONE RECORD -->
-    <form method="post">
-        <input type="hidden" name="action" value="import">
-        <input type="text" name="confirm" placeholder="Type 'ok' and press Enter" required>
-        <button type="submit" class="import">Import This Record</button>
-    </form>
-
-    <!-- IMPORT ALL -->
-    <form method="post" onsubmit="return confirm('Import ALL {{ progress.total - progress.index + 1 }} remaining records?');">
-        <input type="hidden" name="action" value="import_all">
-        <button type="submit" class="bulk">
-            Import All Remaining ({{ progress.total - progress.index + 1 }})
-        </button>
-    </form>
 
     <!-- RESET -->
     <form method="post" onsubmit="return confirm('Start over from record 1?');">
