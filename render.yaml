@@ -1,29 +1,16 @@
 services:
   - type: web
-    name: lab  # ← Changed from wurdle to lab
+    name: lab
     env: python
-    buildCommand: >-
-      apt-get update &&
-      apt-get install -y --no-install-recommends jq &&
-      apt-get clean &&
-      rm -rf /var/lib/apt/lists/* &&
-      pip install -r requirements.txt
-    startCommand: >-
-      LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libpython3.13.so.1.0
-      gunicorn app:app
-      --workers 2
-      --timeout 60
-      --max-requests 1000
-      --max-requests-jitter 50
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 2 --timeout 60
     envVars:
       - key: PYTHONUNBUFFERED
         value: "1"
       - key: DATABASE_URL
         fromDatabase:
-          name: wurdle-db  # ← Keep your DB name
+          name: wurdle-db
           property: connectionString
-      - key: LD_PRELOAD
-        value: /usr/lib/x86_64-linux-gnu/libpython3.13.so.1.0
     disk:
       name: wurdle-disk
       mountPath: /opt/render/project/src
