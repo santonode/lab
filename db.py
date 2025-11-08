@@ -12,7 +12,7 @@ def get_conn():
 def init_db():
     with get_conn() as conn:
         with conn.cursor() as cur:
-            # === ERATE TABLE ===
+            # === ERATE TABLE: Create only if not exists ===
             cur.execute('''
                 CREATE TABLE IF NOT EXISTS erate (
                     app_number TEXT PRIMARY KEY,
@@ -88,23 +88,15 @@ def init_db():
                 )
             ''')
 
-            # === MEMES TABLE (with id) ===
+            # === MEMES TABLE: Add id if missing ===
             cur.execute('''
-                CREATE TABLE IF NOT EXISTS memes (
-                    id SERIAL PRIMARY KEY,
-                    filename TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    upload_time TIMESTAMP NOT NULL,
-                    uploader_ip TEXT NOT NULL,
-                    uploader_username TEXT NOT NULL,
-                    likes INTEGER DEFAULT 0,
-                    dislikes INTEGER DEFAULT 0
-                )
+                ALTER TABLE memes ADD COLUMN IF NOT EXISTS id SERIAL PRIMARY KEY
             ''')
 
-            # === VOTES TABLE ===
+            # === VOTES TABLE: Recreate (safe to reset) ===
+            cur.execute('DROP TABLE IF EXISTS votes')
             cur.execute('''
-                CREATE TABLE IF NOT EXISTS votes (
+                CREATE TABLE votes (
                     id SERIAL PRIMARY KEY,
                     meme_id INTEGER NOT NULL,
                     voter_ip TEXT NOT NULL,
