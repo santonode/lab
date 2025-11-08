@@ -3,21 +3,31 @@ from flask import Flask
 import os
 import re
 
-# === IMPORT ALL BLUEPRINTS ===
+# === IMPORT BLUEPRINTS ===
 from wurdle import wurdle_bp
 from memes import memes_bp, init_db
-from erate import erate_bp  # ← E-RATE ADDED
+from erate import erate_bp
+
+# === IMPORT EXTENSIONS ===
+from extensions import db  # ← IMPORT db
 
 # === CREATE APP ===
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))
 
-# === REGISTER ALL BLUEPRINTS ===
+# === CONFIG ===
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# === INIT EXTENSIONS ===
+db.init_app(app)  # ← CRITICAL: BIND db TO app
+
+# === REGISTER BLUEPRINTS ===
 app.register_blueprint(wurdle_bp)
 app.register_blueprint(memes_bp)
-app.register_blueprint(erate_bp)  # ← E-RATE ROUTES
+app.register_blueprint(erate_bp)
 
-# === CUSTOM JINJA FILTER: Google Drive Direct Download ===
+# === CUSTOM FILTER ===
 def get_download_url(url):
     if url and 'drive.google.com/file/d/' in url:
         match = re.search(r'https://drive.google.com/file/d/([^/]+)/view\?usp=drive_link', url)
@@ -28,16 +38,16 @@ def get_download_url(url):
 
 app.jinja_env.filters['get_download_url'] = get_download_url
 
-# === DATABASE INIT (WITH ERROR HANDLING) ===
+# === DATABASE INIT ===
 try:
     with app.app_context():
         init_db()
-        print("Database initialized successfully.")
+        print("Database initialized.")
 except Exception as e:
-    print(f"Database initialization failed: {str(e)}")
+    print(f"DB init failed: {e}")
     raise
 
-# === PORT CONFIG FOR RENDER ===
+# === PORT ===
 port = int(os.getenv("PORT", 5000))
 
 if __name__ == '__main__':
