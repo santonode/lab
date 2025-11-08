@@ -9,7 +9,8 @@
         h1 { text-align: center; color: #1a5d57; margin-bottom: 10px; }
         .filters { display: flex; gap: 10px; margin: 20px 0; flex-wrap: wrap; align-items: center; }
         .filters label { font-weight: 600; }
-        .filters input { padding: 8px; border: 1px solid #ccc; border-radius: 6px; width: 80px; }
+        .filters input[type="text"] { padding: 8px; border: 1px solid #ccc; border-radius: 6px; width: 80px; }
+        .filters input[type="date"] { padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
         .btn { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; text-decoration: none; display: inline-block; }
         .btn-primary { background: #007bff; color: white; }
         .btn-success { background: #27ae60; color: white; }
@@ -18,7 +19,6 @@
         th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
         th { background-color: #1a5d57; color: white; }
         tr:nth-child(even) { background-color: #f9f9f9; }
-        .footer { text-align: center; margin-top: 30px; color: #777; }
         .pagination { text-align: center; margin: 20px 0; }
     </style>
 </head>
@@ -28,7 +28,8 @@
 
     <div class="filters">
         <form method="get" style="display: inline;">
-            <label>State: <input name="state" value="{{ filters.state }}" maxlength="2" placeholder="KS"></label>
+            <label>State: <input type="text" name="state" value="{{ filters.state }}" maxlength="2" placeholder="KS"></label>
+            <label>Modified After: <input type="date" name="modified_after" value="{{ filters.modified_after }}"></label>
             <button type="submit" class="btn btn-primary">Filter</button>
             <a href="/erate/" class="btn">Reset</a>
         </form>
@@ -60,15 +61,11 @@
 
     {% if has_more %}
     <div class="pagination">
-        <a href="?state={{ filters.state }}&offset={{ next_offset }}" class="btn btn-primary">
+        <a href="?state={{ filters.state }}&modified_after={{ filters.modified_after }}&offset={{ next_offset }}" class="btn btn-primary">
             Load More (+)
         </a>
     </div>
     {% endif %}
-
-    <div class="footer">
-        <p><a href="/memes">Memes</a> | <a href="/erate/import-interactive">Import</a></p>
-    </div>
 </div>
 </body>
 </html>
