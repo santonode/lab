@@ -3,114 +3,27 @@
 <head>
     <title>E-Rate Import</title>
     <style>
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            margin: 40px; 
-            background: #f9f9f9; 
-            color: #333;
-        }
-        .box { 
-            max-width: 700px; 
-            margin: auto; 
-            background: white; 
-            padding: 25px; 
-            border-radius: 12px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08); 
-        }
-        h1 { 
-            text-align: center; 
-            color: #1a5d57; 
-            margin-bottom: 10px; 
-            font-weight: 600;
-        }
-        .progress { 
-            font-size: 18px; 
-            font-weight: 600; 
-            text-align: center; 
-            margin: 20px 0; 
-            color: #1a5d57;
-        }
-        .record { 
-            background: #f0f8ff; 
-            padding: 18px; 
-            border-left: 5px solid #007bff; 
-            margin: 20px 0; 
-            border-radius: 8px; 
-            font-size: 15px;
-        }
-        .success { 
-            background: #d4edda; 
-            border-left-color: #28a745; 
-        }
-        .error { 
-            background: #f8d7da; 
-            border-left-color: #dc3545; 
-        }
-        .record p { 
-            margin: 8px 0; 
-        }
-        .record strong { 
-            color: #1a5d57; 
-        }
-        form { 
-            margin: 15px 0; 
-        }
-        input[type="text"] { 
-            width: 100%; 
-            padding: 12px; 
-            margin: 8px 0; 
-            font-size: 16px; 
-            border: 1px solid #ccc; 
-            border-radius: 6px; 
-        }
-        button { 
-            padding: 12px 24px; 
-            margin: 8px 0; 
-            font-size: 16px; 
-            border: none; 
-            border-radius: 6px; 
-            cursor: pointer; 
-            width: 100%; 
-            font-weight: 600;
-        }
-        button.import { 
-            background: #007bff; 
-            color: white; 
-        }
-        button.import:hover { 
-            background: #0056b3; 
-        }
-        button.bulk { 
-            background: #27ae60; 
-            color: white; 
-        }
-        button.bulk:hover { 
-            background: #219653; 
-        }
-        button.reset { 
-            background: #dc3545; 
-            color: white; 
-        }
-        button.reset:hover { 
-            background: #c82333; 
-        }
-        .footer { 
-            text-align: center; 
-            margin-top: 40px; 
-            color: #777; 
-            font-size: 14px; 
-        }
-        .footer a { 
-            color: #26A69A; 
-            text-decoration: none; 
-        }
-        .footer a:hover { 
-            text-decoration: underline; 
-        }
-        @media (max-width: 768px) {
-            .box { padding: 15px; }
-            button { font-size: 15px; }
-        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background: #f9f9f9; color: #333; }
+        .box { max-width: 700px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+        h1 { text-align: center; color: #1a5d57; margin-bottom: 10px; font-weight: 600; }
+        .progress { font-size: 18px; font-weight: 600; text-align: center; margin: 20px 0; color: #1a5d57; }
+        .record { background: #f0f8ff; padding: 18px; border-left: 5px solid #007bff; margin: 20px 0; border-radius: 8px; font-size: 15px; }
+        .success { background: #d4edda; border-left-color: #28a745; }
+        .error { background: #f8d7da; border-left-color: #dc3545; }
+        .record p { margin: 8px 0; }
+        .record strong { color: #1a5d57; }
+        form { margin: 15px 0; }
+        input[type="text"] { width: 100%; padding: 12px; margin: 8px 0; font-size: 16px; border: 1px solid #ccc; border-radius: 6px; }
+        button { padding: 12px 24px; margin: 8px 0; font-size: 16px; border: none; border-radius: 6px; cursor: pointer; width: 100%; font-weight: 600; }
+        button.import { background: #007bff; color: white; }
+        button.import:hover { background: #0056b3; }
+        button.bulk { background: #27ae60; color: white; }
+        button.bulk:hover { background: #219653; }
+        button.reset { background: #dc3545; color: white; }
+        button.reset:hover { background: #c82333; }
+        .footer { text-align: center; margin-top: 40px; color: #777; font-size: 14px; }
+        .footer a { color: #26A69A; text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -148,10 +61,12 @@
         <button type="submit" class="import">Import This Record</button>
     </form>
 
-    <!-- IMPORT ALL (BULK) -->
-    <form method="post" onsubmit="return confirm('Import ALL remaining records? This may take time.');">
+    <!-- IMPORT ALL -->
+    <form method="post" onsubmit="return confirm('Import ALL {{ progress.total - progress.index + 1 }} remaining records?');">
         <input type="hidden" name="action" value="import_all">
-        <button type="submit" class="bulk">Import All Remaining ({{ progress.total - progress.index + 1 }})</button>
+        <button type="submit" class="bulk">
+            Import All Remaining ({{ progress.total - progress.index + 1 }})
+        </button>
     </form>
 
     <!-- RESET -->
@@ -162,9 +77,7 @@
 
     <!-- FOOTER -->
     <div class="footer">
-        <p>
-            <a href="/erate">Go to Dashboard</a>
-        </p>
+        <p><a href="/erate">Go to Dashboard</a></p>
     </div>
 </div>
 </body>
