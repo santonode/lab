@@ -6,7 +6,7 @@ class Erate(db.Model):
     __tablename__ = 'erate'
 
     # === PRIMARY KEY ===
-    app_number = db.Column(db.String(20), primary_key=True)  # Application Number
+    app_number = db.Column(db.String(20), primary_key=True)
 
     # === BASIC INFO ===
     form_nickname = db.Column(db.String(255))
@@ -18,11 +18,11 @@ class Erate(db.Model):
     created_by = db.Column(db.String(100))
     certified_datetime = db.Column(db.DateTime)
     certified_by = db.Column(db.String(100))
-    last_modified_datetime = db.Column(db.DateTime)
+    last_modified_datetime = db.Column(db.DateTime)  # ← NOW DateTime
     last_modified_by = db.Column(db.String(100))
 
     # === BILLED ENTITY ===
-    ben = db.Column(db.String(20))  # Billed Entity Number
+    ben = db.Column(db.String(20))
     entity_name = db.Column(db.Text)
     org_status = db.Column(db.String(50))
     org_type = db.Column(db.String(50))
