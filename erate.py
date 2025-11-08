@@ -78,19 +78,17 @@ def import_interactive():
         current_app.logger.error(f"Failed to count CSV rows: {e}")
         return f"<h2>CSV Count Error: {e}</h2>"
 
-    # === SESSION WITH FORCED TOTAL UPDATE + INDEX RESET ===
-    if 'import_progress' not in session:
-        session['import_progress'] = {'index': 1, 'success': 0, 'error': 0, 'total': total}
-    else:
-        # FORCE UPDATE TOTAL
-        session['import_progress']['total'] = total
-        # FORCE RESET IF INDEX > TOTAL
-        if session['import_progress']['index'] > total:
-            current_app.logger.warning(f"Resetting invalid index {session['import_progress']['index']} > total {total}")
-            session['import_progress'] = {'index': 1, 'success': 0, 'error': 0, 'total': total}
+    # === FORCE CLEAR SESSION & SET NEW TOTAL ===
+    session.clear()
+    session['import_progress'] = {
+        'index': 1,
+        'success': 0,
+        'error': 0,
+        'total': total
+    }
 
     progress = session['import_progress']
-    current_app.logger.info(f"Progress: {progress}")
+    current_app.logger.info(f"Session reset: {progress}")
 
     # === POST: ACTIONS ===
     if request.method == 'POST':
@@ -100,7 +98,7 @@ def import_interactive():
         if action == 'reset':
             session.clear()
             session['import_progress'] = {'index': 1, 'success': 0, 'error': 0, 'total': total}
-            current_app.logger.info("Session reset")
+            current_app.logger.info("Manual session reset")
             return redirect('/erate/import-interactive')
 
         # IMPORT ONE
@@ -193,7 +191,7 @@ def import_interactive():
                         auth_employer=row.get('Authorized Person Employer', ''),
                         cat1_desc=row.get('Category One Description', ''),
                         cat2_desc=row.get('Category Two Description', ''),
-                        installment_type=row.get('Install Installment Type', ''),
+                        installment_type=row.get('Installment Type', ''),
                         installment_min=safe_int(row.get('Installment Min Range Years')),
                         installment_max=safe_int(row.get('Installment Max Range Years')),
                         rfp_id=row.get('Request for Proposal Identifier', ''),
