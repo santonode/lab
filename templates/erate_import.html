@@ -14,8 +14,7 @@
         .btn-success { background: #27ae60; color: white; }
         .btn-danger { background: #dc3545; color: white; }
         .btn:hover { opacity: 0.9; }
-        .form-group { margin: 15px 0; }
-        .form-group input { padding: 8px; width: 100%; border: 1px solid #ccc; border-radius: 6px; }
+        .form-group { margin: 15px 0; text-align: center; }
         .success { color: green; font-weight: bold; }
         .error { color: red; font-weight: bold; }
     </style>
@@ -32,7 +31,9 @@
 
     {% if progress.index > progress.total %}
         <p class="success">IMPORT COMPLETE!</p>
-        <p><a href="/erate/" class="btn btn-primary">Back to Dashboard</a></p>
+        <p style="text-align: center;">
+            <a href="/erate/" class="btn btn-primary">Back to Dashboard</a>
+        </p>
     {% else %}
 
         <div class="record">
@@ -49,26 +50,31 @@
             <p class="error">Error: {{ error }}</p>
         {% endif %}
 
-        <form method="post" class="form-group">
-            <input type="hidden" name="action" value="import_one">
-            <label>
-                Type <code>ok</code> to confirm:
-                <input type="text" name="confirm" placeholder="ok" required autocomplete="off">
-            </label>
-            <button type="submit" class="btn btn-primary">Import This Record</button>
-        </form>
+        <!-- IMPORT THIS RECORD — NO CONFIRM FIELD -->
+        <div class="form-group">
+            <form method="post" onsubmit="return confirm('Import this record?');">
+                <input type="hidden" name="action" value="import_one">
+                <button type="submit" class="btn btn-primary">Import This Record</button>
+            </form>
+        </div>
 
-        <form method="post" onsubmit="return confirm('Import ALL remaining {{ progress.total - progress.index + 1 }} records?');">
-            <input type="hidden" name="action" value="import_all">
-            <button type="submit" class="btn btn-success">
-                Import All Remaining ({{ progress.total - progress.index + 1 }})
-            </button>
-        </form>
+        <!-- IMPORT ALL REMAINING -->
+        <div class="form-group">
+            <form method="post" onsubmit="return confirm('Import ALL {{ progress.total - progress.index + 1 }} remaining records?');">
+                <input type="hidden" name="action" value="import_all">
+                <button type="submit" class="btn btn-success">
+                    Import All Remaining ({{ progress.total - progress.index + 1 }})
+                </button>
+            </form>
+        </div>
 
-        <form method="post" onsubmit="return confirm('Start over from record 1?');">
-            <input type="hidden" name="action" value="reset">
-            <button type="submit" class="btn btn-danger">Start Over</button>
-        </form>
+        <!-- START OVER -->
+        <div class="form-group">
+            <form method="post" onsubmit="return confirm('Start over from record 1?');">
+                <input type="hidden" name="action" value="reset">
+                <button type="submit" class="btn btn-danger">Start Over</button>
+            </form>
+        </div>
 
     {% endif %}
 
