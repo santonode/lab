@@ -25,27 +25,37 @@ def parse_datetime(value):
             continue
     return None
 
-# === DASHBOARD WITH PAGINATION & FILTERS ===
+# === DASHBOARD WITH STATE + DATE FILTER + PAGINATION ===
 @erate_bp.route('/')
 def dashboard():
     state_filter = request.args.get('state', '').strip().upper()
+    modified_after_str = request.args.get('modified_after', '').strip()
     offset = max(int(request.args.get('offset', 0)), 0)
     limit = 10
-    filters = {'state': state_filter}
+    filters = {
+        'state': state_filter,
+        'modified_after': modified_after_str
+    }
 
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                # Total count
+                # === COUNT TOTAL ===
                 count_sql = 'SELECT COUNT(*) FROM erate'
                 count_params = []
+                where_clauses = []
                 if state_filter:
-                    count_sql += ' WHERE state = %s'
+                    where_clauses.append('state = %s')
                     count_params.append(state_filter)
+                if modified_after_str:
+                    where_clauses.append('last_modified_datetime >= %s')
+                    count_params.append(modified_after_str)
+                if where_clauses:
+                    count_sql += ' WHERE ' + ' AND '.join(where_clauses)
                 cur.execute(count_sql, count_params)
                 total_count = cur.fetchone()[0]
 
-                # Fetch page
+                # === FETCH PAGE ===
                 sql = '''
                     SELECT 
                         app_number, entity_name, state, funding_year, 
@@ -53,9 +63,9 @@ def dashboard():
                     FROM erate
                 '''
                 params = []
-                if state_filter:
-                    sql += ' WHERE state = %s'
-                    params.append(state_filter)
+                if where_clauses:
+                    sql += ' WHERE ' + ' AND '.join(where_clauses)
+                    params.extend(count_params)
                 sql += ' ORDER BY app_number LIMIT %s OFFSET %s'
                 params.extend([limit + 1, offset])
                 cur.execute(sql, params)
