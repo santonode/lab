@@ -51,12 +51,19 @@ def safe_date(value):
 # === INTERACTIVE IMPORT ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
+    # === DEBUG LOGS ===
+    current_app.logger.info(f"CSV path: {CSV_FILE}")
+    current_app.logger.info(f"File exists: {os.path.exists(CSV_FILE)}")
+    if os.path.exists(CSV_FILE):
+        current_app.logger.info(f"File size: {os.path.getsize(CSV_FILE)} bytes")
+
     if not os.path.exists(CSV_FILE):
         return f"""
         <div style="text-align:center; margin:60px auto; max-width:600px; font-family:Arial, sans-serif; color:#555;">
             <h2 style="color:#dc3545;">CSV File Not Found</h2>
-            <p>Please ensure <code style="background:#f0f0f0; padding:2px 6px; border-radius:4px;">470schema.csv</code> is in the <code style="background:#f0f0f0; padding:2px 6px; border-radius:4px;">src/</code> directory.</p>
-            <p><a href="/erate" style="color:#007bff; text-decoration:none; font-weight:600;">← Go to Dashboard</a></p>
+            <p><code>{CSV_FILE}</code></p>
+            <p>Upload to <code>src/</code> and <code>git push</code>.</p>
+            <p><a href="/erate" style="color:#007bff;">Dashboard</a></p>
         </div>
         """
 
@@ -65,9 +72,11 @@ def import_interactive():
         with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
             total_rows = sum(1 for _ in f) - 1
             total = max(total_rows, 1)
+            current_app.logger.info(f"CSV has {total} records")
     except Exception as e:
         total = 1
         current_app.logger.error(f"Failed to count CSV rows: {e}")
+        return f"<h2>CSV Count Error: {e}</h2>"
 
     # Session
     if 'import_progress' not in session:
@@ -124,7 +133,7 @@ def import_interactive():
                         certified_datetime=safe_date(row.get('Certified Date/Time')),
                         certified_by=row.get('Certified By', ''),
                         last_modified_datetime=safe_date(row.get('Last Modified Date/Time')),
-                        last_modified_by=row.get('Last Modified By', ''),  # ← FIXED: comma, not 67
+                        last_modified_by=row.get('Last Modified By', ''),
                         ben=row.get('Billed Entity Number', ''),
                         entity_name=row.get('Billed Entity Name', ''),
                         org_status=row.get('Organization Status', ''),
@@ -239,7 +248,7 @@ def import_interactive():
                             certified_datetime=safe_date(row.get('Certified Date/Time')),
                             certified_by=row.get('Certified By', ''),
                             last_modified_datetime=safe_date(row.get('Last Modified Date/Time')),
-                            last_modified_by=row.get('Last Modified By', ''),  # ← FIXED
+                            last_modified_by=row.get('Last Modified By', ''),
                             ben=row.get('Billed Entity Number', ''),
                             entity_name=row.get('Billed Entity Name', ''),
                             org_status=row.get('Organization Status', ''),
@@ -336,7 +345,8 @@ def import_interactive():
                 next(reader)
             row = next(reader)
     except Exception as e:
-        return f"<h2 style='color:#dc3545;'>Error reading CSV: {e}</h2>"
+        current_app.logger.error(f"CSV row error: {e}")
+        return f"<h2>Row Error: {e}</h2>"
 
     return render_template('erate_import.html', row=row, progress=progress, success=False, error=None)
 
