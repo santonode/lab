@@ -8,23 +8,12 @@ from datetime import datetime
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate')
 CSV_FILE = os.path.join(os.path.dirname(__file__), "470schema.csv")
 
-# === HELPERS ===
-def safe_float(v, d=0.0):
-    try:
-        return float(v) if v and str(v).strip() else d
-    except:
-        return d
-
-def safe_int(v, d=None):
-    try:
-        return int(v) if v and str(v).strip() else d
-    except:
-        return d
-
-def safe_date(v):
-    if not v or not str(v).strip():
+# === TIME PARSING ===
+def parse_datetime(value):
+    """Parse various datetime formats from CSV"""
+    if not value or not str(value).strip():
         return None
-    v = str(v).strip()
+    value = str(value).strip()
     formats = [
         "%m/%d/%Y %I:%M:%S %p", "%m/%d/%Y %H:%M:%S",
         "%m/%d/%Y %I:%M %p", "%m/%d/%Y %H:%M",
@@ -32,7 +21,7 @@ def safe_date(v):
     ]
     for fmt in formats:
         try:
-            return datetime.strptime(v, fmt)
+            return datetime.strptime(value, fmt)
         except ValueError:
             continue
     return None
@@ -46,8 +35,19 @@ def dashboard():
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
+                # Count total
+                cur.execute('SELECT COUNT(*) FROM erate')
+                total_count = cur.fetchone()[0]
+
+                # Fetch data
                 sql = '''
-                    SELECT app_number, entity_name, state, fcc_status
+                    SELECT 
+                        app_number, 
+                        entity_name, 
+                        state, 
+                        funding_year, 
+                        fcc_status, 
+                        last_modified_datetime
                     FROM erate
                 '''
                 params = []
@@ -66,11 +66,12 @@ def dashboard():
             table_data=table_data,
             filters=filters,
             total_filtered=len(rows),
-            has_more=has_more
+            has_more=has_more,
+            total_count=total_count
         )
     except Exception as e:
         print(f"Dashboard error: {e}")
-        return render_template('erate.html', table_data=[], filters=filters, error=str(e))
+        return f"<pre>ERROR: {e}</pre>"
 
 # === IMPORT INTERACTIVE ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
@@ -78,11 +79,9 @@ def import_interactive():
     if not os.path.exists(CSV_FILE):
         return "<h2>CSV not found: 470schema.csv</h2>", 404
 
-    # Count total rows
     with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
         total = sum(1 for _ in f) - 1 or 1
 
-    # Session progress
     if 'import_progress' not in session:
         session['import_progress'] = {
             'index': 1,
@@ -103,7 +102,6 @@ def import_interactive():
         if action == 'import_all':
             return _import_all_records()
 
-    # GET: Show current row
     if progress['index'] > progress['total']:
         return render_template('erate_import.html', progress=progress)
 
@@ -165,24 +163,22 @@ def _import_one_record():
                         cat1_desc, cat2_desc, installment_type, installment_min,
                         installment_max, rfp_id, state_restrictions, restriction_desc,
                         statewide, all_public, all_nonpublic, all_libraries, form_version
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-                    )
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                              %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                              %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                              %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ''', (
                     app_number,
                     row.get('Form Nickname',''),
                     row.get('Form PDF',''),
                     row.get('Funding Year',''),
                     row.get('FCC Form 470 Status',''),
-                    safe_date(row.get('Allowable Contract Date')),
-                    safe_date(row.get('Created Date/Time')),
+                    parse_datetime(row.get('Allowable Contract Date')),
+                    parse_datetime(row.get('Created Date/Time')),
                     row.get('Created By',''),
-                    safe_date(row.get('Certified Date/Time')),
+                    parse_datetime(row.get('Certified Date/Time')),
                     row.get('Certified By',''),
-                    safe_date(row.get('Last Modified Date/Time')),
+                    parse_datetime(row.get('Last Modified Date/Time')),
                     row.get('Last Modified By',''),
                     row.get('Billed Entity Number',''),
                     row.get('Billed Entity Name',''),
@@ -190,8 +186,8 @@ def _import_one_record():
                     row.get('Organization Type',''),
                     row.get('Applicant Type',''),
                     row.get('Website URL',''),
-                    safe_float(row.get('Latitude')),
-                    safe_float(row.get('Longitude')),
+                    float(row.get('Latitude') or 0),
+                    float(row.get('Longitude') or 0),
                     row.get('Billed Entity FCC Registration Number',''),
                     row.get('Billed Entity Address 1',''),
                     row.get('Billed Entity Address 2',''),
@@ -202,7 +198,7 @@ def _import_one_record():
                     row.get('Billed Entity Email',''),
                     row.get('Billed Entity Phone',''),
                     row.get('Billed Entity Phone Ext',''),
-                    safe_int(row.get('Number of Eligible Entities')),
+                    int(row.get('Number of Eligible Entities') or 0),
                     row.get('Contact Name',''),
                     row.get('Contact Address 1',''),
                     row.get('Contact Address 2',''),
@@ -232,8 +228,8 @@ def _import_one_record():
                     row.get('Category One Description',''),
                     row.get('Category Two Description',''),
                     row.get('Installment Type',''),
-                    safe_int(row.get('Installment Min Range Years')),
-                    safe_int(row.get('Installment Max Range Years')),
+                    int(row.get('Installment Min Range Years') or 0),
+                    int(row.get('Installment Max Range Years') or 0),
                     row.get('Request for Proposal Identifier',''),
                     row.get('State or Local Restrictions',''),
                     row.get('State or Local Restrictions Description',''),
@@ -277,7 +273,6 @@ def _import_all_records():
                             skipped += 1
                             continue
 
-                        # Insert using same tuple as _import_one_record
                         cur.execute('''
                             INSERT INTO erate (
                                 app_number, form_nickname, form_pdf, funding_year, fcc_status,
@@ -295,24 +290,22 @@ def _import_all_records():
                                 cat1_desc, cat2_desc, installment_type, installment_min,
                                 installment_max, rfp_id, state_restrictions, restriction_desc,
                                 statewide, all_public, all_nonpublic, all_libraries, form_version
-                            ) VALUES (
-                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-                            )
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                                      %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                                      %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                                      %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ''', (
                             app_number,
                             row.get('Form Nickname',''),
                             row.get('Form PDF',''),
                             row.get('Funding Year',''),
                             row.get('FCC Form 470 Status',''),
-                            safe_date(row.get('Allowable Contract Date')),
-                            safe_date(row.get('Created Date/Time')),
+                            parse_datetime(row.get('Allowable Contract Date')),
+                            parse_datetime(row.get('Created Date/Time')),
                             row.get('Created By',''),
-                            safe_date(row.get('Certified Date/Time')),
+                            parse_datetime(row.get('Certified Date/Time')),
                             row.get('Certified By',''),
-                            safe_date(row.get('Last Modified Date/Time')),
+                            parse_datetime(row.get('Last Modified Date/Time')),
                             row.get('Last Modified By',''),
                             row.get('Billed Entity Number',''),
                             row.get('Billed Entity Name',''),
@@ -320,8 +313,8 @@ def _import_all_records():
                             row.get('Organization Type',''),
                             row.get('Applicant Type',''),
                             row.get('Website URL',''),
-                            safe_float(row.get('Latitude')),
-                            safe_float(row.get('Longitude')),
+                            float(row.get('Latitude') or 0),
+                            float(row.get('Longitude') or 0),
                             row.get('Billed Entity FCC Registration Number',''),
                             row.get('Billed Entity Address 1',''),
                             row.get('Billed Entity Address 2',''),
@@ -332,7 +325,7 @@ def _import_all_records():
                             row.get('Billed Entity Email',''),
                             row.get('Billed Entity Phone',''),
                             row.get('Billed Entity Phone Ext',''),
-                            safe_int(row.get('Number of Eligible Entities')),
+                            int(row.get('Number of Eligible Entities') or 0),
                             row.get('Contact Name',''),
                             row.get('Contact Address 1',''),
                             row.get('Contact Address 2',''),
@@ -362,8 +355,8 @@ def _import_all_records():
                             row.get('Category One Description',''),
                             row.get('Category Two Description',''),
                             row.get('Installment Type',''),
-                            safe_int(row.get('Installment Min Range Years')),
-                            safe_int(row.get('Installment Max Range Years')),
+                            int(row.get('Installment Min Range Years') or 0),
+                            int(row.get('Installment Max Range Years') or 0),
                             row.get('Request for Proposal Identifier',''),
                             row.get('State or Local Restrictions',''),
                             row.get('State or Local Restrictions Description',''),
