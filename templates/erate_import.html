@@ -46,11 +46,13 @@
 
         {% if success %}
             <p class="success">Imported successfully!</p>
-        {% elif error %}
+        {% endif %}
+
+        {% if error %}
             <p class="error">Error: {{ error }}</p>
         {% endif %}
 
-        <!-- IMPORT THIS RECORD — NO CONFIRM FIELD -->
+        <!-- IMPORT THIS RECORD -->
         <div class="form-group">
             <form method="post" onsubmit="return confirm('Import this record?');">
                 <input type="hidden" name="action" value="import_one">
