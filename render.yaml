@@ -11,8 +11,6 @@ services:
         fromDatabase:
           name: wurdle-db
           property: connectionString
-      - key: PYTHONPATH
-        value: /opt/render/project/src
     disk:
       name: wurdle-disk
       mountPath: /opt/render/project/src
