@@ -62,11 +62,11 @@ def import_interactive():
         total = 1
         current_app.logger.error(f"Failed to count CSV rows: {e}")
 
-    # Session init
+    # Session
     if 'import_progress' not in session:
         session['import_progress'] = {'index': 1, 'success': 0, 'error': 0, 'total': total}
     else:
-        session['import_progress']['total'] = total  # UPDATE TOTAL
+        session['import_progress']['total'] = total
 
     progress = session['import_progress']
 
@@ -331,7 +331,31 @@ def import_interactive():
 
     return render_template('erate_import.html', row=row, progress=progress, success=False, error=None)
 
-# === DASHBOARD ===
+# === DASHBOARD (FROM POSTGRES) ===
 @erate_bp.route('/')
 def dashboard():
-    return "<h1>E-Rate Dashboard</h1><p>Import in progress.</p><a href='/erate/import-interactive'>Resume Import</a>"
+    state = request.args.get('state', '').strip().upper()
+    min_date = request.args.get('min_date', '')
+    offset = max(int(request.args.get('offset', 0)), 0)
+    limit = 10
+
+    query = Erate.query
+    if state:
+        query = query.filter(Erate.state == state)
+    if min_date:
+        query = query.filter(Erate.last_modified_datetime >= min_date)
+
+    total_filtered = query.count()
+    data = query.order_by(Erate.app_number).offset(offset).limit(limit + 1).all()
+    has_more = len(data) > limit
+    table_data = data[:limit]
+
+    return render_template(
+        'erate.html',
+        table_data=table_data,
+        filters={'state': state, 'min_date': min_date},
+        total=offset + len(table_data),
+        total_filtered=total_filtered,
+        has_more=has_more,
+        next_offset=offset + limit
+    )
