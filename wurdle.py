@@ -1,3 +1,4 @@
+# wurdle.py
 from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for, current_app
 import random
 from datetime import date, datetime
@@ -7,7 +8,7 @@ import base64
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import hashlib
-import psycopg
+import psycopg2  # ← FIXED: Use psycopg2 (from psycopg2-binary)
 import re
 
 wurdle_bp = Blueprint('wurdle', __name__)
@@ -34,7 +35,7 @@ def get_daily_word():
     available_words = WORDS_ALL if word_list == 'words.txt' else WORDS_PETS
     print(f"Attempting to get daily word for {today} with list {word_list}")
     try:
-        with psycopg.connect(DATABASE_URL) as conn:
+        with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
             with conn.cursor() as cur:
                 cur.execute('SELECT word FROM daily_word WHERE date = %s AND word_list = %s', (today, word_list))
                 result = cur.fetchone()
@@ -48,7 +49,7 @@ def get_daily_word():
                     conn.commit()
                     print(f"Inserted new word: {word}")
                     return word
-    except psycopg.Error as e:
+    except psycopg2.Error as e:  # ← psycopg2
         print(f"Database error in get_daily_word: {str(e)}")
         return random.choice(available_words)
     except Exception as e:
@@ -70,7 +71,7 @@ def hash_password(password):
 # Initialize database on app startup
 def init_db():
     try:
-        with psycopg.connect(DATABASE_URL) as conn:
+        with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
             with conn.cursor() as cur:
                 cur.execute('DROP TABLE IF EXISTS daily_word')
                 cur.execute('''
@@ -114,7 +115,7 @@ def init_db():
                 ''')
                 conn.commit()
         print(f"Database initialized successfully with URL: {DATABASE_URL}")
-    except psycopg.Error as e:
+    except psycopg2.Error as e:  # ← psycopg2
         print(f"Database initialization error: {str(e)}")
         raise
     except Exception as e:
@@ -137,7 +138,7 @@ def index():
     user_type = session.get('user_type', 'Guest')
     points = 0
     word_list = session.get('word_list', 'words.txt')
-    
+   
     if not session.get('guesses') or (last_played and last_played != today):
         session['guesses'] = []
         session['game_over'] = False
@@ -150,7 +151,7 @@ def index():
             print(f"Debug - New username generated: {username}")
         else:
             try:
-                with psycopg.connect(DATABASE_URL) as conn:
+                with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
                     with conn.cursor() as cur:
                         cur.execute('SELECT user_type, points, word_list FROM users WHERE username = %s', (username,))
                         result = cur.fetchone()
@@ -159,14 +160,13 @@ def index():
                             session['user_type'] = user_type
                             session['word_list'] = db_word_list
                             print(f"Debug - Fetched user_type: {user_type}, points: {points}, word_list: {db_word_list} for {username}")
-            except psycopg.Error as e:
+            except psycopg2.Error as e:  # ← psycopg2
                 print(f"Database error fetching user_type: {str(e)}")
-
     share_text = session.get('share_text') if session.get('game_over') else None
     print(f"Debug - Session guesses: {session.get('guesses')}, game_over: {session.get('game_over')}")
     if username and session.get('last_played_date') == today and session.get('game_over', False):
         return render_template('index.html', game_blocked=True, message="You've already played today's puzzle. Use 'Clear Session' to test again!", username=username, user_type=user_type, points=points if user_type != 'Guest' else None, share_text=share_text, guesses=session.get('guesses', []), game_over=session.get('game_over', False), word_list=word_list)
-    
+   
     return render_template('index.html', game_blocked=False, username=username, user_type=user_type, points=points if user_type != 'Guest' else None, share_text=share_text, guesses=session.get('guesses', []), game_over=session.get('game_over', False), word_list=word_list)
 
 @wurdle_bp.route('/wordlist')
@@ -174,7 +174,7 @@ def wordlist():
     username = session.get('username')
     if username:
         try:
-            with psycopg.connect(DATABASE_URL) as conn:
+            with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
                 with conn.cursor() as cur:
                     cur.execute('SELECT id, user_type FROM users WHERE username = %s', (username,))
                     result = cur.fetchone()
@@ -184,7 +184,7 @@ def wordlist():
                             cur.execute('UPDATE users SET points = GREATEST(points - 1, 0) WHERE id = %s', (user_id,))
                             conn.commit()
                             print(f"Debug - Deducted 1 point for user {username}")
-        except psycopg.Error as e:
+        except psycopg2.Error as e:  # ← psycopg2
             print(f"Database error deducting point for wordlist: {str(e)}")
     word_list = session.get('word_list', 'words.txt')
     words = WORDS_ALL if word_list == 'words.txt' else WORDS_PETS
@@ -193,10 +193,10 @@ def wordlist():
 @wurdle_bp.route('/stats')
 def stats():
     try:
-        with psycopg.connect(DATABASE_URL) as conn:
+        with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
             with conn.cursor() as cur:
                 cur.execute('''
-                    SELECT date(timestamp) as day, 
+                    SELECT date(timestamp) as day,
                            SUM(CASE WHEN win = 1 THEN 1 ELSE 0 END) as wins,
                            SUM(CASE WHEN win = 0 THEN 1 ELSE 0 END) as losses
                     FROM game_logs GROUP BY day ORDER BY day
@@ -204,14 +204,14 @@ def stats():
                 data = cur.fetchall()
                 cur.execute('SELECT COUNT(*) FROM game_logs')
                 total_games = cur.fetchone()[0]
-        
+       
         if not data:
             return render_template('stats.html', chart=None, table_data=None)
-        
+       
         days = [row[0] for row in data]
         wins = [row[1] for row in data]
         losses = [row[2] for row in data]
-        
+       
         fig, ax = plt.subplots(figsize=(9, 6))
         ax.bar(days, wins, label='Wins', color='green')
         ax.bar(days, losses, bottom=wins, label='Losses', color='red')
@@ -222,17 +222,17 @@ def stats():
         ax.xaxis.set_major_locator(mdates.AutoDateLocator())
         ax.tick_params(axis='x', labelsize=8, rotation=45)
         plt.tight_layout()
-        
+       
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=100)
         buf.seek(0)
         chart = base64.b64encode(buf.getvalue()).decode('utf-8')
         plt.close(fig)
-        
+       
         table_data = data
-        
+       
         return render_template('stats.html', chart=chart, table_data=table_data)
-    except psycopg.Error as e:
+    except psycopg2.Error as e:  # ← psycopg2
         print(f"Database error in stats: {str(e)}")
         return render_template('stats.html', chart=None, table_data=None)
     except Exception as e:
@@ -246,13 +246,12 @@ def profile():
     user_type = session.get('user_type', 'Guest')
     points = 0
     word_list = session.get('word_list', 'words.txt')
-
     if not username:
         username = generate_username(ip_address)
         session['username'] = username
     else:
         try:
-            with psycopg.connect(DATABASE_URL) as conn:
+            with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
                 with conn.cursor() as cur:
                     cur.execute('SELECT user_type, points, word_list FROM users WHERE username = %s', (username,))
                     result = cur.fetchone()
@@ -260,16 +259,15 @@ def profile():
                         user_type, points, db_word_list = result
                         session['user_type'] = user_type
                         session['word_list'] = db_word_list
-        except psycopg.Error as e:
+        except psycopg2.Error as e:  # ← psycopg2
             print(f"Database error fetching user_type: {str(e)}")
-
     wins = 0
     losses = 0
     total_guesses = 0
     games_played = 0
     avg_guesses = 0.0
     try:
-        with psycopg.connect(DATABASE_URL) as conn:
+        with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
             with conn.cursor() as cur:
                 cur.execute('SELECT id FROM users WHERE username = %s', (username,))
                 user_id = cur.fetchone()
@@ -283,9 +281,8 @@ def profile():
                     else:
                         cur.execute('INSERT INTO user_stats (user_id) VALUES (%s)', (user_id,))
                         conn.commit()
-    except psycopg.Error as e:
+    except psycopg2.Error as e:  # ← psycopg2
         print(f"Database error fetching stats: {str(e)}")
-
     message = None
     if request.method == 'POST':
         if 'clear_session' in request.form:
@@ -303,7 +300,7 @@ def profile():
             password = request.form.get('login_password', '')
             if username and password:
                 try:
-                    with psycopg.connect(DATABASE_URL) as conn:
+                    with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
                         with conn.cursor() as cur:
                             hashed_password = hash_password(password)
                             print(f"Attempting login for {username} with hashed password: {hashed_password}")
@@ -322,7 +319,7 @@ def profile():
                                     message = "Invalid username or password."
                             else:
                                 message = "Invalid username or password."
-                except psycopg.Error as e:
+                except psycopg2.Error as e:  # ← psycopg2
                     print(f"Database error during login: {str(e)}")
                     message = "Error during login."
         elif 'register' in request.form:
@@ -330,13 +327,13 @@ def profile():
             new_password = request.form.get('register_password', '')
             if new_username and new_password and all(c.isalnum() for c in new_username) and 1 <= len(new_username) <= 12:
                 try:
-                    with psycopg.connect(DATABASE_URL) as conn:
+                    with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
                         with conn.cursor() as cur:
                             cur.execute('SELECT 1 FROM users WHERE username = %s', (new_username,))
                             if cur.fetchone():
                                 message = "Username already taken."
                             else:
-                                cur.execute('INSERT INTO users (ip_address, username, password, user_type, points, word_list) VALUES (%s, %s, %s, %s, %s, %s)', 
+                                cur.execute('INSERT INTO users (ip_address, username, password, user_type, points, word_list) VALUES (%s, %s, %s, %s, %s, %s)',
                                           (ip_address, new_username, hash_password(new_password), 'Member', 0, 'words.txt'))
                                 cur.execute('INSERT INTO user_stats (user_id) VALUES (currval(\'users_id_seq\'))')
                                 conn.commit()
@@ -347,14 +344,14 @@ def profile():
                                 user_type = 'Member'
                                 points = 0
                                 message = "Registration successful! You are now a Member."
-                except psycopg.Error as e:
+                except psycopg2.Error as e:  # ← psycopg2
                     print(f"Database error during registration: {str(e)}")
                     message = "Error during registration."
         elif 'change_word_list' in request.form:
             new_word_list = request.form.get('word_list')
             if new_word_list in ['words.txt', 'words-pets.txt']:
                 try:
-                    with psycopg.connect(DATABASE_URL) as conn:
+                    with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
                         with conn.cursor() as cur:
                             cur.execute('UPDATE users SET word_list = %s WHERE username = %s', (new_word_list, username))
                             conn.commit()
@@ -363,10 +360,9 @@ def profile():
                             session['game_over'] = False
                             session['last_played_date'] = None
                             message = f"Word list changed to {new_word_list.split('-')[0] if '-' in new_word_list else new_word_list}. Game reset!"
-                except psycopg.Error as e:
+                except psycopg2.Error as e:  # ← psycopg2
                     print(f"Database error changing word list: {str(e)}")
                     message = "Error changing word list."
-
     return render_template('profile.html', username=session['username'], user_type=user_type, points=points, message=message, wins=wins, losses=losses, avg_guesses=avg_guesses, word_list=word_list)
 
 @wurdle_bp.route('/guess', methods=['POST'])
@@ -377,12 +373,12 @@ def guess():
     user_type = session.get('user_type', 'Guest')
     ip_address = request.remote_addr
     word_list = session.get('word_list', 'words.txt')
-    
+   
     if not username:
         username = generate_username(ip_address)
         session['username'] = username
     try:
-        with psycopg.connect(DATABASE_URL) as conn:
+        with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
             with conn.cursor() as cur:
                 cur.execute('SELECT 1 FROM users WHERE username = %s', (username,))
                 if not cur.fetchone():
@@ -395,27 +391,22 @@ def guess():
                     user_type, db_word_list = cur.fetchone()
                     session['user_type'] = user_type
                     session['word_list'] = db_word_list
-    except psycopg.Error as e:
+    except psycopg2.Error as e:  # ← psycopg2
         print(f"Database error creating or fetching guest user: {str(e)}")
         return jsonify({'error': 'Database error. Please try again later.'})
-
     if session.get('last_played_date') == today and session.get('game_over', False):
         return jsonify({'error': 'You have already played today. Use \'Clear Session\' to test again!'})
-
     if session.get('game_over'):
         return jsonify({'error': 'Game is over. Start a new game.'})
-
     guess = request.json.get('guess', '').upper()
     print(f"Debug - Received guess: {guess}, username: {username}")
     hard_mode = session.get('hard_mode', False)
     target = get_daily_word()
     print(f"Debug - Target word: {target}, username: {username}")
-
     available_words = WORDS_ALL if word_list == 'words.txt' else WORDS_PETS
     if len(guess) != 5 or guess not in available_words:
         print(f"Debug - Invalid guess: {guess}, length: {len(guess)}, in WORDS: {guess in available_words}, username: {username}")
         return jsonify({'error': 'Invalid word. Must be a 5-letter word from the selected list.'})
-
     if hard_mode:
         known_letters = {}
         for g in session.get('guesses', []):
@@ -428,13 +419,11 @@ def guess():
         for letter, count in known_letters.items():
             if guess_letters.get(letter, 0) < count:
                 return jsonify({'error': f'Hard Mode: Must use all known letters ({letter}).'})
-
     result = ['gray'] * 5
     target_counts = {}
     for letter in target:
         target_counts[letter] = target_counts.get(letter, 0) + 1
     guess_counts = {}
-
     all_green = True
     for i, (g, t) in enumerate(zip(guess, target)):
         if g == t:
@@ -443,17 +432,14 @@ def guess():
         else:
             all_green = False
     print(f"Debug - After first pass, result: {result}, all_green: {all_green}, username: {username}")
-
     if not all_green:
         for i, (g, t) in enumerate(zip(guess, target)):
             if result[i] == 'gray' and g in target and guess_counts.get(g, 0) < target_counts.get(g, 0):
                 result[i] = 'yellow'
                 guess_counts[g] = guess_counts.get(g, 0) + 1
     print(f"Debug - After second pass, result: {result}, username: {username}")
-
     session['guesses'].append({'guess': guess, 'result': result})
     session.modified = True
-
     game_over = False
     message = None
     win = 0
@@ -474,10 +460,9 @@ def guess():
         win = 0
         points_change = -10
         print(f"Debug - Lose condition met: guesses={len(session['guesses'])}, target={target}, username={username}")
-
     if game_over:
         try:
-            with psycopg.connect(DATABASE_URL) as conn:
+            with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
                 with conn.cursor() as cur:
                     cur.execute('SELECT id, user_type FROM users WHERE username = %s', (username,))
                     db_result = cur.fetchone()
@@ -492,7 +477,7 @@ def guess():
                         user_id, user_type = cur.fetchone()
                     session['user_type'] = user_type
                     if user_type != 'Guest':
-                        cur.execute('INSERT INTO game_logs (timestamp, ip_address, username, win, guesses) VALUES (%s, %s, %s, %s, %s)', 
+                        cur.execute('INSERT INTO game_logs (timestamp, ip_address, username, win, guesses) VALUES (%s, %s, %s, %s, %s)',
                                   (datetime.now(), ip_address, username, win, len(session['guesses'])))
                         cur.execute('''
                             INSERT INTO user_stats (user_id, wins, losses, total_guesses, games_played)
@@ -508,16 +493,14 @@ def guess():
                         print(f"Debug - Game logged: user_id={user_id}, win={win}, guesses={len(session['guesses'])}, points_change={points_change}, username={username}")
                     else:
                         print(f"Debug - Skipping points update for guest user: {username}")
-        except psycopg.Error as e:
+        except psycopg2.Error as e:  # ← psycopg2
             print(f"Database logging error: {str(e)}")
-
     share_text = f"Wurdle {date.today().strftime('%Y-%m-%d')} {len(session['guesses'])}/6\n"
     for g in session['guesses']:
         share_text += ''.join({
-            'green': '🟩', 'yellow': '🟨', 'gray': '⬜'
+            'green': 'green square', 'yellow': 'yellow square', 'gray': 'white square'
         }[color] for color in g['result']) + '\n'
     session['share_text'] = share_text
-
     print(f"Debug - Final result before jsonify: {result}, game_over: {game_over}, message: {message}, username={username}")
     return jsonify({
         'guess': guess,
@@ -542,12 +525,12 @@ def favicon():
 @wurdle_bp.route('/leader')
 def leader():
     try:
-        with psycopg.connect(DATABASE_URL) as conn:
+        with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
             with conn.cursor() as cur:
                 cur.execute('SELECT id, username, points FROM users ORDER BY points DESC')
                 leaders = [{'id': row[0], 'username': row[1], 'points': row[2]} for row in cur.fetchall()]
         return render_template('leader.html', leaders=leaders)
-    except psycopg.Error as e:
+    except psycopg2.Error as e:  # ← psycopg2
         print(f"Database error in leader: {str(e)}")
         return render_template('leader.html', leaders=[])
     except Exception as e:
