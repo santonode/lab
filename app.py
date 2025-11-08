@@ -2,10 +2,10 @@
 from flask import Flask
 import os
 import re
-from psycopg import connect  # ← Import psycopg v3
+from psycopg import connect
 
 # === IMPORT BLUEPRINTS ===
-from wurdle import wurdle_bp
+# from wurdle import wurdle_bp  # ← DISABLED
 from memes import memes_bp, init_db
 from erate import erate_bp
 
@@ -32,7 +32,7 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 db.init_app(app)
 
 # === REGISTER BLUEPRINTS ===
-app.register_blueprint(wurdle_bp)
+# app.register_blueprint(wurdle_bp)  # ← DISABLED
 app.register_blueprint(memes_bp)
 app.register_blueprint(erate_bp)
 
