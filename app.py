@@ -1,15 +1,18 @@
-# app.py
-from flask import Flask
+# app.py — TOP OF FILE
 import os
-import re
-from psycopg import connect
+import ctypes
+from ctypes.util import find_library
 
-# === PATCH Flask-SQLAlchemy to avoid psycopg2 import ===
-import sqlalchemy.dialects.postgresql.psycopg2 as psycopg2_dialect
-def _fake_import_dbapi():
-    from psycopg import Connection
-    return Connection
-psycopg2_dialect.import_dbapi = _fake_import_dbapi
+# === FIX: undefined symbol: _PyInterpreterState_Get ===
+# This is a known issue with psycopg2-binary on Python 3.13
+# Load libpython3.13.so to resolve missing symbols
+libpython = find_library("python3.13")
+if libpython:
+    ctypes.CDLL(libpython, mode=ctypes.RTLD_GLOBAL)
+# === END FIX ===
+
+from flask import Flask
+import re
 
 # === IMPORT BLUEPRINTS ===
 # from wurdle import wurdle_bp  # ← DISABLED
@@ -26,13 +29,10 @@ app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))
 # === CONFIG ===
 DATABASE_URL = os.getenv('DATABASE_URL')
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'creator': lambda: connect(DATABASE_URL, sslmode='require')
-}
 
 # === INIT EXTENSIONS ===
 db.init_app(app)
