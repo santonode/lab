@@ -46,7 +46,7 @@ def init_db():
                     phone_ext TEXT,
                     num_eligible INTEGER,
                     contact_name TEXT,
-                    contact_address1 TEXT,
+                    contact_address1_functions TEXT,
                     contact_address2 TEXT,
                     contact_city TEXT,
                     contact_state TEXT,
@@ -84,6 +84,27 @@ def init_db():
                     all_nonpublic TEXT,
                     all_libraries TEXT,
                     form_version TEXT
+                )
+            ''')
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS memes (
+                    id SERIAL PRIMARY KEY,
+                    filename TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    upload_time TIMESTAMP NOT NULL,
+                    uploader_ip TEXT NOT NULL,
+                    uploader_username TEXT NOT NULL,
+                    likes INTEGER DEFAULT 0,
+                    dislikes INTEGER DEFAULT 0
+                )
+            ''')
+            cur.execute('''
+                CREATE TABLE IF NOT EXISTS votes (
+                    id SERIAL PRIMARY KEY,
+                    meme_id INTEGER NOT NULL,
+                    voter_ip TEXT NOT NULL,
+                    vote_type TEXT NOT NULL,
+                    FOREIGN KEY (meme_id) REFERENCES memes(id) ON DELETE CASCADE
                 )
             ''')
             conn.commit()
