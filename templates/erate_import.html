@@ -3,50 +3,169 @@
 <head>
     <title>E-Rate Import</title>
     <style>
-        body { font-family: Arial; margin: 40px; background: #f9f9f9; }
-        .box { max-width: 700px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .record { background: #f0f8ff; padding: 15px; border-left: 5px solid #007bff; margin: 20px 0; }
-        .success { background: #d4edda; border-left-color: #28a745; }
-        .error { background: #f8d7da; border-left-color: #dc3545; }
-        input, button { padding: 12px; margin: 5px 0; font-size: 16px; width: 100%; }
-        button { background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        .reset { background: #dc3545; }
-        .reset:hover { background: #c82333; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 40px; 
+            background: #f9f9f9; 
+            color: #333;
+        }
+        .box { 
+            max-width: 700px; 
+            margin: auto; 
+            background: white; 
+            padding: 25px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08); 
+        }
+        h1 { 
+            text-align: center; 
+            color: #1a5d57; 
+            margin-bottom: 10px; 
+            font-weight: 600;
+        }
+        .progress { 
+            font-size: 18px; 
+            font-weight: 600; 
+            text-align: center; 
+            margin: 20px 0; 
+            color: #1a5d57;
+        }
+        .record { 
+            background: #f0f8ff; 
+            padding: 18px; 
+            border-left: 5px solid #007bff; 
+            margin: 20px 0; 
+            border-radius: 8px; 
+            font-size: 15px;
+        }
+        .success { 
+            background: #d4edda; 
+            border-left-color: #28a745; 
+        }
+        .error { 
+            background: #f8d7da; 
+            border-left-color: #dc3545; 
+        }
+        .record p { 
+            margin: 8px 0; 
+        }
+        .record strong { 
+            color: #1a5d57; 
+        }
+        form { 
+            margin: 15px 0; 
+        }
+        input[type="text"] { 
+            width: 100%; 
+            padding: 12px; 
+            margin: 8px 0; 
+            font-size: 16px; 
+            border: 1px solid #ccc; 
+            border-radius: 6px; 
+        }
+        button { 
+            padding: 12px 24px; 
+            margin: 8px 0; 
+            font-size: 16px; 
+            border: none; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            width: 100%; 
+            font-weight: 600;
+        }
+        button.import { 
+            background: #007bff; 
+            color: white; 
+        }
+        button.import:hover { 
+            background: #0056b3; 
+        }
+        button.bulk { 
+            background: #27ae60; 
+            color: white; 
+        }
+        button.bulk:hover { 
+            background: #219653; 
+        }
+        button.reset { 
+            background: #dc3545; 
+            color: white; 
+        }
+        button.reset:hover { 
+            background: #c82333; 
+        }
+        .footer { 
+            text-align: center; 
+            margin-top: 40px; 
+            color: #777; 
+            font-size: 14px; 
+        }
+        .footer a { 
+            color: #26A69A; 
+            text-decoration: none; 
+        }
+        .footer a:hover { 
+            text-decoration: underline; 
+        }
+        @media (max-width: 768px) {
+            .box { padding: 15px; }
+            button { font-size: 15px; }
+        }
     </style>
 </head>
 <body>
 <div class="box">
     <h1>E-Rate Interactive Import</h1>
-    <p><strong>Progress:</strong> {{ progress.index }} / {{ progress.total }} | Success: {{ progress.success }} | Errors: {{ progress.error }}</p>
 
+    <!-- DYNAMIC PROGRESS -->
+    <div class="progress">
+        Progress: <strong>{{ progress.index }}</strong> / <strong>{{ progress.total }}</strong> 
+        | Success: <strong style="color:#27ae60;">{{ progress.success }}</strong> 
+        | Errors: <strong style="color:#dc3545;">{{ progress.error }}</strong>
+    </div>
+
+    <!-- CURRENT RECORD -->
     <div class="record">
         <h3>Record {{ progress.index }}</h3>
-        <p><strong>ID:</strong> {{ row.ID or 'N/A' }}</p>
+        <p><strong>Application #:</strong> {{ row['Application Number'] or 'N/A' }}</p>
         <p><strong>State:</strong> {{ row['Billed Entity State'] or 'N/A' }}</p>
         <p><strong>Entity:</strong> {{ row['Billed Entity Name'] or 'N/A' }}</p>
         <p><strong>Amount:</strong> {{ row['Total Committed Amount'] or 'N/A' }}</p>
         <p><strong>Modified:</strong> {{ row['Last Modified Date/Time'] or 'N/A' }}</p>
     </div>
 
+    <!-- STATUS MESSAGES -->
     {% if success %}
         <div class="record success"><strong>Imported!</strong></div>
     {% elif error %}
         <div class="record error"><strong>Error:</strong> {{ error }}</div>
     {% endif %}
 
+    <!-- IMPORT ONE RECORD -->
     <form method="post">
         <input type="hidden" name="action" value="import">
         <input type="text" name="confirm" placeholder="Type 'ok' and press Enter" required>
-        <button type="submit">Import Record</button>
+        <button type="submit" class="import">Import This Record</button>
     </form>
 
-    <form method="post" onsubmit="return confirm('Start over from record 1?')">
+    <!-- IMPORT ALL (BULK) -->
+    <form method="post" onsubmit="return confirm('Import ALL remaining records? This may take time.');">
+        <input type="hidden" name="action" value="import_all">
+        <button type="submit" class="bulk">Import All Remaining ({{ progress.total - progress.index + 1 }})</button>
+    </form>
+
+    <!-- RESET -->
+    <form method="post" onsubmit="return confirm('Start over from record 1?');">
         <input type="hidden" name="action" value="reset">
         <button type="submit" class="reset">Start Over from Record 1</button>
     </form>
 
-    <p><a href="/erate">Go to Dashboard</a></p>
+    <!-- FOOTER -->
+    <div class="footer">
+        <p>
+            <a href="/erate">Go to Dashboard</a>
+        </p>
+    </div>
 </div>
 </body>
 </html>
