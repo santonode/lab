@@ -215,7 +215,7 @@ def _import_one_record():
                     row.get('Billed Entity Phone Ext',''),
                     int(row.get('Number of Eligible Entities') or 0),
                     row.get('Contact Name',''),
-                    row.get('Contact Address 11',''),
+                    row.get('Contact Address 1',''),
                     row.get('Contact Address 2',''),
                     row.get('Contact City',''),
                     row.get('Contact State',''),
