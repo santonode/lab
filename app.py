@@ -1,7 +1,4 @@
 # app.py
-# === PATCH FIRST — BEFORE ANYTHING ===
-import patch_psycopg2  # ← MUST BE FIRST
-
 from flask import Flask
 import os
 import re
