@@ -4,93 +4,77 @@
     <title>E-Rate Import</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background: #f9f9f9; color: #333; }
-        .box { max-width: 700px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
-        h1 { text-align: center; color: #1a5d57; margin-bottom: 10px; font-weight: 600; }
-        .progress { font-size: 18px; font-weight: 600; text-align: center; margin: 20px 0; color: #1a5d57; }
-        .record { background: #f0f8ff; padding: 18px; border-left: 5px solid #007bff; margin: 20px 0; border-radius: 8px; font-size: 15px; }
-        .success { background: #d4edda; border-left-color: #28a745; }
-        .error { background: #f8d7da; border-left-color: #dc3545; }
-        .record p { margin: 8px 0; }
-        .record strong { color: #1a5d57; }
-        form { margin: 15px 0; }
-        input[type="text"] { width: 100%; padding: 12px; margin: 8px 0; font-size: 16px; border: 1px solid #ccc; border-radius: 6px; }
-        button { padding: 12px 24px; margin: 8px 0; font-size: 16px; border: none; border-radius: 6px; cursor: pointer; width: 100%; font-weight: 600; }
-        button.import { background: #007bff; color: white; }
-        button.import:hover { background: #0056b3; }
-        button.bulk { background: #27ae60; color: white; }
-        button.bulk:hover { background: #219653; }
-        button.reset { background: #dc3545; color: white; }
-        button.reset:hover { background: #c82333; }
-        .footer { text-align: center; margin-top: 40px; color: #777; font-size: 14px; }
-        .footer a { color: #26A69A; text-decoration: none; }
-        .footer a:hover { text-decoration: underline; }
-        .complete { text-align: center; font-size: 1.4em; color: #27ae60; margin: 30px 0; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 40px; background: #f4f7f9; color: #333; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #1a5d57; }
+        .progress { text-align: center; font-size: 1.2em; margin: 20px 0; }
+        .record { background: #f0f8ff; padding: 15px; border-radius: 8px; margin: 20px 0; }
+        .btn { padding: 10px 20px; margin: 5px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-success { background: #27ae60; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn:hover { opacity: 0.9; }
+        .form-group { margin: 15px 0; }
+        .form-group input { padding: 8px; width: 100%; border: 1px solid #ccc; border-radius: 6px; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
     </style>
 </head>
 <body>
-<div class="box">
+<div class="container">
     <h1>E-Rate Interactive Import</h1>
 
-    <!-- PROGRESS -->
     <div class="progress">
         Progress: <strong>{{ progress.index }}</strong> / <strong>{{ progress.total }}</strong>
-        | Success: <strong style="color:#27ae60;">{{ progress.success }}</strong>
-        | Errors: <strong style="color:#dc3545;">{{ progress.error }}</strong>
+        | Success: <strong style="color:green">{{ progress.success }}</strong>
+        | Errors: <strong style="color:red">{{ progress.error }}</strong>
     </div>
 
-    <!-- COMPLETE MESSAGE -->
     {% if progress.index > progress.total %}
-        <div class="complete">
-            <strong>IMPORT COMPLETE!</strong><br>
-            {{ progress.success }} imported | {{ progress.error }} skipped
-        </div>
+        <p class="success">IMPORT COMPLETE!</p>
+        <p><a href="/erate/" class="btn btn-primary">Back to Dashboard</a></p>
     {% else %}
 
-        <!-- CURRENT RECORD -->
         <div class="record">
             <h3>Record {{ progress.index }}</h3>
-            <p><strong>Application #:</strong> {{ row['Application Number'] or 'N/A' }}</p>
-            <p><strong>State:</strong> {{ row['Billed Entity State'] or 'N/A' }}</p>
+            <p><strong>App #:</strong> {{ row['Application Number'] or 'N/A' }}</p>
             <p><strong>Entity:</strong> {{ row['Billed Entity Name'] or 'N/A' }}</p>
-            <p><strong>Amount:</strong> {{ row['Total Committed Amount'] or 'N/A' }}</p>
+            <p><strong>State:</strong> {{ row['Billed Entity State'] or 'N/A' }}</p>
             <p><strong>Modified:</strong> {{ row['Last Modified Date/Time'] or 'N/A' }}</p>
         </div>
 
-        <!-- STATUS -->
         {% if success %}
-            <div class="record success"><strong>Imported!</strong></div>
+            <p class="success">Imported successfully!</p>
         {% elif error %}
-            <div class="record error"><strong>Error:</strong> {{ error }}</div>
+            <p class="error">Error: {{ error }}</p>
         {% endif %}
 
-        <!-- IMPORT ONE -->
-        <form method="post">
-            <input type="hidden" name="action" value="import">
-            <input type="text" name="confirm" placeholder="Type 'ok' to import" required autocomplete="off">
-            <button type="submit" class="import">Import This Record</button>
+        <form method="post" class="form-group">
+            <input type="hidden" name="action" value="import_one">
+            <label>
+                Type <code>ok</code> to confirm:
+                <input type="text" name="confirm" placeholder="ok" required autocomplete="off">
+            </label>
+            <button type="submit" class="btn btn-primary">Import This Record</button>
         </form>
 
-        <!-- BULK IMPORT -->
-        <form method="post" onsubmit="return confirm('Import ALL {{ progress.total - progress.index + 1 }} remaining records?');">
+        <form method="post" onsubmit="return confirm('Import ALL remaining {{ progress.total - progress.index + 1 }} records?');">
             <input type="hidden" name="action" value="import_all">
-            <button type="submit" class="bulk">
+            <button type="submit" class="btn btn-success">
                 Import All Remaining ({{ progress.total - progress.index + 1 }})
             </button>
         </form>
 
+        <form method="post" onsubmit="return confirm('Start over from record 1?');">
+            <input type="hidden" name="action" value="reset">
+            <button type="submit" class="btn btn-danger">Start Over</button>
+        </form>
+
     {% endif %}
 
-    <!-- RESET -->
-    <form method="post" onsubmit="return confirm('Start over from record 1?');">
-        <input type="hidden" name="action" value="reset">
-        <button type="submit" class="reset">Start Over from Record 1</button>
-    </form>
-
-    <!-- FOOTER -->
-    <div class="footer">
-        <p><a href="/erate">Go to Dashboard</a></p>
-    </div>
+    <p style="text-align: center; margin-top: 30px;">
+        <a href="/erate/">Back to Dashboard</a>
+    </p>
 </div>
 </body>
 </html>
