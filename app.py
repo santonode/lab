@@ -2,7 +2,14 @@
 from flask import Flask
 import os
 import re
-from psycopg import connect  # ← psycopg v3
+from psycopg import connect
+
+# === PATCH Flask-SQLAlchemy to avoid psycopg2 import ===
+import sqlalchemy.dialects.postgresql.psycopg2 as psycopg2_dialect
+def _fake_import_dbapi():
+    from psycopg import Connection
+    return Connection
+psycopg2_dialect.import_dbapi = _fake_import_dbapi
 
 # === IMPORT BLUEPRINTS ===
 # from wurdle import wurdle_bp  # ← DISABLED
@@ -24,8 +31,7 @@ if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'creator': lambda: connect(DATABASE_URL, sslmode='require'),
-    'dialect': 'postgresql.psycopg'  # ← FORCE DIALECT
+    'creator': lambda: connect(DATABASE_URL, sslmode='require')
 }
 
 # === INIT EXTENSIONS ===
