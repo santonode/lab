@@ -4,12 +4,12 @@ import csv
 import os
 from extensions import db
 from models import Erate
+from urllib.parse import quote_plus
 from datetime import datetime
 
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate')
 
-# === CONFIG ===
-CSV_FILE = "470schema.csv"  # MUST BE IN src/
+CSV_FILE = "470schema.csv"  # IN src/
 
 # === HELPERS ===
 def safe_float(value, default=0.0):
@@ -29,7 +29,6 @@ def safe_date(value):
         return None
     value = str(value).strip()
 
-    # ALL USAC DATE FORMATS
     formats = [
         "%m/%d/%Y %I:%M:%S %p",   # 1/10/2019 10:43:00 AM
         "%m/%d/%Y %H:%M:%S",      # 1/10/2019 14:43:00
@@ -55,35 +54,28 @@ def import_interactive():
     if not os.path.exists(CSV_FILE):
         return f"<h2>CSV not found</h2><p>Upload <code>{CSV_FILE}</code> to <code>src/</code> and redeploy.</p>"
 
-    # === SESSION INIT ===
     if 'import_progress' not in session:
         session['import_progress'] = {'index': 1, 'success': 0, 'error': 0, 'total': 0}
     progress = session['import_progress']
 
-    # === COUNT TOTAL ROWS ===
     if progress['total'] == 0:
         with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
             progress['total'] = sum(1 for _ in f) - 1
         session['import_progress'] = progress
 
-    # === POST: ACTIONS ===
     if request.method == 'POST':
         action = request.form.get('action', '').lower()
 
-        # RESET
         if action == 'reset':
             session.clear()
             session['import_progress'] = {'index': 1, 'success': 0, 'error': 0, 'total': progress['total']}
             return redirect('/erate/import-interactive')
 
-        # IMPORT
         if action == 'import' and request.form.get('confirm') == 'ok':
             try:
                 with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
                     reader = csv.DictReader(f)
                     reader.fieldnames = [name.strip().lstrip('\ufeff') for name in reader.fieldnames]
-
-                    # Skip to current record
                     for _ in range(progress['index'] - 1):
                         next(reader)
                     row = next(reader)
@@ -192,7 +184,7 @@ def import_interactive():
                 current_app.logger.error(f"Import error: {e}")
                 return render_template('erate_import.html', row={}, progress=progress, error=str(e))
 
-    # === GET: SHOW RECORD ===
+    # GET
     if progress['index'] > progress['total']:
         return "<h1>IMPORT COMPLETE!</h1><p>Success: {progress['success']} | Errors: {progress['error']}</p><a href='/erate'>Dashboard</a>"
 
@@ -204,11 +196,44 @@ def import_interactive():
                 next(reader)
             row = next(reader)
     except Exception as e:
-        return f"Error reading CSV: {e}"
+        return f"Error: {e}"
 
     return render_template('erate_import.html', row=row, progress=progress, success=False, error=None)
 
-# === DASHBOARD ===
+# === DASHBOARD (FROM POSTGRES) ===
 @erate_bp.route('/')
 def dashboard():
-    return "<h1>E-Rate Dashboard</h1><p>Import in progress.</p><a href='/erate/import-interactive'>Resume Import</a>"
+    state = request.args.get('state', '').strip().upper()
+    min_date = request.args.get('min_date', '')
+    offset = max(int(request.args.get('offset', 0)), 0)
+    limit = 10
+
+    query = Erate.query
+    if state:
+        query = query.filter(Erate.state == state)
+    if min_date:
+        query = query.filter(Erate.last_modified_datetime >= min_date)
+
+    total_filtered = query.count()
+    data = query.order_by(Erate.app_number).offset(offset).limit(limit + 1).all()
+    has_more = len(data) > limit
+    table_data = data[:limit]
+
+    return render_template(
+        'erate.html',
+        table_data=table_data,
+        filters={'state': state, 'min_date': min_date},
+        total=offset + len(table_data),
+        total_filtered=total_filtered,
+        has_more=has_more,
+        next_offset=offset + limit
+    )
+
+# === FILTERED CSV DOWNLOAD ===
+@erate_bp.route('/download-csv')
+def download_filtered():
+    state = request.args.get('state', '').upper()
+    min_date = request.args.get('min_date', '')
+    where = f"`Billed Entity State` = '{state}' AND `Last Modified Date/Time` >= '{min_date}T00:00:00.000'"
+    url = f"{ROWS_CSV_URL}?$where={quote_plus(where)}&$order=`ID` ASC"
+    return redirect(url)
