@@ -2,12 +2,7 @@
 from flask import Flask
 import os
 import re
-import sqlalchemy  # ← Import sqlalchemy
-
-# === MONKEY-PATCH: REPLACE psycopg2 DIALECT WITH psycopg v3 ===
-import sqlalchemy.dialects.postgresql.psycopg2 as _
-from sqlalchemy.dialects.postgresql import psycopg
-sqlalchemy.dialects.postgresql.psycopg2 = psycopg  # ← FORCE psycopg v3
+from psycopg import connect  # ← psycopg v3
 
 # === IMPORT BLUEPRINTS ===
 # from wurdle import wurdle_bp  # ← DISABLED
@@ -28,6 +23,10 @@ if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
 
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'creator': lambda: connect(DATABASE_URL, sslmode='require'),
+    'dialect': 'postgresql.psycopg'  # ← FORCE DIALECT
+}
 
 # === INIT EXTENSIONS ===
 db.init_app(app)
