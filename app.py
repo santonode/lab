@@ -9,7 +9,7 @@ from memes import memes_bp, init_db
 from erate import erate_bp
 
 # === IMPORT EXTENSIONS ===
-from extensions import db  # ← IMPORT db
+from extensions import db  # ← Import db
 
 # === CREATE APP ===
 app = Flask(__name__, static_folder='static', template_folder='templates')
@@ -20,7 +20,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # === INIT EXTENSIONS ===
-db.init_app(app)  # ← CRITICAL: BIND db TO app
+db.init_app(app)  # ← BIND db to app
 
 # === REGISTER BLUEPRINTS ===
 app.register_blueprint(wurdle_bp)
