@@ -1,14 +1,10 @@
 # app.py
+# === PATCH FIRST — BEFORE ANYTHING ===
+import patch_psycopg2  # ← MUST BE FIRST
+
 from flask import Flask
 import os
 import re
-
-# === PATCH Flask-SQLAlchemy to avoid psycopg2 import ===
-import sqlalchemy.dialects.postgresql.psycopg2 as psycopg2_dialect
-def _fake_import_dbapi():
-    from psycopg import Connection
-    return Connection
-psycopg2_dialect.import_dbapi = _fake_import_dbapi
 
 # === IMPORT BLUEPRINTS ===
 # from wurdle import wurdle_bp  # ← DISABLED
