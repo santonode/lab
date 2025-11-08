@@ -8,7 +8,7 @@ from datetime import datetime
 
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate')
 
-CSV_FILE = "470schema.csv"
+CSV_FILE = "470schema.csv"  # IN src/
 
 # === HELPERS ===
 def safe_float(value, default=0.0):
@@ -58,13 +58,18 @@ def import_interactive():
         session['import_progress'] = {'index': 1, 'success': 0, 'error': 0, 'total': 0}
     progress = session['import_progress']
 
-    # Count total
+    # === DYNAMIC TOTAL FROM CSV ===
     if progress['total'] == 0:
-        with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
-            progress['total'] = sum(1 for _ in f) - 1
+        try:
+            with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
+                total_rows = sum(1 for _ in f) - 1  # minus header
+                progress['total'] = max(total_rows, 1)
+        except Exception as e:
+            progress['total'] = 1
+            current_app.logger.error(f"Failed to count CSV rows: {e}")
         session['import_progress'] = progress
 
-    # POST
+    # === POST: ACTIONS ===
     if request.method == 'POST':
         action = request.form.get('action', '').lower()
 
