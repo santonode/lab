@@ -1,17 +1,6 @@
-# app.py — TOP OF FILE
-import os
-import ctypes
-from ctypes.util import find_library
-
-# === FIX: undefined symbol: _PyInterpreterState_Get ===
-# This is a known issue with psycopg2-binary on Python 3.13
-# Load libpython3.13.so to resolve missing symbols
-libpython = find_library("python3.13")
-if libpython:
-    ctypes.CDLL(libpython, mode=ctypes.RTLD_GLOBAL)
-# === END FIX ===
-
+# app.py
 from flask import Flask
+import os
 import re
 
 # === IMPORT BLUEPRINTS ===
