@@ -1,5 +1,6 @@
 # app.py
 from flask import Flask
+import os
 from models import Base
 from extensions import engine
 from erate import erate_bp
