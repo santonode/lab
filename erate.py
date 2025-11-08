@@ -124,7 +124,7 @@ def import_interactive():
                         certified_datetime=safe_date(row.get('Certified Date/Time')),
                         certified_by=row.get('Certified By', ''),
                         last_modified_datetime=safe_date(row.get('Last Modified Date/Time')),
-                       67 last_modified_by=row.get('Last Modified By', ''),
+                        last_modified_by=row.get('Last Modified By', ''),  # ← FIXED: comma, not 67
                         ben=row.get('Billed Entity Number', ''),
                         entity_name=row.get('Billed Entity Name', ''),
                         org_status=row.get('Organization Status', ''),
@@ -239,7 +239,7 @@ def import_interactive():
                             certified_datetime=safe_date(row.get('Certified Date/Time')),
                             certified_by=row.get('Certified By', ''),
                             last_modified_datetime=safe_date(row.get('Last Modified Date/Time')),
-                            last_modified_by=row.get('Last Modified By', ''),
+                            last_modified_by=row.get('Last Modified By', ''),  # ← FIXED
                             ben=row.get('Billed Entity Number', ''),
                             entity_name=row.get('Billed Entity Name', ''),
                             org_status=row.get('Organization Status', ''),
