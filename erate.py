@@ -78,11 +78,17 @@ def import_interactive():
         current_app.logger.error(f"Failed to count CSV rows: {e}")
         return f"<h2>CSV Count Error: {e}</h2>"
 
-    # Session
+    # === SESSION WITH FORCE RESET IF INDEX > TOTAL ===
     if 'import_progress' not in session:
         session['import_progress'] = {'index': 1, 'success': 0, 'error': 0, 'total': total}
     else:
+        # Update total
         session['import_progress']['total'] = total
+        # Force reset if index too high
+        if session['import_progress']['index'] > total:
+            current_app.logger.warning(f"Resetting invalid index {session['import_progress']['index']} > total {total}")
+            session.clear()
+            session['import_progress'] = {'index': 1, 'success': 0, 'error': 0, 'total': total}
 
     progress = session['import_progress']
     current_app.logger.info(f"Progress: {progress}")
@@ -316,7 +322,7 @@ def import_interactive():
                             form_version=row.get('Form Version', '')
                         )
                         db.session.add(erate)
-                        imported += 1  # ← CORRECT INDENTATION
+                        imported += 1
 
                         if imported % 100 == 0:
                             db.session.commit()
@@ -356,6 +362,10 @@ def import_interactive():
 
             row = next(reader)
             current_app.logger.info(f"Row {progress['index']}: {dict(list(row.items())[:5])}")
+    except StopIteration:
+        progress['index'] = progress['total'] + 1
+        session['import_progress'] = progress
+        return "<h1>IMPORT COMPLETE!</h1><a href='/erate'>Dashboard</a>"
     except Exception as e:
         current_app.logger.error(f"CSV row error at index {progress['index']}: {e}")
         return f"<h2>Row Error at {progress['index']}: {e}</h2><p><a href='/erate'>Dashboard</a></p>"
