@@ -8,7 +8,8 @@ from datetime import datetime
 
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate')
 
-CSV_FILE = "470schema.csv"  # MUST BE IN src/
+# === FULL PATH TO CSV IN src/ ===
+CSV_FILE = os.path.join(os.path.dirname(__file__), "470schema.csv")
 
 # === HELPERS ===
 def safe_float(value, default=0.0):
@@ -50,12 +51,11 @@ def safe_date(value):
 # === INTERACTIVE IMPORT ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
-    # === FRIENDLY ERROR IF CSV MISSING ===
     if not os.path.exists(CSV_FILE):
         return f"""
         <div style="text-align:center; margin:60px auto; max-width:600px; font-family:Arial, sans-serif; color:#555;">
             <h2 style="color:#dc3545;">CSV File Not Found</h2>
-            <p>Please upload <code style="background:#f0f0f0; padding:2px 6px; border-radius:4px;">{CSV_FILE}</code> to the <code style="background:#f0f0f0; padding:2px 6px; border-radius:4px;">src/</code> directory and redeploy.</p>
+            <p>Please ensure <code style="background:#f0f0f0; padding:2px 6px; border-radius:4px;">470schema.csv</code> is in the <code style="background:#f0f0f0; padding:2px 6px; border-radius:4px;">src/</code> directory.</p>
             <p><a href="/erate" style="color:#007bff; text-decoration:none; font-weight:600;">← Go to Dashboard</a></p>
         </div>
         """
@@ -69,7 +69,7 @@ def import_interactive():
         total = 1
         current_app.logger.error(f"Failed to count CSV rows: {e}")
 
-    # Session init
+    # Session
     if 'import_progress' not in session:
         session['import_progress'] = {'index': 1, 'success': 0, 'error': 0, 'total': total}
     else:
@@ -124,7 +124,7 @@ def import_interactive():
                         certified_datetime=safe_date(row.get('Certified Date/Time')),
                         certified_by=row.get('Certified By', ''),
                         last_modified_datetime=safe_date(row.get('Last Modified Date/Time')),
-                        last_modified_by=row.get('Last Modified By', ''),
+                       67 last_modified_by=row.get('Last Modified By', ''),
                         ben=row.get('Billed Entity Number', ''),
                         entity_name=row.get('Billed Entity Name', ''),
                         org_status=row.get('Organization Status', ''),
