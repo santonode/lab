@@ -1,5 +1,6 @@
 # app.py
 from flask import Flask
+import os  # ← ADD THIS LINE
 from db import init_db
 from erate import erate_bp
 from memes import memes_bp
