@@ -2,121 +2,70 @@
 <html>
 <head>
     <title>E-Rate Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background: #f8f9fa; color: #333; }
-        .container { max-width: 1400px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
-        h1 { text-align: center; color: #1a5d57; margin-bottom: 10px; font-weight: 600; }
-        .filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 25px 0; padding: 15px; background: #f0f7fb; border-radius: 8px; border: 1px solid #d0e8f2; }
-        .filters label { font-weight: 600; color: #1a5d57; }
-        .filters input, .filters button { padding: 10px 14px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
-        .filters button { background: #26A69A; color: white; border: none; cursor: pointer; font-weight: 600; }
-        .filters button:hover { background: #1e7d71; }
-        .action-btn { display: inline-block; padding: 10px 20px; background: #3498db; color: white; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 5px; }
-        .action-btn:hover { background: #2980b9; }
-        .action-btn.import { background: #27ae60; }
-        .action-btn.import:hover { background: #219653; }
-        .summary { font-size: 18px; font-weight: 600; text-align: center; margin: 20px 0; color: #1a5d57; }
-        table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 40px; background: #f4f7f9; color: #333; }
+        .container { max-width: 1200px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #1a5d57; margin-bottom: 10px; }
+        .filters { display: flex; gap: 10px; margin: 20px 0; flex-wrap: wrap; align-items: center; }
+        .filters label { font-weight: 600; }
+        .filters input { padding: 8px; border: 1px solid #ccc; border-radius: 6px; width: 80px; }
+        .btn { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; text-decoration: none; display: inline-block; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-success { background: #27ae60; color: white; }
+        .btn:hover { opacity: 0.9; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-        th { background: #1a5d57; color: white; font-weight: 600; position: sticky; top: 0; z-index: 10; }
-        tr:nth-child(even) { background: #f9f9f9; }
-        tr:hover { background: #f0f7fb; transition: 0.2s; }
-        .load-more { text-align: center; margin: 30px 0; }
-        .footer { text-align: center; margin-top: 50px; color: #777; font-size: 14px; }
-        .footer a { color: #26A69A; text-decoration: none; }
-        .footer a:hover { text-decoration: underline; }
+        th { background-color: #1a5d57; color: white; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .footer { text-align: center; margin-top: 30px; color: #777; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>E-Rate Dashboard</h1>
+<div class="container">
+    <h1>E-Rate Dashboard</h1>
 
-        <!-- FILTERS -->
-        <div class="filters">
-            <form method="get" style="display: contents;">
-                <div>
-                    <label for="state">State:</label>
-                    <input id="state" name="state" value="{{ filters.state }}" placeholder="KS" maxlength="2">
-                </div>
-                <div>
-                    <label for="min_date">Modified After:</label>
-                    <input id="min_date" name="min_date" type="date" value="{{ filters.min_date }}">
-                </div>
-                <button type="submit">Filter</button>
-                <a href="{{ url_for('erate.dashboard') }}" class="action-btn" style="padding: 10px 16px; font-size: 14px;">Reset</a>
-            </form>
-        </div>
-
-        <!-- SUMMARY -->
-        <div class="summary">
-            Showing <strong>{{ total }}</strong> of <strong>{{ total_filtered }}</strong> records
-            {% if filters.state %}for <strong>{{ filters.state }}</strong>{% endif %}
-            {% if filters.min_date %}modified on or after <strong>{{ filters.min_date }}</strong>{% endif %}
-        </div>
-
-        <!-- ACTION BUTTONS -->
-        <div style="text-align: center; margin: 20px 0;">
-            <a href="/erate/download-csv?state={{ filters.state }}&min_date={{ filters.min_date }}" class="action-btn" target="_blank">Download Filtered CSV</a>
-            <a href="/erate/import-interactive" class="action-btn import">Resume Import</a>
-        </div>
-
-        <!-- DATA TABLE -->
-        {% if table_data %}
-            <table>
-                <thead>
-                    <tr>
-                        <th>Application #</th>
-                        <th>State</th>
-                        <th>Entity Name</th>
-                        <th>Funding Year</th>
-                        <th>FCC Status</th>
-                        <th>Modified</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in table_data %}
-                    <tr>
-                        <td>{{ row.app_number }}</td>
-                        <td>{{ row.state }}</td>
-                        <td>{{ row.entity_name }}</td>
-                        <td>{{ row.funding_year }}</td>
-                        <td>{{ row.fcc_status }}</td>
-                        <td>
-                            {% if row.last_modified_datetime %}
-                                {{ row.last_modified_datetime.strftime('%Y-%m-%d %H:%M') }}
-                            {% else %}
-                                —
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-
-            <!-- LOAD MORE -->
-            {% if has_more %}
-                <div class="load-more">
-                    <a href="?state={{ filters.state }}&min_date={{ filters.min_date }}&offset={{ next_offset }}"
-                       class="action-btn" style="font-size: 16px; padding: 12px 24px;">
-                       Load More ({{ next_offset }}+)
-                    </a>
-                </div>
-            {% endif %}
-        {% else %}
-            <p style="text-align: center; color: #777; font-style: italic; padding: 40px;">
-                No records found.
-            </p>
-        {% endif %}
-
-        <!-- FOOTER -->
-        <div class="footer">
-            <p>
-                E-Rate Data Portal | 
-                <a href="/erate/import-interactive">Import</a> | 
-                <a href="/erate/search">Search</a> | 
-                <a href="/erate/export">Export All</a>
-            </p>
-        </div>
+    <div class="filters">
+        <form method="get" style="display: inline;">
+            <label>State: <input name="state" value="{{ filters.state }}" maxlength="2" placeholder="KS"></label>
+            <button type="submit" class="btn btn-primary">Filter</button>
+            <a href="/erate/" class="btn">Reset</a>
+        </form>
+        <a href="/erate/import-interactive" class="btn btn-success">Resume Import</a>
     </div>
+
+    <p><strong>Showing {{ total_filtered }} of {{ total_count }} records</strong></p>
+
+    <table>
+        <tr>
+            <th>Application #</th>
+            <th>Entity Name</th>
+            <th>State</th>
+            <th>Funding Year</th>
+            <th>FCC Status</th>
+            <th>Modified</th>
+        </tr>
+        {% for row in table_data %}
+        <tr>
+            <td>{{ row[0] }}</td>
+            <td>{{ row[1] }}</td>
+            <td>{{ row[2] }}</td>
+            <td>{{ row[3] }}</td>
+            <td>{{ row[4] }}</td>
+            <td>{{ row[5] | strftime }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    {% if has_more %}
+    <p style="text-align: center;">
+        <a href="?state={{ filters.state }}&offset={{ total_filtered }}" class="btn btn-primary">Load More (+)</a>
+    </p>
+    {% endif %}
+
+    <div class="footer">
+        <p><a href="/memes">Memes</a> | <a href="/erate/import-interactive">Import</a></p>
+    </div>
+</div>
 </body>
 </html>
