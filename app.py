@@ -2,7 +2,7 @@
 from flask import Flask
 import os
 import re
-from psycopg import connect
+from psycopg import connect  # ← Import psycopg v3
 
 # === IMPORT BLUEPRINTS ===
 # from wurdle import wurdle_bp  # ← DISABLED
@@ -24,8 +24,7 @@ if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'creator': lambda: connect(DATABASE_URL),
-    'connect_args': {'sslmode': 'require'}
+    'creator': lambda: connect(DATABASE_URL, sslmode='require')
 }
 
 # === INIT EXTENSIONS ===
