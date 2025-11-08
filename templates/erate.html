@@ -19,6 +19,7 @@
         th { background-color: #1a5d57; color: white; }
         tr:nth-child(even) { background-color: #f9f9f9; }
         .footer { text-align: center; margin-top: 30px; color: #777; }
+        .pagination { text-align: center; margin: 20px 0; }
     </style>
 </head>
 <body>
@@ -58,9 +59,11 @@
     </table>
 
     {% if has_more %}
-    <p style="text-align: center;">
-        <a href="?state={{ filters.state }}&offset={{ total_filtered }}" class="btn btn-primary">Load More (+)</a>
-    </p>
+    <div class="pagination">
+        <a href="?state={{ filters.state }}&offset={{ next_offset }}" class="btn btn-primary">
+            Load More (+)
+        </a>
+    </div>
     {% endif %}
 
     <div class="footer">
