@@ -10,7 +10,6 @@ CSV_FILE = os.path.join(os.path.dirname(__file__), "470schema.csv")
 
 # === TIME PARSING ===
 def parse_datetime(value):
-    """Parse various datetime formats from CSV"""
     if not value or not str(value).strip():
         return None
     value = str(value).strip()
@@ -26,48 +25,54 @@ def parse_datetime(value):
             continue
     return None
 
-# === DASHBOARD ===
+# === DASHBOARD WITH PAGINATION & FILTERS ===
 @erate_bp.route('/')
 def dashboard():
     state_filter = request.args.get('state', '').strip().upper()
+    offset = max(int(request.args.get('offset', 0)), 0)
+    limit = 10
     filters = {'state': state_filter}
 
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                # Count total
-                cur.execute('SELECT COUNT(*) FROM erate')
+                # Total count
+                count_sql = 'SELECT COUNT(*) FROM erate'
+                count_params = []
+                if state_filter:
+                    count_sql += ' WHERE state = %s'
+                    count_params.append(state_filter)
+                cur.execute(count_sql, count_params)
                 total_count = cur.fetchone()[0]
 
-                # Fetch data
+                # Fetch page
                 sql = '''
                     SELECT 
-                        app_number, 
-                        entity_name, 
-                        state, 
-                        funding_year, 
-                        fcc_status, 
-                        last_modified_datetime
+                        app_number, entity_name, state, funding_year, 
+                        fcc_status, last_modified_datetime
                     FROM erate
                 '''
                 params = []
                 if state_filter:
                     sql += ' WHERE state = %s'
                     params.append(state_filter)
-                sql += ' ORDER BY app_number LIMIT 11'
+                sql += ' ORDER BY app_number LIMIT %s OFFSET %s'
+                params.extend([limit + 1, offset])
                 cur.execute(sql, params)
                 rows = cur.fetchall()
 
-        has_more = len(rows) > 10
-        table_data = rows[:10]
+        has_more = len(rows) > limit
+        table_data = rows[:limit]
+        next_offset = offset + limit
 
         return render_template(
             'erate.html',
             table_data=table_data,
             filters=filters,
-            total_filtered=len(rows),
+            total_count=total_count,
+            total_filtered=offset + len(table_data),
             has_more=has_more,
-            total_count=total_count
+            next_offset=next_offset
         )
     except Exception as e:
         print(f"Dashboard error: {e}")
