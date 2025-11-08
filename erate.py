@@ -53,21 +53,22 @@ def import_interactive():
     if not os.path.exists(CSV_FILE):
         return f"<h2>CSV not found</h2><p>Upload <code>{CSV_FILE}</code> to <code>src/</code> and redeploy.</p>"
 
+    # === DYNAMIC TOTAL FROM CSV (EVERY TIME) ===
+    try:
+        with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
+            total_rows = sum(1 for _ in f) - 1
+            total = max(total_rows, 1)
+    except Exception as e:
+        total = 1
+        current_app.logger.error(f"Failed to count CSV rows: {e}")
+
     # Session init
     if 'import_progress' not in session:
-        session['import_progress'] = {'index': 1, 'success': 0, 'error': 0, 'total': 0}
-    progress = session['import_progress']
+        session['import_progress'] = {'index': 1, 'success': 0, 'error': 0, 'total': total}
+    else:
+        session['import_progress']['total'] = total  # UPDATE TOTAL
 
-    # === DYNAMIC TOTAL FROM CSV ===
-    if progress['total'] == 0:
-        try:
-            with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
-                total_rows = sum(1 for _ in f) - 1  # minus header
-                progress['total'] = max(total_rows, 1)
-        except Exception as e:
-            progress['total'] = 1
-            current_app.logger.error(f"Failed to count CSV rows: {e}")
-        session['import_progress'] = progress
+    progress = session['import_progress']
 
     # === POST: ACTIONS ===
     if request.method == 'POST':
@@ -76,7 +77,7 @@ def import_interactive():
         # RESET
         if action == 'reset':
             session.clear()
-            session['import_progress'] = {'index': 1, 'success': 0, 'error': 0, 'total': progress['total']}
+            session['import_progress'] = {'index': 1, 'success': 0, 'error': 0, 'total': total}
             return redirect('/erate/import-interactive')
 
         # IMPORT ONE
