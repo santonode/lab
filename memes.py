@@ -2,7 +2,7 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, session, jsonify
 import os
 from werkzeug.utils import secure_filename
-from psycopg import connect  # ← psycopg v3 (from psycopg[binary])
+from psycopg import connect  # ← psycopg v3
 from datetime import datetime
 from extensions import db
 
@@ -88,7 +88,7 @@ def memes():
 
         return redirect(url_for('memes.memes'))
 
-    # GET: Show all memes
+    # GET
     try:
         with connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
@@ -122,15 +122,12 @@ def vote():
     try:
         with connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
-                # Check if already voted
                 cur.execute('SELECT 1 FROM votes WHERE meme_id = %s AND voter_ip = %s', (meme_id, ip_address))
                 if cur.fetchone():
                     return jsonify({'success': False, 'message': 'You have already voted on this meme.'})
 
-                # Record vote
                 cur.execute('INSERT INTO votes (meme_id, voter_ip, vote_type) VALUES (%s, %s, %s)', (meme_id, ip_address, vote_type))
 
-                # Update likes/dislikes
                 if vote_type == 'like':
                     cur.execute('UPDATE memes SET likes = likes + 1 WHERE id = %s', (meme_id,))
                 else:
