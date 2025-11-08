@@ -2,51 +2,15 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, session, jsonify
 import os
 from werkzeug.utils import secure_filename
-from psycopg import connect  # ← psycopg v3
+from db import get_conn
 from datetime import datetime
-from extensions import db
 
 memes_bp = Blueprint('memes', __name__, url_prefix='/memes')
-
-DATABASE_URL = os.environ.get('DATABASE_URL')
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL environment variable must be set")
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-def init_db():
-    try:
-        with connect(DATABASE_URL) as conn:
-            with conn.cursor() as cur:
-                cur.execute('''
-                    CREATE TABLE IF NOT EXISTS memes (
-                        id SERIAL PRIMARY KEY,
-                        filename TEXT NOT NULL,
-                        title TEXT NOT NULL,
-                        upload_time TIMESTAMP NOT NULL,
-                        uploader_ip TEXT NOT NULL,
-                        uploader_username TEXT NOT NULL,
-                        likes INTEGER DEFAULT 0,
-                        dislikes INTEGER DEFAULT 0
-                    )
-                ''')
-                cur.execute('''
-                    CREATE TABLE IF NOT EXISTS votes (
-                        id SERIAL PRIMARY KEY,
-                        meme_id INTEGER NOT NULL,
-                        voter_ip TEXT NOT NULL,
-                        vote_type TEXT NOT NULL,
-                        FOREIGN KEY (meme_id) REFERENCES memes(id) ON DELETE CASCADE
-                    )
-                ''')
-                conn.commit()
-        print("Memes database initialized.")
-    except Exception as e:
-        print(f"Memes DB init error: {str(e)}")
-        raise
 
 @memes_bp.route('/', methods=['GET', 'POST'])
 def memes():
@@ -74,7 +38,7 @@ def memes():
         file.save(file_path)
 
         try:
-            with connect(DATABASE_URL) as conn:
+            with get_conn() as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         'INSERT INTO memes (filename, title, upload_time, uploader_ip, uploader_username) VALUES (%s, %s, %s, %s, %s)',
@@ -90,7 +54,7 @@ def memes():
 
     # GET
     try:
-        with connect(DATABASE_URL) as conn:
+        with get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute('SELECT id, filename, title, upload_time, uploader_username, likes, dislikes FROM memes ORDER BY upload_time DESC')
                 memes = [
@@ -120,7 +84,7 @@ def vote():
         return jsonify({'success': False, 'message': 'Invalid request.'})
 
     try:
-        with connect(DATABASE_URL) as conn:
+        with get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute('SELECT 1 FROM votes WHERE meme_id = %s AND voter_ip = %s', (meme_id, ip_address))
                 if cur.fetchone():
