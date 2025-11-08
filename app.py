@@ -9,6 +9,7 @@ from memes import memes_bp, init_db
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = os.urandom(24)
 
+# Register blueprints
 app.register_blueprint(erate_bp)
 app.register_blueprint(memes_bp)
 
