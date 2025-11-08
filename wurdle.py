@@ -1,4 +1,4 @@
-# wurdle.py
+# wurdle.py — FULL FILE WITH psycopg v3
 from flask import Blueprint, render_template, request, jsonify, session, redirect, url_for, current_app
 import random
 from datetime import date, datetime
@@ -8,7 +8,7 @@ import base64
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import hashlib
-import psycopg2  # ← FIXED: Use psycopg2 (from psycopg2-binary)
+from psycopg import connect  # ← psycopg v3
 import re
 
 wurdle_bp = Blueprint('wurdle', __name__)
@@ -28,14 +28,14 @@ except FileNotFoundError as e:
     WORDS_ALL = ['APPLE', 'BREAD', 'CLOUD', 'DREAM']
     WORDS_PETS = ['DOG', 'CAT', 'BIRD', 'FISH']
 
-# Get or set daily word based on selected word list
+# Get or set daily word
 def get_daily_word():
     today = str(date.today())
     word_list = session.get('word_list', 'words.txt')
     available_words = WORDS_ALL if word_list == 'words.txt' else WORDS_PETS
     print(f"Attempting to get daily word for {today} with list {word_list}")
     try:
-        with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
+        with connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
                 cur.execute('SELECT word FROM daily_word WHERE date = %s AND word_list = %s', (today, word_list))
                 result = cur.fetchone()
@@ -49,14 +49,11 @@ def get_daily_word():
                     conn.commit()
                     print(f"Inserted new word: {word}")
                     return word
-    except psycopg2.Error as e:  # ← psycopg2
+    except Exception as e:
         print(f"Database error in get_daily_word: {str(e)}")
         return random.choice(available_words)
-    except Exception as e:
-        print(f"Unexpected error in get_daily_word: {str(e)}")
-        return random.choice(available_words)
 
-# Generate username based on IP and session data
+# Generate username
 def generate_username(ip_address):
     seed = f"{ip_address}{datetime.now().microsecond}{random.randint(1000, 9999)}"
     hash_object = hashlib.md5(seed.encode())
@@ -64,14 +61,14 @@ def generate_username(ip_address):
     username = ''.join(c for c in hash_hex if c.isalnum()).upper()[:12]
     return username
 
-# Hash password for storage
+# Hash password
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-# Initialize database on app startup
+# Initialize database
 def init_db():
     try:
-        with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
+        with connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
                 cur.execute('DROP TABLE IF EXISTS daily_word')
                 cur.execute('''
@@ -115,11 +112,8 @@ def init_db():
                 ''')
                 conn.commit()
         print(f"Database initialized successfully with URL: {DATABASE_URL}")
-    except psycopg2.Error as e:  # ← psycopg2
-        print(f"Database initialization error: {str(e)}")
-        raise
     except Exception as e:
-        print(f"Unexpected error during initialization: {str(e)}")
+        print(f"Database initialization error: {str(e)}")
         raise
 
 init_db()
@@ -151,7 +145,7 @@ def index():
             print(f"Debug - New username generated: {username}")
         else:
             try:
-                with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
+                with connect(DATABASE_URL) as conn:
                     with conn.cursor() as cur:
                         cur.execute('SELECT user_type, points, word_list FROM users WHERE username = %s', (username,))
                         result = cur.fetchone()
@@ -160,7 +154,7 @@ def index():
                             session['user_type'] = user_type
                             session['word_list'] = db_word_list
                             print(f"Debug - Fetched user_type: {user_type}, points: {points}, word_list: {db_word_list} for {username}")
-            except psycopg2.Error as e:  # ← psycopg2
+            except Exception as e:
                 print(f"Database error fetching user_type: {str(e)}")
     share_text = session.get('share_text') if session.get('game_over') else None
     print(f"Debug - Session guesses: {session.get('guesses')}, game_over: {session.get('game_over')}")
@@ -174,7 +168,7 @@ def wordlist():
     username = session.get('username')
     if username:
         try:
-            with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
+            with connect(DATABASE_URL) as conn:
                 with conn.cursor() as cur:
                     cur.execute('SELECT id, user_type FROM users WHERE username = %s', (username,))
                     result = cur.fetchone()
@@ -184,7 +178,7 @@ def wordlist():
                             cur.execute('UPDATE users SET points = GREATEST(points - 1, 0) WHERE id = %s', (user_id,))
                             conn.commit()
                             print(f"Debug - Deducted 1 point for user {username}")
-        except psycopg2.Error as e:  # ← psycopg2
+        except Exception as e:
             print(f"Database error deducting point for wordlist: {str(e)}")
     word_list = session.get('word_list', 'words.txt')
     words = WORDS_ALL if word_list == 'words.txt' else WORDS_PETS
@@ -193,7 +187,7 @@ def wordlist():
 @wurdle_bp.route('/stats')
 def stats():
     try:
-        with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
+        with connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
                 cur.execute('''
                     SELECT date(timestamp) as day,
@@ -232,11 +226,8 @@ def stats():
         table_data = data
        
         return render_template('stats.html', chart=chart, table_data=table_data)
-    except psycopg2.Error as e:  # ← psycopg2
-        print(f"Database error in stats: {str(e)}")
-        return render_template('stats.html', chart=None, table_data=None)
     except Exception as e:
-        print(f"Unexpected error in stats: {str(e)}")
+        print(f"Error in stats: {str(e)}")
         return render_template('stats.html', chart=None, table_data=None)
 
 @wurdle_bp.route('/profile', methods=['GET', 'POST'])
@@ -251,7 +242,7 @@ def profile():
         session['username'] = username
     else:
         try:
-            with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
+            with connect(DATABASE_URL) as conn:
                 with conn.cursor() as cur:
                     cur.execute('SELECT user_type, points, word_list FROM users WHERE username = %s', (username,))
                     result = cur.fetchone()
@@ -259,7 +250,7 @@ def profile():
                         user_type, points, db_word_list = result
                         session['user_type'] = user_type
                         session['word_list'] = db_word_list
-        except psycopg2.Error as e:  # ← psycopg2
+        except Exception as e:
             print(f"Database error fetching user_type: {str(e)}")
     wins = 0
     losses = 0
@@ -267,7 +258,7 @@ def profile():
     games_played = 0
     avg_guesses = 0.0
     try:
-        with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
+        with connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
                 cur.execute('SELECT id FROM users WHERE username = %s', (username,))
                 user_id = cur.fetchone()
@@ -281,7 +272,7 @@ def profile():
                     else:
                         cur.execute('INSERT INTO user_stats (user_id) VALUES (%s)', (user_id,))
                         conn.commit()
-    except psycopg2.Error as e:  # ← psycopg2
+    except Exception as e:
         print(f"Database error fetching stats: {str(e)}")
     message = None
     if request.method == 'POST':
@@ -300,10 +291,9 @@ def profile():
             password = request.form.get('login_password', '')
             if username and password:
                 try:
-                    with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
+                    with connect(DATABASE_URL) as conn:
                         with conn.cursor() as cur:
                             hashed_password = hash_password(password)
-                            print(f"Attempting login for {username} with hashed password: {hashed_password}")
                             cur.execute('SELECT user_type, points, password, word_list FROM users WHERE username = %s', (username,))
                             result = cur.fetchone()
                             if result:
@@ -319,7 +309,7 @@ def profile():
                                     message = "Invalid username or password."
                             else:
                                 message = "Invalid username or password."
-                except psycopg2.Error as e:  # ← psycopg2
+                except Exception as e:
                     print(f"Database error during login: {str(e)}")
                     message = "Error during login."
         elif 'register' in request.form:
@@ -327,7 +317,7 @@ def profile():
             new_password = request.form.get('register_password', '')
             if new_username and new_password and all(c.isalnum() for c in new_username) and 1 <= len(new_username) <= 12:
                 try:
-                    with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
+                    with connect(DATABASE_URL) as conn:
                         with conn.cursor() as cur:
                             cur.execute('SELECT 1 FROM users WHERE username = %s', (new_username,))
                             if cur.fetchone():
@@ -344,14 +334,14 @@ def profile():
                                 user_type = 'Member'
                                 points = 0
                                 message = "Registration successful! You are now a Member."
-                except psycopg2.Error as e:  # ← psycopg2
+                except Exception as e:
                     print(f"Database error during registration: {str(e)}")
                     message = "Error during registration."
         elif 'change_word_list' in request.form:
             new_word_list = request.form.get('word_list')
             if new_word_list in ['words.txt', 'words-pets.txt']:
                 try:
-                    with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
+                    with connect(DATABASE_URL) as conn:
                         with conn.cursor() as cur:
                             cur.execute('UPDATE users SET word_list = %s WHERE username = %s', (new_word_list, username))
                             conn.commit()
@@ -360,7 +350,7 @@ def profile():
                             session['game_over'] = False
                             session['last_played_date'] = None
                             message = f"Word list changed to {new_word_list.split('-')[0] if '-' in new_word_list else new_word_list}. Game reset!"
-                except psycopg2.Error as e:  # ← psycopg2
+                except Exception as e:
                     print(f"Database error changing word list: {str(e)}")
                     message = "Error changing word list."
     return render_template('profile.html', username=session['username'], user_type=user_type, points=points, message=message, wins=wins, losses=losses, avg_guesses=avg_guesses, word_list=word_list)
@@ -378,7 +368,7 @@ def guess():
         username = generate_username(ip_address)
         session['username'] = username
     try:
-        with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
+        with connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
                 cur.execute('SELECT 1 FROM users WHERE username = %s', (username,))
                 if not cur.fetchone():
@@ -391,7 +381,7 @@ def guess():
                     user_type, db_word_list = cur.fetchone()
                     session['user_type'] = user_type
                     session['word_list'] = db_word_list
-    except psycopg2.Error as e:  # ← psycopg2
+    except Exception as e:
         print(f"Database error creating or fetching guest user: {str(e)}")
         return jsonify({'error': 'Database error. Please try again later.'})
     if session.get('last_played_date') == today and session.get('game_over', False):
@@ -462,7 +452,7 @@ def guess():
         print(f"Debug - Lose condition met: guesses={len(session['guesses'])}, target={target}, username={username}")
     if game_over:
         try:
-            with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
+            with connect(DATABASE_URL) as conn:
                 with conn.cursor() as cur:
                     cur.execute('SELECT id, user_type FROM users WHERE username = %s', (username,))
                     db_result = cur.fetchone()
@@ -493,12 +483,12 @@ def guess():
                         print(f"Debug - Game logged: user_id={user_id}, win={win}, guesses={len(session['guesses'])}, points_change={points_change}, username={username}")
                     else:
                         print(f"Debug - Skipping points update for guest user: {username}")
-        except psycopg2.Error as e:  # ← psycopg2
+        except Exception as e:
             print(f"Database logging error: {str(e)}")
     share_text = f"Wurdle {date.today().strftime('%Y-%m-%d')} {len(session['guesses'])}/6\n"
     for g in session['guesses']:
         share_text += ''.join({
-            'green': 'green square', 'yellow': 'yellow square', 'gray': 'white square'
+            'green': '🟩', 'yellow': '🟨', 'gray': '⬜'
         }[color] for color in g['result']) + '\n'
     session['share_text'] = share_text
     print(f"Debug - Final result before jsonify: {result}, game_over: {game_over}, message: {message}, username={username}")
@@ -525,14 +515,11 @@ def favicon():
 @wurdle_bp.route('/leader')
 def leader():
     try:
-        with psycopg2.connect(DATABASE_URL) as conn:  # ← psycopg2
+        with connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
                 cur.execute('SELECT id, username, points FROM users ORDER BY points DESC')
                 leaders = [{'id': row[0], 'username': row[1], 'points': row[2]} for row in cur.fetchall()]
         return render_template('leader.html', leaders=leaders)
-    except psycopg2.Error as e:  # ← psycopg2
-        print(f"Database error in leader: {str(e)}")
-        return render_template('leader.html', leaders=[])
     except Exception as e:
-        print(f"Unexpected error in leader: {str(e)}")
+        print(f"Error in leader: {str(e)}")
         return render_template('leader.html', leaders=[])
