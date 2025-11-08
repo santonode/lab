@@ -10,10 +10,17 @@ from datetime import datetime
 
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate')
 
-API_BASE_URL = "https://opendata.usac.org/api/views/jp7a-89nd"
-ROWS_CSV_URL = f"{API_BASE_URL}/rows.csv"
+# === CORRECT v3 ENDPOINT ===
+API_BASE_URL = "https://opendata.usac.org/api/v3/views/jp7a-89nd"
+ROWS_CSV_URL = f"{API_BASE_URL}/query.csv"
 
 # === HELPERS ===
+def safe_float(value, default=0.0):
+    try:
+        return float(value) if value and str(value).strip() else default
+    except:
+        return default
+
 def safe_date(value):
     try:
         if value and str(value).strip():
@@ -21,12 +28,6 @@ def safe_date(value):
         return None
     except:
         return None
-
-def safe_int(value, default=None):
-    try:
-        return int(value) if value and str(value).strip() else default
-    except:
-        return default
 
 # === INTERACTIVE IMPORT ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
@@ -48,10 +49,11 @@ def import_interactive():
             try:
                 offset = progress['index'] - 1
                 cache_buster = int(datetime.now().timestamp() * 1000)
-                url = f"{ROWS_CSV_URL}?$limit=1&$offset={offset}&accessType=DOWNLOAD&_={cache_buster}"
+                url = f"{ROWS_CSV_URL}?$limit=1&$offset={offset}&_={cache_buster}"
+                current_app.logger.debug(f"Fetching: {url}")
+
                 response = requests.get(url, stream=True, timeout=30)
                 response.raise_for_status()
-                response.raw.decode_content = True
                 stream = io.TextIOWrapper(response.raw, encoding='utf-8')
                 reader = csv.DictReader(stream)
                 row = next(reader)
@@ -166,10 +168,9 @@ def import_interactive():
     try:
         offset = progress['index'] - 1
         cache_buster = int(datetime.now().timestamp() * 1000)
-        url = f"{ROWS_CSV_URL}?$limit=1&$offset={offset}&accessType=DOWNLOAD&_={cache_buster}"
+        url = f"{ROWS_CSV_URL}?$limit=1&$offset={offset}&_={cache_buster}"
         response = requests.get(url, stream=True, timeout=30)
         response.raise_for_status()
-        response.raw.decode_content = True
         stream = io.TextIOWrapper(response.raw, encoding='utf-8')
         reader = csv.DictReader(stream)
         row = next(reader)
