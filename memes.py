@@ -1,9 +1,8 @@
 # memes.py
 from flask import Blueprint, render_template, request, flash, redirect, url_for, session, jsonify
 import os
-import hashlib
 from werkzeug.utils import secure_filename
-from psycopg import connect  # ← psycopg v3 (from psycopg[binary])
+import psycopg2  # ← WORKS with psycopg2-binary
 from datetime import datetime
 from extensions import db
 
@@ -20,7 +19,7 @@ def allowed_file(filename):
 
 def init_db():
     try:
-        with connect(DATABASE_URL) as conn:
+        with psycopg2.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
                 cur.execute('''
                     CREATE TABLE IF NOT EXISTS memes (
@@ -45,7 +44,7 @@ def init_db():
                 ''')
                 conn.commit()
         print("Memes database initialized.")
-    except Exception as e:
+    except psycopg2.Error as e:
         print(f"Memes DB init error: {str(e)}")
         raise
 
@@ -75,7 +74,7 @@ def memes():
         file.save(file_path)
 
         try:
-            with connect(DATABASE_URL) as conn:
+            with psycopg2.connect(DATABASE_URL) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         'INSERT INTO memes (filename, title, upload_time, uploader_ip, uploader_username) VALUES (%s, %s, %s, %s, %s)',
@@ -83,15 +82,15 @@ def memes():
                     )
                     conn.commit()
             flash('Meme uploaded successfully!')
-        except Exception as e:
+        except psycopg2.Error as e:
             print(f"Database error uploading meme: {str(e)}")
             flash('Error uploading meme.')
 
         return redirect(url_for('memes.memes'))
 
-    # GET: Show all memes
+    # GET
     try:
-        with connect(DATABASE_URL) as conn:
+        with psycopg2.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
                 cur.execute('SELECT id, filename, title, upload_time, uploader_username, likes, dislikes FROM memes ORDER BY upload_time DESC')
                 memes = [
@@ -107,7 +106,7 @@ def memes():
                     for row in cur.fetchall()
                 ]
         return render_template('memes.html', memes=memes)
-    except Exception as e:
+    except psycopg2.Error as e:
         print(f"Database error fetching memes: {str(e)}")
         return render_template('memes.html', memes=[])
 
@@ -121,17 +120,14 @@ def vote():
         return jsonify({'success': False, 'message': 'Invalid request.'})
 
     try:
-        with connect(DATABASE_URL) as conn:
+        with psycopg2.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
-                # Check if already voted
                 cur.execute('SELECT 1 FROM votes WHERE meme_id = %s AND voter_ip = %s', (meme_id, ip_address))
                 if cur.fetchone():
                     return jsonify({'success': False, 'message': 'You have already voted on this meme.'})
 
-                # Record vote
                 cur.execute('INSERT INTO votes (meme_id, voter_ip, vote_type) VALUES (%s, %s, %s)', (meme_id, ip_address, vote_type))
 
-                # Update likes/dislikes
                 if vote_type == 'like':
                     cur.execute('UPDATE memes SET likes = likes + 1 WHERE id = %s', (meme_id,))
                 else:
@@ -139,6 +135,6 @@ def vote():
 
                 conn.commit()
         return jsonify({'success': True})
-    except Exception as e:
+    except psycopg2.Error as e:
         print(f"Database error in vote: {str(e)}")
         return jsonify({'success': False, 'message': 'Database error.'})
