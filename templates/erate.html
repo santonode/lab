@@ -3,127 +3,28 @@
 <head>
     <title>E-Rate Dashboard</title>
     <style>
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            margin: 40px; 
-            background: #f8f9fa; 
-            color: #333;
-        }
-        .container { 
-            max-width: 1400px; 
-            margin: auto; 
-            background: white; 
-            padding: 25px; 
-            border-radius: 12px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08); 
-        }
-        h1 { 
-            text-align: center; 
-            color: #1a5d57; 
-            margin-bottom: 10px; 
-            font-weight: 600;
-        }
-        .filters { 
-            display: flex; 
-            gap: 12px; 
-            flex-wrap: wrap; 
-            align-items: center; 
-            margin: 25px 0; 
-            padding: 15px; 
-            background: #f0f7fb; 
-            border-radius: 8px; 
-            border: 1px solid #d0e8f2;
-        }
-        .filters label { 
-            font-weight: 600; 
-            color: #1a5d57; 
-        }
-        .filters input, .filters button { 
-            padding: 10px 14px; 
-            border: 1px solid #ccc; 
-            border-radius: 6px; 
-            font-size: 14px; 
-        }
-        .filters button { 
-            background: #26A69A; 
-            color: white; 
-            border: none; 
-            cursor: pointer; 
-            font-weight: 600; 
-        }
-        .filters button:hover { 
-            background: #1e7d71; 
-        }
-        .action-btn { 
-            display: inline-block; 
-            padding: 10px 20px; 
-            background: #3498db; 
-            color: white; 
-            text-decoration: none; 
-            border-radius: 6px; 
-            font-weight: 600; 
-            margin: 5px 5px 5px 0; 
-        }
-        .action-btn:hover { 
-            background: #2980b9; 
-        }
-        .action-btn.import { 
-            background: #27ae60; 
-        }
-        .action-btn.import:hover { 
-            background: #219653; 
-        }
-        .summary { 
-            font-size: 18px; 
-            font-weight: 600; 
-            text-align: center; 
-            margin: 20px 0; 
-            color: #1a5d57; 
-        }
-        table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin: 20px 0; 
-            font-size: 14px; 
-        }
-        th, td { 
-            border: 1px solid #ddd; 
-            padding: 12px; 
-            text-align: left; 
-        }
-        th { 
-            background: #1a5d57; 
-            color: white; 
-            font-weight: 600; 
-            position: sticky; 
-            top: 0; 
-            z-index: 10; 
-        }
-        tr:nth-child(even) { 
-            background: #f9f9f9; 
-        }
-        tr:hover { 
-            background: #f0f7fb; 
-            transition: 0.2s; 
-        }
-        .load-more { 
-            text-align: center; 
-            margin: 30px 0; 
-        }
-        .footer { 
-            text-align: center; 
-            margin-top: 50px; 
-            color: #777; 
-            font-size: 14px; 
-        }
-        .footer a { 
-            color: #26A69A; 
-            text-decoration: none; 
-        }
-        @media (max-width: 768px) {
-            .filters { flex-direction: column; align-items: stretch; }
-            .filters input, .filters button { width: 100%; }
-        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; background: #f8f9fa; color: #333; }
+        .container { max-width: 1400px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+        h1 { text-align: center; color: #1a5d57; margin-bottom: 10px; font-weight: 600; }
+        .filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 25px 0; padding: 15px; background: #f0f7fb; border-radius: 8px; border: 1px solid #d0e8f2; }
+        .filters label { font-weight: 600; color: #1a5d57; }
+        .filters input, .filters button { padding: 10px 14px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+        .filters button { background: #26A69A; color: white; border: none; cursor: pointer; font-weight: 600; }
+        .filters button:hover { background: #1e7d71; }
+        .action-btn { display: inline-block; padding: 10px 20px; background: #3498db; color: white; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 5px; }
+        .action-btn:hover { background: #2980b9; }
+        .action-btn.import { background: #27ae60; }
+        .action-btn.import:hover { background: #219653; }
+        .summary { font-size: 18px; font-weight: 600; text-align: center; margin: 20px 0; color: #1a5d57; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background: #1a5d57; color: white; font-weight: 600; position: sticky; top: 0; z-index: 10; }
+        tr:nth-child(even) { background: #f9f9f9; }
+        tr:hover { background: #f0f7fb; transition: 0.2s; }
+        .load-more { text-align: center; margin: 30px 0; }
+        .footer { text-align: center; margin-top: 50px; color: #777; font-size: 14px; }
+        .footer a { color: #26A69A; text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -155,9 +56,8 @@
 
         <!-- ACTION BUTTONS -->
         <div style="text-align: center; margin: 20px 0;">
-            <a href="/erate/download-csv?state={{ filters.state }}&min_date={{ filters.min_date }}" 
-               class="action-btn" target="_blank">Download Filtered CSV</a>
-            <a href="/erate/import-interactive" class="action-btn import">Import More Records</a>
+            <a href="/erate/download-csv?state={{ filters.state }}&min_date={{ filters.min_date }}" class="action-btn" target="_blank">Download Filtered CSV</a>
+            <a href="/erate/import-interactive" class="action-btn import">Resume Import</a>
         </div>
 
         <!-- DATA TABLE -->
