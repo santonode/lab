@@ -1,4 +1,7 @@
 # extensions.py
+# === PATCH FIRST ===
+import patch_psycopg2  # ← MUST BE LINE 1
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
 import os
