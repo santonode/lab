@@ -263,7 +263,7 @@ def _import_one_record():
 
     progress['index'] += 1
     session['import_progress'] = progress
-    return render_template('erate_import.html', row=row, progress=progress, success=True)
+    return render_template(' redeemed_import.html', row=row, progress=progress, success=True)
 
 # === BULK IMPORT (69 COLUMNS = 69 VALUES) ===
 def _import_all_records():
