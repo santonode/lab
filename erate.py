@@ -51,7 +51,7 @@ def safe_date(value):
 # === INTERACTIVE IMPORT ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
-    # === DEBUG LOGS ===
+    # === DEBUG: CSV INFO ===
     current_app.logger.info(f"CSV path: {CSV_FILE}")
     current_app.logger.info(f"File exists: {os.path.exists(CSV_FILE)}")
     if os.path.exists(CSV_FILE):
@@ -85,6 +85,7 @@ def import_interactive():
         session['import_progress']['total'] = total
 
     progress = session['import_progress']
+    current_app.logger.info(f"Progress: {progress}")
 
     # === POST: ACTIONS ===
     if request.method == 'POST':
@@ -94,6 +95,7 @@ def import_interactive():
         if action == 'reset':
             session.clear()
             session['import_progress'] = {'index': 1, 'success': 0, 'error': 0, 'total': total}
+            current_app.logger.info("Session reset")
             return redirect('/erate/import-interactive')
 
         # IMPORT ONE
@@ -101,10 +103,15 @@ def import_interactive():
             try:
                 with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
                     reader = csv.DictReader(f)
-                    reader.fieldnames = [name.strip().lstrip('\ufeff') for name in reader.fieldnames]
-                    for _ in range(progress['index'] - 1):
+                    fieldnames = [name.strip().lstrip('\ufeff') for name in reader.fieldnames]
+                    reader.fieldnames = fieldnames
+                    current_app.logger.info(f"CSV headers: {fieldnames}")
+
+                    for i in range(progress['index'] - 1):
                         next(reader)
+
                     row = next(reader)
+                    current_app.logger.info(f"Importing row {progress['index']}: {dict(list(row.items())[:5])}")
 
                     app_number = row.get('Application Number', '').strip()
                     if not app_number:
@@ -309,7 +316,7 @@ def import_interactive():
                             form_version=row.get('Form Version', '')
                         )
                         db.session.add(erate)
-                        imported += 1
+                       imported += 1
 
                         if imported % 100 == 0:
                             db.session.commit()
@@ -340,13 +347,18 @@ def import_interactive():
     try:
         with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
-            reader.fieldnames = [name.strip().lstrip('\ufeff') for name in reader.fieldnames]
-            for _ in range(progress['index'] - 1):
+            fieldnames = [name.strip().lstrip('\ufeff') for name in reader.fieldnames]
+            reader.fieldnames = fieldnames
+            current_app.logger.info(f"CSV headers: {fieldnames}")
+
+            for i in range(progress['index'] - 1):
                 next(reader)
+
             row = next(reader)
+            current_app.logger.info(f"Row {progress['index']}: {dict(list(row.items())[:5])}")
     except Exception as e:
-        current_app.logger.error(f"CSV row error: {e}")
-        return f"<h2>Row Error: {e}</h2>"
+        current_app.logger.error(f"CSV row error at index {progress['index']}: {e}")
+        return f"<h2>Row Error at {progress['index']}: {e}</h2><p><a href='/erate'>Dashboard</a></p>"
 
     return render_template('erate_import.html', row=row, progress=progress, success=False, error=None)
 
