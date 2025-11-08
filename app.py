@@ -9,18 +9,22 @@ from memes import memes_bp, init_db
 from erate import erate_bp
 
 # === IMPORT EXTENSIONS ===
-from extensions import db  # ← Import db
+from extensions import db
 
 # === CREATE APP ===
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))
 
 # === CONFIG ===
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
+DATABASE_URL = os.getenv('DATABASE_URL')
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # === INIT EXTENSIONS ===
-db.init_app(app)  # ← BIND db to app
+db.init_app(app)
 
 # === REGISTER BLUEPRINTS ===
 app.register_blueprint(wurdle_bp)
