@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: wurdle
+    name: lab  # ← Changed from wurdle to lab
     env: python
     buildCommand: >-
       apt-get update &&
@@ -8,14 +8,22 @@ services:
       apt-get clean &&
       rm -rf /var/lib/apt/lists/* &&
       pip install -r requirements.txt
-    startCommand: "gunicorn -w 2 -k uvicorn.workers.UvicornWorker app:app --timeout 60 --max-requests 1000 --max-requests-jitter 50"
+    startCommand: >-
+      LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libpython3.13.so.1.0
+      gunicorn app:app
+      --workers 2
+      --timeout 60
+      --max-requests 1000
+      --max-requests-jitter 50
     envVars:
       - key: PYTHONUNBUFFERED
         value: "1"
       - key: DATABASE_URL
         fromDatabase:
-          name: wurdle-db
+          name: wurdle-db  # ← Keep your DB name
           property: connectionString
+      - key: LD_PRELOAD
+        value: /usr/lib/x86_64-linux-gnu/libpython3.13.so.1.0
     disk:
       name: wurdle-disk
       mountPath: /opt/render/project/src
