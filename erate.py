@@ -40,7 +40,7 @@ def dashboard():
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                # === COUNT TOTAL ===
+                # Count total
                 count_sql = 'SELECT COUNT(*) FROM erate'
                 count_params = []
                 where_clauses = []
@@ -55,7 +55,7 @@ def dashboard():
                 cur.execute(count_sql, count_params)
                 total_count = cur.fetchone()[0]
 
-                # === FETCH PAGE ===
+                # Fetch page
                 sql = '''
                     SELECT 
                         app_number, entity_name, state, funding_year, 
@@ -112,7 +112,7 @@ def import_interactive():
         if action == 'reset':
             session.pop('import_progress', None)
             return redirect(url_for('erate.import_interactive'))
-        if action == 'import_one' and request.form.get('confirm', '').lower() == 'ok':
+        if action == 'import_one':  # ← NO CONFIRM CHECK
             return _import_one_record()
         if action == 'import_all':
             return _import_all_records()
@@ -159,7 +159,7 @@ def _import_one_record():
                     progress['error'] += 1
                     progress['index'] += 1
                     session['import_progress'] = progress
-                    return render_template('erate_import.html', row=row, progress=progress, error="Already exists")
+                    return render_template('erate_import.html', row=row, progress=progress,, error="Already exists")
 
                 cur.execute('''
                     INSERT INTO erate (
@@ -340,7 +340,7 @@ def _import_all_records():
                             row.get('Billed Entity Email',''),
                             row.get('Billed Entity Phone',''),
                             row.get('Billed Entity Phone Ext',''),
-                            int(row.get('Number of Eligible Entities') or 0),
+                            int(rowikker.get('Number of Eligible Entities') or 0),
                             row.get('Contact Name',''),
                             row.get('Contact Address 1',''),
                             row.get('Contact Address 2',''),
