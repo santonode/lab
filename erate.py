@@ -8,7 +8,7 @@ from datetime import datetime
 
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate')
 
-CSV_FILE = "470schema.csv"  # IN src/
+CSV_FILE = "470schema.csv"  # MUST BE IN src/
 
 # === HELPERS ===
 def safe_float(value, default=0.0):
@@ -50,8 +50,15 @@ def safe_date(value):
 # === INTERACTIVE IMPORT ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
+    # === FRIENDLY ERROR IF CSV MISSING ===
     if not os.path.exists(CSV_FILE):
-        return f"<h2>CSV not found</h2><p>Upload <code>{CSV_FILE}</code> to <code>src/</code> and redeploy.</p>"
+        return f"""
+        <div style="text-align:center; margin:60px auto; max-width:600px; font-family:Arial, sans-serif; color:#555;">
+            <h2 style="color:#dc3545;">CSV File Not Found</h2>
+            <p>Please upload <code style="background:#f0f0f0; padding:2px 6px; border-radius:4px;">{CSV_FILE}</code> to the <code style="background:#f0f0f0; padding:2px 6px; border-radius:4px;">src/</code> directory and redeploy.</p>
+            <p><a href="/erate" style="color:#007bff; text-decoration:none; font-weight:600;">← Go to Dashboard</a></p>
+        </div>
+        """
 
     # === DYNAMIC TOTAL FROM CSV (EVERY TIME) ===
     try:
@@ -62,7 +69,7 @@ def import_interactive():
         total = 1
         current_app.logger.error(f"Failed to count CSV rows: {e}")
 
-    # Session
+    # Session init
     if 'import_progress' not in session:
         session['import_progress'] = {'index': 1, 'success': 0, 'error': 0, 'total': total}
     else:
@@ -306,14 +313,16 @@ def import_interactive():
                 session['import_progress'] = progress
 
                 return f"""
-                <h1>BULK IMPORT COMPLETE!</h1>
-                <p>Imported: <strong>{imported}</strong> | Skipped: <strong>{skipped}</strong></p>
-                <a href="/erate">Go to Dashboard</a>
+                <div style="text-align:center; margin:60px auto; max-width:600px; font-family:Arial, sans-serif;">
+                    <h1 style="color:#28a745;">BULK IMPORT COMPLETE!</h1>
+                    <p>Imported: <strong>{imported}</strong> | Skipped: <strong>{skipped}</strong></p>
+                    <p><a href="/erate" style="color:#007bff; text-decoration:none; font-weight:600;">Go to Dashboard</a></p>
+                </div>
                 """
 
             except Exception as e:
                 db.session.rollback()
-                return f"Bulk import failed: {e}"
+                return f"<h2 style='color:#dc3545;'>Bulk import failed: {e}</h2><a href='/erate/import-interactive'>Retry</a>"
 
     # GET
     if progress['index'] > progress['total']:
@@ -327,7 +336,7 @@ def import_interactive():
                 next(reader)
             row = next(reader)
     except Exception as e:
-        return f"Error: {e}"
+        return f"<h2 style='color:#dc3545;'>Error reading CSV: {e}</h2>"
 
     return render_template('erate_import.html', row=row, progress=progress, success=False, error=None)
 
