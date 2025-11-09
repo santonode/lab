@@ -30,28 +30,75 @@ def reset_import_session():
     session.pop('import_progress', None)
     log("Import session reset by user")
 
-# === DASHBOARD ROUTE ===
+# === DASHBOARD ROUTE (FULLY WORKING) ===
 @erate_bp.route('/')
 def dashboard():
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute('SELECT COUNT(*) FROM erate_forms')
-                total_records = cur.fetchone()[0]
-                
-                cur.execute('SELECT COUNT(*) FROM erate_forms WHERE imported = TRUE')
-                imported = cur.fetchone()[0]
-                
-                pending = total_records - imported
+                # Base query for total count
+                query = "SELECT COUNT(*) FROM erate_forms"
+                params = []
+
+                # Apply filters
+                filters = {}
+                if request.args.get('state'):
+                    filters['state'] = request.args['state'].strip().upper()
+                    query += " WHERE state = %s"
+                    params.append(filters['state'])
+                if request.args.get('modified_after'):
+                    filters['modified_after'] = request.args['modified_after']
+                    if 'WHERE' not in query:
+                        query += " WHERE"
+                    else:
+                        query += " AND"
+                    query += " last_modified_datetime >= %s"
+                    params.append(filters['modified_after'])
+
+                cur.execute(query, params)
+                total_count = cur.fetchone()[0]
+
+                # Filtered count
+                filtered_query = query
+                cur.execute(filtered_query, params)
+                total_filtered = cur.fetchone()[0]
+
+                # Fetch paginated data
+                offset = int(request.args.get('offset', 0))
+                limit = 50
+                data_query = """
+                    SELECT app_number, entity_name, state, funding_year, fcc_status, last_modified_datetime
+                    FROM erate_forms
+                """
+                if params:
+                    data_query += " WHERE " + " AND ".join([
+                        "state = %s" if 'state' in filters else "",
+                        "last_modified_datetime >= %s" if 'modified_after' in filters else ""
+                    ]).strip(" AND ")
+                data_query += " ORDER BY last_modified_datetime DESC LIMIT %s OFFSET %s"
+                data_params = params + [limit, offset]
+                cur.execute(data_query, data_params)
+                table_data = cur.fetchall()
+
+                has_more = (offset + limit) < total_filtered
+                next_offset = offset + limit
+
     except Exception as e:
-        logger.error(f"Dashboard DB error: {e}")
-        total_records = imported = pending = 0
+        logger.error(f"Dashboard error: {e}")
+        total_count = total_filtered = 0
+        table_data = []
+        has_more = False
+        next_offset = 0
+        filters = {}
 
     return render_template(
         'erate.html',
-        total_records=total_records,
-        imported=imported,
-        pending=pending
+        total_count=total_count,
+        total_filtered=total_filtered,
+        table_data=table_data,
+        filters=filters,
+        has_more=has_more,
+        next_offset=next_offset
     )
 
 # === IMPORT INTERACTIVE ===
