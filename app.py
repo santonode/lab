@@ -3,10 +3,10 @@ from flask import Flask, render_template, request, session, redirect, url_for, j
 import os
 import logging
 from datetime import datetime
-from db import get_conn
+from db import get_conn, init_db
 from erate import erate_bp  # E-Rate SAFE
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-prod')
 
 # === REGISTER BLUEPRINTS ===
@@ -17,20 +17,20 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s %(levelname)s: %(message)s',
     handlers=[
-        logging.FileHandler("import.log"),
+        logging.FileHandler("app.log"),
         logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
 
-# === STRFTIME FILTER (SAFE + DEFAULT FORMAT) ===
+# === STRFTIME FILTER ===
 @app.template_filter('strftime')
 def _jinja2_filter_strftime(date, fmt='%m/%d/%Y'):
     if date is None:
         return ''
     return date.strftime(fmt)
 
-# === ROUTES ===
+# === GUEST/LOGIN POPUP LOGIC ===
 @app.route('/')
 def index():
     username = session.get('username')
@@ -39,12 +39,15 @@ def index():
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
+                # Total memes
                 cur.execute('SELECT COUNT(*) FROM memes')
                 meme_count = cur.fetchone()[0]
 
+                # Total downloads
                 cur.execute('SELECT COALESCE(SUM(meme_download_counts), 0) FROM memes')
                 total_downloads = cur.fetchone()[0]
 
+                # Fetch memes with owner
                 cur.execute('''
                     SELECT m.meme_id, m.type, m.meme_description, m.meme_download_counts, m.owner,
                            u.username
@@ -102,7 +105,7 @@ def register():
 
                 cur.execute(
                     'INSERT INTO users (username, password_hash) VALUES (%s, %s) RETURNING id',
-                    (username, password)
+                    (username, password)  # bcrypt in prod
                 )
                 user_id = cur.fetchone()[0]
                 conn.commit()
@@ -137,7 +140,7 @@ def login():
         logger.error(f"Login error: {e}")
         return jsonify({'success': False, 'message': 'Server error'})
 
-# === INCREMENT DOWNLOAD ===
+# === DOWNLOAD COUNT ===
 @app.route('/increment_download/<int:meme_id>', methods=['POST'])
 def increment_download(meme_id):
     try:
@@ -169,6 +172,10 @@ def profile():
 @app.route('/admin')
 def admin():
     return render_template('admin.html')
+
+# === INIT DB ON START ===
+with app.app_context():
+    init_db()
 
 # === RUN ===
 if __name__ == '__main__':
