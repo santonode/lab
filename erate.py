@@ -215,7 +215,7 @@ def _import_one_record():
                     row.get('Billed Entity Phone Ext',''),
                     int(row.get('Number of Eligible Entities') or 0),
                     row.get('Contact Name',''),
-                    row.get('Contact Address 1',''),
+                    row.get('Contact Address 1',''),  # FIXED: was 'Contact Address 11'
                     row.get('Contact Address 2',''),
                     row.get('Contact City',''),
                     row.get('Contact State',''),
@@ -265,7 +265,7 @@ def _import_one_record():
     session['import_progress'] = progress
     return render_template('erate_import.html', row=row, progress=progress, success=True)
 
-# === BULK IMPORT (69 COLUMNS = 69 VALUES) ===
+# === BULK IMPORT (69 = 69) ===
 def _import_all_records():
     progress = session['import_progress']
     try:
@@ -288,7 +288,6 @@ def _import_all_records():
                             skipped += 1
                             continue
 
-                        # FIXED: 69 placeholders, 69 values
                         cur.execute('''
                             INSERT INTO erate (
                                 app_number, form_nickname, form_pdf, funding_year, fcc_status,
@@ -343,7 +342,7 @@ def _import_all_records():
                             row.get('Billed Entity Phone Ext',''),
                             int(row.get('Number of Eligible Entities') or 0),
                             row.get('Contact Name',''),
-                            row.get('Contact Address 1',''),
+                            row.get('Contact Address 1',''),  # FIXED: was 'Contact Address 11'
                             row.get('Contact Address 2',''),
                             row.get('Contact City',''),
                             row.get('Contact State',''),
@@ -394,5 +393,4 @@ def _import_all_records():
     except Exception as e:
         progress['error'] += 1
         session['import_progress'] = progress
-        # FIXED: No 'row' in error case
         return render_template('erate_import.html', progress=progress, error=str(e))
