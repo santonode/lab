@@ -1,164 +1,193 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>E-Rate Interactive Import</title>
+    <title>E-Rate Import</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- FAVICON -->
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
-        .container { max-width: 900px; margin: auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 15px rgba(0,0,0,0.1); }
-        h1 { text-align: center; color: #263238; }
-        .progress { background: #eee; border-radius: 10px; height: 30px; margin: 20px 0; overflow: hidden; }
-        .progress-bar { height: 100%; background: #26A69A; width: 0%; transition: width 0.5s; text-align: center; color: white; line-height: 30px; font-weight: bold; }
-        .stats { display: flex; justify-content: space-around; margin: 15px 0; font-size: 18px; }
-        .stats span { padding: 8px 15px; border-radius: 5px; }
-        .success { background: #d4edda; color: #155724; }
-        .error { background: #f8d7da; color: #721c24; }
-        .row-data { background: #f9f9f9; padding: 20px; border-radius: 8px; margin: 20px 0; }
-        .field { margin: 8px 0; }
-        .field strong { display: inline-block; width: 180px; color: #555; }
-        .actions { text-align: center; margin: 25px 0; }
-        .btn { padding: 12px 25px; margin: 0 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; }
-        .btn-primary { background: #007bff; color: white; }
-        .btn-success { background: #28a745; color: white; }
-        .btn-danger { background: #dc3545; color: white; }
-        .btn:hover { opacity: 0.9; }
-        .loading { display: none; text-align: center; margin: 20px; }
-        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: auto; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .complete { text-align: center; padding: 40px; }
-        .complete h2 { color: #28a745; }
+        :root {
+            --primary: #1a5d57;
+            --accent: #007bff;
+            --success: #27ae60;
+            --danger: #dc3545;
+            --bg: #f4f7f9;
+            --card: white;
+            --border: #ddd;
+            --text: #333;
+            --hover: #f0f7ff;
+            --shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            background: var(--card);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+        }
+        h1 {
+            text-align: center;
+            color: var(--primary);
+            margin: 0 0 10px;
+            font-weight: 600;
+            font-size: 2.2rem;
+        }
+        .progress {
+            text-align: center;
+            font-size: 1.2em;
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        .progress strong { font-weight: 700; }
+        .success-count { color: var(--success); }
+        .error-count { color: var(--danger); }
+        .record {
+            background: #f0f8ff;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 25px 0;
+            border-left: 5px solid var(--accent);
+        }
+        .record h3 {
+            margin: 0 0 12px;
+            color: var(--primary);
+            font-size: 1.3rem;
+        }
+        .record p {
+            margin: 8px 0;
+            font-size: 1rem;
+        }
+        .record strong {
+            color: var(--primary);
+            min-width: 120px;
+            display: inline-block;
+        }
+        .btn {
+            padding: 12px 24px;
+            margin: 8px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+            text-align: center;
+            min-width: 160px;
+        }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn:active { transform: translateY(0); }
+        .form-group {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .success, .error {
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin: 15px 0;
+            padding: 12px;
+            border-radius: 6px;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .back-link {
+            text-align: center;
+            margin-top: 30px;
+        }
+        .back-link a {
+            color: #666;
+            text-decoration: none;
+            font-size: 0.95rem;
+        }
+        .back-link a:hover { text-decoration: underline; }
+        @media (max-width: 768px) {
+            .container { margin: 20px; padding: 20px; }
+            .btn { width: 100%; margin: 8px 0; }
+            .record p { font-size: 0.9rem; }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>E-Rate 470 Import Tool</h1>
+<div class="container">
+    <h1>E-Rate Interactive Import</h1>
 
-        <div class="progress">
-            <div class="progress-bar" id="progressBar">0%</div>
-        </div>
-
-        <div class="stats">
-            <span class="success">Success: <strong id="successCount">{{ progress.success }}</strong></span>
-            <span class="error">Errors: <strong id="errorCount">{{ progress.error }}</strong></span>
-            <span>Row: <strong>{{ progress.index }}</strong> / {{ progress.total }}</span>
-        </div>
-
-        {% if progress.index > progress.total %}
-            <div class="complete">
-                <h2>Import Complete!</h2>
-                <p><strong>{{ progress.success }}</strong> records imported successfully.</p>
-                <p><strong>{{ progress.error }}</strong> records skipped or failed.</p>
-                <a href="{{ url_for('erate.import_complete') }}" class="btn btn-success">View Summary</a>
-            </div>
-        {% else %}
-            <div class="row-data">
-                <h3>Current Record (Row {{ progress.index }})</h3>
-                <div class="field"><strong>FRN:</strong> {{ row.FRN|default('N/A') }}</div>
-                <div class="field"><strong>Applicant:</strong> {{ row['Applicant Name']|default('N/A') }}</div>
-                <div class="field"><strong>BEN:</strong> {{ row.BEN|default('N/A') }}</div>
-                <div class="field"><strong>City/State:</strong> {{ row.City|default('') }}, {{ row.State|default('') }}</div>
-                <div class="field"><strong>Zip:</strong> {{ row['Zip Code']|default('N/A') }}</div>
-                <div class="field"><strong>Contact:</strong> {{ row['Contact Name']|default('N/A') }}</div>
-                <div class="field"><strong>Phone:</strong> {{ row['Contact Phone']|default('N/A') }}</div>
-                <div class="field"><strong>Email:</strong> {{ row['Contact Email']|default('N/A') }}</div>
-                <div class="field"><strong>Category:</strong> {{ row.Category|default('N/A') }}</div>
-                <div class="field"><strong>Discount:</strong> {{ row['Discount Level']|default('N/A') }}</div>
-                <div class="field"><strong>Service:</strong> {{ row['Service Type']|default('N/A') }}</div>
-            </div>
-
-            <div class="actions">
-                <button onclick="importOne()" class="btn btn-primary">Import This Row</button>
-                <button onclick="importAll()" class="btn btn-success">Import All Remaining</button>
-                <button onclick="resetImport()" class="btn btn-danger">Reset & Start Over</button>
-            </div>
-
-            <div class="loading" id="loading">
-                <div class="spinner"></div>
-                <p>Importing... Please wait.</p>
-            </div>
-        {% endif %}
+    <div class="progress">
+        Progress: <strong>{{ progress.index|default(0) }}</strong> / <strong>{{ progress.total|default(0) }}</strong>
+        | Success: <strong class="success-count">{{ progress.success|default(0) }}</strong>
+        | Errors: <strong class="error-count">{{ progress.error|default(0) }}</strong>
     </div>
 
-    <script>
-        function updateProgress(success, error, index, total) {
-            const percent = total > 0 ? (index / total) * 100 : 0;
-            document.getElementById('progressBar').style.width = percent + '%';
-            document.getElementById('progressBar').textContent = Math.round(percent) + '%';
-            document.getElementById('successCount').textContent = success;
-            document.getElementById('errorCount').textContent = error;
-        }
+    {% if error %}
+        <div class="error">Error: {{ error }}</div>
+        <div class="form-group">
+            <a href="{{ url_for('erate.import_interactive') }}" class="btn btn-primary">Try Again</a>
+        </div>
+    {% elif progress.index > progress.total %}
+        <div class="success">IMPORT COMPLETE!</div>
+        <div class="form-group">
+            <a href="{{ url_for('erate.dashboard') }}" class="btn btn-primary">Back to Dashboard</a>
+        </div>
+    {% else %}
+        <div class="record">
+            <h3>Record {{ progress.index|default(0) }}</h3>
+            <p><strong>App #:</strong> {{ row['Application Number']|default('N/A') }}</p>
+            <p><strong>Entity:</strong> {{ row['Billed Entity Name']|default('N/A') }}</p>
+            <p><strong>State:</strong> {{ row['Billed Entity State']|default('N/A') }}</p>
+            <p><strong>Modified:</strong> {{ row['Last Modified Date/Time']|default('N/A') }}</p>
+        </div>
 
-        function importOne() {
-            const btn = event.target;
-            btn.disabled = true;
-            document.getElementById('loading').style.display = 'block';
+        {% if success %}
+            <div class="success">Imported successfully!</div>
+        {% endif %}
 
-            fetch('{{ url_for("erate.import_interactive") }}', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'action=import_one'
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    updateProgress(data.success_count, data.error_count, data.index, data.total);
-                    if (data.index > data.total) {
-                        setTimeout(() => location.reload(), 1000);
-                    } else {
-                        location.reload();
-                    }
-                } else {
-                    alert('Error: ' + data.message);
-                    btn.disabled = false;
-                }
-            })
-            .catch(() => {
-                alert('Network error');
-                btn.disabled = false;
-            })
-            .finally(() => {
-                document.getElementById('loading').style.display = 'none';
-            });
-        }
+        <!-- IMPORT THIS RECORD -->
+        <div class="form-group">
+            <form method="post" onsubmit="return confirm('Import this record?');">
+                <input type="hidden" name="action" value="import_one">
+                <button type="submit" class="btn btn-primary">Import This Record</button>
+            </form>
+        </div>
 
-        function importAll() {
-            if (!confirm('Import ALL remaining rows? This cannot be stopped.')) return;
+        <!-- IMPORT ALL REMAINING -->
+        <div class="form-group">
+            <form method="post" onsubmit="return confirm('Import ALL {{ (progress.total|default(0)) - (progress.index|default(0)) + 1 }} remaining records?');">
+                <input type="hidden" name="action" value="import_all">
+                <button type="submit" class="btn btn-success">
+                    Import All Remaining ({{ (progress.total|default(0)) - (progress.index|default(0)) + 1 }})
+                </button>
+            </form>
+        </div>
 
-            const btn = event.target;
-            btn.disabled = true;
-            document.getElementById('loading').style.display = 'block';
+        <!-- START OVER -->
+        <div class="form-group">
+            <form method="post" onsubmit="return confirm('Start over from record 1?');">
+                <input type="hidden" name="action" value="reset">
+                <button type="submit" class="btn btn-danger">Start Over</button>
+            </form>
+        </div>
+    {% endif %}
 
-            fetch('{{ url_for("erate.import_interactive") }}', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'action=import_all'
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.complete) {
-                    updateProgress(data.progress.success, data.progress.error, data.progress.index, data.progress.total);
-                    setTimeout(() => location.href = '{{ url_for("erate.import_complete") }}', 1500);
-                }
-            })
-            .catch(() => alert('Error during bulk import'))
-            .finally(() => {
-                document.getElementById('loading').style.display = 'none';
-            });
-        }
-
-        function resetImport() {
-            if (confirm('Reset import and start over? All progress will be lost.')) {
-                fetch('{{ url_for("erate.import_interactive") }}', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'action=reset'
-                }).then(() => location.reload());
-            }
-        }
-
-        // Initial progress
-        updateProgress({{ progress.success }}, {{ progress.error }}, {{ progress.index }}, {{ progress.total }});
-    </script>
+    <div class="back-link">
+        <a href="{{ url_for('erate.dashboard') }}">Back to Dashboard</a>
+    </div>
+</div>
 </body>
 </html>
