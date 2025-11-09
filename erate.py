@@ -40,7 +40,7 @@ def parse_datetime(value):
             continue
     return None
 
-# === DASHBOARD WITH FILTERS + PAGINATION ===
+# === DASHBOARD WITH FILTERS + PAGINATION + DATA LOADS ===
 @erate_bp.route('/')
 def dashboard():
     state_filter = request.args.get('state', '').strip().upper()
@@ -87,8 +87,21 @@ def dashboard():
                 cur.execute(sql, params)
                 rows = cur.fetchall()
 
-        has_more = len(rows) > limit
-        table_data = rows[:limit]
+                # CONVERT TO LIST OF DICTS (CRITICAL FOR erate.html)
+                table_data = [
+                    {
+                        'app_number': row[0],
+                        'entity_name': row[1],
+                        'state': row[2],
+                        'funding_year': row[3],
+                        'fcc_status': row[4],
+                        'last_modified_datetime': row[5]
+                    }
+                    for row in rows
+                ]
+
+        has_more = len(table_data) > limit
+        table_data = table_data[:limit]
         next_offset = offset + limit
 
         return render_template(
@@ -387,7 +400,7 @@ def _import_all_records():
                                 row.get('Technical Contact Phone',''),
                                 row.get('Technical Contact Phone Ext',''),
                                 row.get('Technical Contact Email',''),
-                                row.get('Authorized Person Name',''),
+                                row.get('Authorized Person Camera',''),
                                 row.get('Authorized Person Address',''),
                                 row.get('Authorized Person City',''),
                                 row.get('Authorized Person State',''),
