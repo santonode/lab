@@ -13,7 +13,7 @@ app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-prod')
 # === REGISTER BLUEPRINTS ===
 app.register_blueprint(erate_bp)  # E-Rate works
 
-# === SERVE static2 FOLDER (FOR gear-icon.png, styles.css) ===
+# === SERVE static2 FOLDER (HTTPS + url_for support) ===
 @app.route('/static2/<path:filename>')
 def static2_files(filename):
     return send_from_directory(os.path.join(app.root_path, 'static2'), filename)
@@ -43,15 +43,12 @@ def memes_page():
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                # Total memes
                 cur.execute('SELECT COUNT(*) AS count FROM memes')
                 meme_count = cur.fetchone()['count']
 
-                # Total downloads
                 cur.execute('SELECT COALESCE(SUM(meme_download_counts), 0) AS total FROM memes')
                 total_downloads = cur.fetchone()['total']
 
-                # Fetch memes with owner
                 cur.execute('''
                     SELECT m.meme_id, m.type, m.meme_description, m.meme_download_counts, m.owner, u.username
                     FROM memes m
