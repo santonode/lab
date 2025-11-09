@@ -99,7 +99,8 @@
     </div>
 
     <div class="content">
-        <div class="summary">Total Assets: {{ meme_count|default 0 }} assets / Total Downloads: {{ total_downloads|default 0 }}</div>
+        <!-- FIXED: |default(0) -->
+        <div class="summary">Total Assets: {{ meme_count|default(0) }} assets / Total Downloads: {{ total_downloads|default(0) }}</div>
 
         <table class="meme-table">
             <thead>
