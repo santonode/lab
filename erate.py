@@ -57,8 +57,8 @@ def dashboard():
 
                 # Fetch page
                 sql = '''
-                    SELECT 
-                        app_number, entity_name, state, funding_year, 
+                    SELECT
+                        app_number, entity_name, state, funding_year,
                         fcc_status, last_modified_datetime
                     FROM erate
                 '''
@@ -161,7 +161,7 @@ def _import_one_record():
                     session['import_progress'] = progress
                     return render_template('erate_import.html', row=row, progress=progress, error="Already exists")
 
-                # FIXED: 69 VALUES = 69 PLACEHOLDERS
+                # 69 VALUES = 69 PLACEHOLDERS
                 cur.execute('''
                     INSERT INTO erate (
                         app_number, form_nickname, form_pdf, funding_year, fcc_status,
@@ -289,7 +289,7 @@ def _import_all_records():
                             skipped += 1
                             continue
 
-                        # FIXED: 69 VALUES = 69 PLACEHOLDERS
+                        # 69 VALUES = 69 PLACEHOLDERS
                         cur.execute('''
                             INSERT INTO erate (
                                 app_number, form_nickname, form_pdf, funding_year, fcc_status,
@@ -395,5 +395,5 @@ def _import_all_records():
     except Exception as e:
         progress['error'] += 1
         session['import_progress'] = progress
-        # FIXED: No 'row' in error case
+        # NO 'row' in error case
         return render_template('erate_import.html', progress=progress, error=str(e))
