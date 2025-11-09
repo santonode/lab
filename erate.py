@@ -53,7 +53,7 @@ def dashboard():
         with get_conn() as conn:
             with conn.cursor() as cur:
                 # Count total
-                count_sql = 'SELECT COUNT(*) FROM erate'
+                count_sql = 'SELECT COUNT(*) AS total FROM erate'
                 count_params = []
                 where_clauses = []
                 if state_filter:
@@ -65,7 +65,7 @@ def dashboard():
                 if where_clauses:
                     count_sql += ' WHERE ' + ' AND '.join(where_clauses)
                 cur.execute(count_sql, count_params)
-                total_count = cur.fetchone()[0]
+                total_count = cur.fetchone()['total']  # ← dict key
 
                 # Fetch page
                 sql = '''
@@ -275,6 +275,7 @@ def _import_one_record():
                     row.get('Form Version','')
                 ))
                 conn.commit()
+
         logger.info(f"Record {progress['index']} imported | App: {app_number}")
         progress['success'] += 1
     except Exception as e:
@@ -307,6 +308,7 @@ def _import_all_records():
                             logger.warning(f"Skipped row {progress['index'] + imported + skipped}: Missing Application Number")
                             skipped += 1
                             continue
+
                         cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
                         if cur.fetchone():
                             logger.info(f"Skipped row {progress['index'] + imported + skipped}: Duplicate App {app_number}")
@@ -416,6 +418,7 @@ def _import_all_records():
                             skipped += 1
                             conn.rollback()
                     conn.commit()
+
             progress['success'] += imported
             progress['error'] += skipped
             progress['index'] = progress['total'] + 1
