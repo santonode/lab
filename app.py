@@ -1,16 +1,22 @@
 # app.py
-from flask import Flask, render_template, request, session, redirect, url_for, jsonify, send_file
+from flask import Flask, render_template, request, session, redirect, url_for, jsonify, send_file, send_from_directory
 import os
 import logging
 from datetime import datetime
 from db import get_conn, init_db
 from erate import erate_bp  # E-RATE SAFE
 
+# === FLASK APP ===
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-prod')
 
 # === REGISTER BLUEPRINTS ===
 app.register_blueprint(erate_bp)  # E-Rate works
+
+# === SERVE static2 FOLDER (FOR gear-icon.png, styles.css) ===
+@app.route('/static2/<path:filename>')
+def static2_files(filename):
+    return send_from_directory(os.path.join(app.root_path, 'static2'), filename)
 
 # === LOGGING ===
 logging.basicConfig(
@@ -37,12 +43,15 @@ def memes_page():
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
+                # Total memes
                 cur.execute('SELECT COUNT(*) AS count FROM memes')
                 meme_count = cur.fetchone()['count']
 
+                # Total downloads
                 cur.execute('SELECT COALESCE(SUM(meme_download_counts), 0) AS total FROM memes')
                 total_downloads = cur.fetchone()['total']
 
+                # Fetch memes with owner
                 cur.execute('''
                     SELECT m.meme_id, m.type, m.meme_description, m.meme_download_counts, m.owner, u.username
                     FROM memes m
@@ -171,4 +180,4 @@ with app.app_context():
 
 # === RUN ===
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
