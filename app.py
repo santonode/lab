@@ -30,9 +30,9 @@ def _jinja2_filter_strftime(date, fmt='%m/%d/%Y'):
         return ''
     return date.strftime(fmt)
 
-# === GUEST/LOGIN POPUP LOGIC ===
-@app.route('/')
-def index():
+# === MEMES ROUTE ===
+@app.route('/memes')
+def memes():
     username = session.get('username')
     user_type = session.get('user_type', 'Guest')
 
@@ -72,13 +72,13 @@ def index():
                         users.append({'id': row[4], 'username': row[5]})
 
     except Exception as e:
-        logger.error(f"DB Error on /: {e}")
+        logger.error(f"DB Error on /memes: {e}")
         meme_count = total_downloads = 0
         memes = []
         users = []
 
     return render_template(
-        'index.html',
+        'index.html',  # Your memes template
         username=username,
         user_type=user_type,
         meme_count=meme_count,
@@ -140,7 +140,7 @@ def login():
         logger.error(f"Login error: {e}")
         return jsonify({'success': False, 'message': 'Server error'})
 
-# === DOWNLOAD COUNT ===
+# === INCREMENT DOWNLOAD ===
 @app.route('/increment_download/<int:meme_id>', methods=['POST'])
 def increment_download(meme_id):
     try:
@@ -173,7 +173,7 @@ def profile():
 def admin():
     return render_template('admin.html')
 
-# === INIT DB ON START ===
+# === INIT DB ===
 with app.app_context():
     init_db()
 
