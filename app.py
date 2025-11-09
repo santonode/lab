@@ -4,19 +4,23 @@ import os
 import logging
 from datetime import datetime
 from db import get_conn, init_db
-from erate import erate_bp  # E-RATE SAFE
+from erate import erate_bp
 
 # === FLASK APP ===
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-prod')
 
-# === REGISTER BLUEPRINTS ===
-app.register_blueprint(erate_bp)  # E-Rate works
+# === REGISTER E-RATE ===
+app.register_blueprint(erate_bp)
 
-# === SERVE static2 FOLDER (HTTPS + url_for support) ===
+# === SERVE static2/ (gear-icon, styles) ===
 @app.route('/static2/<path:filename>')
 def static2_files(filename):
-    return send_from_directory(os.path.join(app.root_path, 'static2'), filename)
+    response = send_from_directory('static2', filename)
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 # === LOGGING ===
 logging.basicConfig(
@@ -34,20 +38,26 @@ logger = logging.getLogger(__name__)
 def _jinja2_filter_strftime(date, fmt='%m/%d/%Y'):
     return date.strftime(fmt) if date else ''
 
-# === MEMES PAGE ===
+# === CACHE BUSTER (FOR CSS/JS) ===
+@app.context_processor
+def inject_cache_buster():
+    return dict(cache_buster=int(datetime.now().timestamp()))
+
+# === /memes ROUTE (MUST BE HERE) ===
 @app.route('/memes')
 def memes_page():
+    logger.info("MEMES ROUTE HIT")  # ← LOG TO CONFIRM
     username = session.get('username')
     user_type = session.get('user_type', 'Guest')
 
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute('SELECT COUNT(*) AS count FROM memes')
+                cur.execute('SELECT COUNT(*) FROM memes')
                 meme_count = cur.fetchone()['count']
 
-                cur.execute('SELECT COALESCE(SUM(meme_download_counts), 0) AS total FROM memes')
-                total_downloads = cur.fetchone()['total']
+                cur.execute('SELECT COALESCE(SUM(meme_download_counts), 0) FROM memes')
+                total_downloads = cur.fetchone()['count']
 
                 cur.execute('''
                     SELECT m.meme_id, m.type, m.meme_description, m.meme_download_counts, m.owner, u.username
@@ -71,7 +81,7 @@ def memes_page():
                     if row['username']:
                         users.append({'id': row['owner'], 'username': row['username']})
     except Exception as e:
-        logger.error(f"DB Error on /memes: {e}")
+        logger.error(f"DB Error: {e}")
         meme_count = total_downloads = 0
         memes = users = []
 
