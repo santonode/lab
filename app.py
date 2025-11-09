@@ -4,7 +4,7 @@ import os
 import logging
 from datetime import datetime
 from db import get_conn
-from erate import erate_bp  # E-Rate untouched
+from erate import erate_bp  # E-Rate SAFE
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-prod')
@@ -23,9 +23,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# === ADD STRFTIME FILTER (SAFE) ===
+# === STRFTIME FILTER (SAFE + DEFAULT FORMAT) ===
 @app.template_filter('strftime')
-def _jinja2_filter_strftime(date, fmt):
+def _jinja2_filter_strftime(date, fmt='%m/%d/%Y'):
     if date is None:
         return ''
     return date.strftime(fmt)
@@ -39,15 +39,12 @@ def index():
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                # Total assets
                 cur.execute('SELECT COUNT(*) FROM memes')
                 meme_count = cur.fetchone()[0]
 
-                # Total downloads
                 cur.execute('SELECT COALESCE(SUM(meme_download_counts), 0) FROM memes')
                 total_downloads = cur.fetchone()[0]
 
-                # Fetch memes with owner
                 cur.execute('''
                     SELECT m.meme_id, m.type, m.meme_description, m.meme_download_counts, m.owner,
                            u.username
@@ -105,7 +102,7 @@ def register():
 
                 cur.execute(
                     'INSERT INTO users (username, password_hash) VALUES (%s, %s) RETURNING id',
-                    (username, password)  # Use bcrypt in prod!
+                    (username, password)
                 )
                 user_id = cur.fetchone()[0]
                 conn.commit()
@@ -164,7 +161,7 @@ def view_log():
     except FileNotFoundError:
         return "No log yet.", 404
 
-# === PROFILE / ADMIN PLACEHOLDERS ===
+# === PLACEHOLDERS ===
 @app.route('/profile')
 def profile():
     return render_template('profile.html')
