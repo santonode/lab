@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Santo - Asset List</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <!-- CSS from static2/ -->
+    <link rel="stylesheet" href="/static2/styles.css">
     <style>
         body {
             min-height: 100%;
@@ -412,10 +413,10 @@
         </a>
         <a href="/admin" class="admin-link">Admin</a>
     </div>
-   
+  
     <div class="content">
         <div class="summary">Total Assets: {{ meme_count|default(0) }} assets / Total Downloads: {{ total_downloads|default(0) }}</div>
-       
+      
         <table class="meme-table">
             <thead>
                 <tr>
@@ -465,8 +466,8 @@
                             <img src="/static/thumbs/{{ meme.meme_id }}.jpg"
                                  alt="Thumb"
                                  loading="lazy"
-                                 onerror="this.parentNode.innerHTML='<span class=&quot;meme-thumb-na&quot;>na</span>'"
-                                 onclick="openThumbModal({{ meme.meme_id }}, '{{ meme.meme_description | replace("'", "\\'") | default('') }}')">
+                                 onerror="this.parentNode.innerHTML='<span class=\"meme-thumb-na\">na</span>'"
+                                 onclick="openThumbModal({{ meme.meme_id }}, '{{ meme.meme_description | replace(\"'\", \"\\\\'\") | default('') }}')">
                         </td>
                         <td class="meme-description">
                             {{ meme.meme_description if meme.meme_description else 'No description' }}<br>
@@ -486,7 +487,6 @@
             </tbody>
         </table>
     </div>
-
     <!-- THUMBNAIL MODAL -->
     <div class="thumb-modal-overlay" id="thumbModalOverlay">
         <div class="thumb-modal">
@@ -508,7 +508,6 @@
             </button>
         </div>
     </div>
-
     <!-- GUEST / AUTH POPUP -->
     <div id="guestPopup" class="popup">
         <h3>Welcome to Santo!</h3>
@@ -530,11 +529,9 @@
         <button class="decline-btn" onclick="closePopup()">Continue as Guest</button>
     </div>
     <div id="popupOverlay" class="popup-overlay"></div>
-
     <div class="footer">
         <p>Made with Love by Team Santo <a href="https://santoelectronics.com/tosvm" style="color:#FF0000;">TOS</a></p>
     </div>
-
     <script>
         let shareData = {};
         function openThumbModal(memeId, memeDesc) {
