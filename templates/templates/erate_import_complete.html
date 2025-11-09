@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>E-Rate Import Complete</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 50px; text-align: center; }
+        .container { max-width: 600px; margin: auto; padding: 30px; background: #f9f9f9; border-radius: 10px; }
+        .success { color: green; font-size: 24px; margin: 20px 0; }
+        .stats { margin: 20px 0; font-size: 18px; }
+        .reset-btn { background: #007bff; color: white; padding: 15px 30px; font-size: 18px; border: none; border-radius: 5px; cursor: pointer; margin: 20px; }
+        .reset-btn:hover { background: #0056b3; }
+        .dashboard-link { background: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 10px; }
+        .dashboard-link:hover { background: #218838; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Import Complete!</h1>
+        
+        <div class="success">All records processed successfully!</div>
+        
+        <div class="stats">
+            <strong>{{ progress.success }}</strong> successful imports<br>
+            <strong>{{ progress.error }}</strong> skipped/errors
+        </div>
+
+        <p><em>Total: {{ progress.total }} records processed</em></p>
+
+        <button onclick="resetImport()" class="reset-btn">🔄 Start New Import</button>
+
+        <a href="{{ url_for('erate.dashboard') }}" class="dashboard-link">📊 View Dashboard</a>
+        <a href="{{ url_for('erate.import_interactive') }}" class="dashboard-link">📁 Import More</a>
+
+        <hr style="margin: 30px 0;">
+        <small><a href="{{ url_for('erate.view_log') }}">View Import Log</a></small>
+    </div>
+
+    <script>
+        function resetImport() {
+            if (confirm("Reset import session and start over?")) {
+                fetch('{{ url_for('erate.import_interactive') }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'action=reset'
+                }).then(() => {
+                    window.location.reload();
+                });
+            }
+        }
+    </script>
+</body>
+</html>
