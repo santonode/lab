@@ -4,6 +4,8 @@
     <title>E-Rate Dashboard</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
+    <!-- FAVICON -->
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
     <style>
         :root {
             --primary: #1a5d57;
@@ -156,27 +158,24 @@
 <body>
 <div class="container">
     <h1>E-Rate 470 Dashboard</h1>
-
     <div class="filters">
         <form method="get" style="display: contents;">
             <label>
                 State:
-                <input type="text" name="state" value="{{ filters.state }}" maxlength="2" placeholder="KS">
+                <input type="text" name="state" value="{{ filters.state|default('') }}" maxlength="2" placeholder="KS">
             </label>
             <label>
                 Modified After:
-                <input type="date" name="modified_after" value="{{ filters.modified_after }}">
+                <input type="date" name="modified_after" value="{{ filters.modified_after|default('') }}">
             </label>
             <button type="submit" class="btn btn-primary">Filter</button>
             <a href="{{ url_for('erate.dashboard') }}" class="btn btn-secondary">Reset</a>
         </form>
         <a href="{{ url_for('erate.import_interactive') }}" class="btn btn-success">Resume Import</a>
     </div>
-
     <p class="summary">
-        <strong>Showing {{ total_filtered }} of {{ total_count }} records</strong>
+        <strong>Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</strong>
     </p>
-
     <table>
         <thead>
             <tr>
@@ -189,30 +188,31 @@
             </tr>
         </thead>
         <tbody>
-            {% for row in table_data %}
-            <tr>
-                <td class="app-number">{{ row.app_number }}</td>
-                <td>{{ row.entity_name or '—' }}</td>
-                <td>{{ row.state or '—' }}</td>
-                <td>{{ row.funding_year or '—' }}</td>
-                <td>{{ row.fcc_status or '—' }}</td>
-                <td class="modified">
-                    {{ row.last_modified_datetime | strftime('%m/%d/%Y') if row.last_modified_datetime else '—' }}
-                </td>
-            </tr>
+            {% if table_data %}
+                {% for row in table_data %}
+                <tr>
+                    <td class="app-number">{{ row.app_number|default('—') }}</td>
+                    <td>{{ row.entity_name|default('—') }}</td>
+                    <td>{{ row.state|default('—') }}</td>
+                    <td>{{ row.funding_year|default('—') }}</td>
+                    <td>{{ row.fcc_status|default('—') }}</td>
+                    <td class="modified">
+                        {{ row.last_modified_datetime|strftime('%m/%d/%Y') if row.last_modified_datetime else '—' }}
+                    </td>
+                </tr>
+                {% endfor %}
             {% else %}
             <tr>
                 <td colspan="6" style="text-align:center; color:#999; padding:30px;">
                     No records found. Try adjusting filters or <a href="{{ url_for('erate.import_interactive') }}">import data</a>.
                 </td>
             </tr>
-            {% endfor %}
+            {% endif %}
         </tbody>
     </table>
-
-    {% if has_more %}
+    {% if has_more|default(false) %}
     <div class="pagination">
-        <a href="?state={{ filters.state or '' }}&modified_after={{ filters.modified_after or '' }}&offset={{ next_offset }}"
+        <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&offset={{ next_offset|default(0) }}"
            class="load-more">
             Load More (+)
         </a>
