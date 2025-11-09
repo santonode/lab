@@ -161,6 +161,7 @@ def _import_one_record():
                     session['import_progress'] = progress
                     return render_template('erate_import.html', row=row, progress=progress, error="Already exists")
 
+                # FIXED: 69 VALUES = 69 PLACEHOLDERS
                 cur.execute('''
                     INSERT INTO erate (
                         app_number, form_nickname, form_pdf, funding_year, fcc_status,
@@ -288,6 +289,7 @@ def _import_all_records():
                             skipped += 1
                             continue
 
+                        # FIXED: 69 VALUES = 69 PLACEHOLDERS
                         cur.execute('''
                             INSERT INTO erate (
                                 app_number, form_nickname, form_pdf, funding_year, fcc_status,
