@@ -4,13 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Santo - Asset List</title>
-
-    <!-- FAVICON FROM /static/favicon.ico -->
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
-
-    <!-- CACHE BUSTED CSS -->
     <link rel="stylesheet" href="{{ url_for('static2_files', filename='styles.css') }}?v={{ cache_buster }}">
-
     <style>
         /* [ALL YOUR STYLES - UNCHANGED] */
         body { min-height: 100%; margin: 0; padding: 0; box-sizing: border-box; }
@@ -138,7 +133,7 @@
                         <td class="meme-id">{{ meme.meme_id }}</td>
                         <td class="meme-type">{{ meme.type }}</td>
                         <td class="meme-thumb">
-                            <img src="{{ url_for('serve_thumbs', filename=meme.meme_id + '.jpg') }}"
+                            <img src="{{ url_for('serve_thumbs', filename=meme.meme_id|string + '.jpg') }}"
                                  alt="Thumb"
                                  loading="lazy"
                                  onerror="this.onerror=null; this.parentNode.innerHTML={{ '<span class=\"meme-thumb-na\" onclick=\"openThumbModal(' ~ meme.meme_id ~ ', ' ~ (meme.meme_description or '')|tojson ~ ')\">na</span>'|safe }}"
@@ -194,7 +189,7 @@
             <button class="tab-btn" onclick="showTab('login')">Login</button>
         </div>
         <form id="registerForm" method="POST" action="/memes/register" style="display: block;">
-            <input type="text" name="register_username" placeholder="Username (1-12 chars)" required maxlength="12" pattern="[a-zA-Z0-9]+">
+            <input type="text" name="register_username" placeholder="Username (1-12 chars)" requiredmaxlength="12" pattern="[a-zA-Z0-9]+">
             <input type="password" name="register_password" placeholder="Password" required minlength="4">
             <button type="submit" class="register-btn">Register</button>
         </form>
