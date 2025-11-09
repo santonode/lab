@@ -13,52 +13,46 @@ app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-prod')
 # === REGISTER E-RATE ===
 app.register_blueprint(erate_bp)
 
-# === SERVE static2/ (gear-icon, styles) ===
+# === SERVE static2/ ===
 @app.route('/static2/<path:filename>')
 def static2_files(filename):
     response = send_from_directory('static2', filename)
-    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
+    response.headers['Cache-Control'] = 'no-cache'
     return response
 
 # === LOGGING ===
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s %(levelname)s: %(message)s',
-    handlers=[
-        logging.FileHandler("app.log"),
-        logging.StreamHandler()
-    ]
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# === STRFTIME FILTER ===
+# === STRFTIME ===
 @app.template_filter('strftime')
 def _jinja2_filter_strftime(date, fmt='%m/%d/%Y'):
     return date.strftime(fmt) if date else ''
 
-# === CACHE BUSTER (FOR CSS/JS) ===
+# === CACHE BUSTER ===
 @app.context_processor
 def inject_cache_buster():
     return dict(cache_buster=int(datetime.now().timestamp()))
 
-# === /memes ROUTE (MUST BE HERE) ===
+# === /memes ROUTE ===
 @app.route('/memes')
 def memes_page():
-    logger.info("MEMES ROUTE HIT")  # ← LOG TO CONFIRM
+    logger.info("MEMES ROUTE HIT")
     username = session.get('username')
     user_type = session.get('user_type', 'Guest')
 
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute('SELECT COUNT(*) FROM memes')
+                # TOTAL MEMES
+                cur.execute('SELECT COUNT(*) AS count FROM memes')
                 meme_count = cur.fetchone()['count']
 
-                cur.execute('SELECT COALESCE(SUM(meme_download_counts), 0) FROM memes')
-                total_downloads = cur.fetchone()['count']
+                # TOTAL DOWNLOADS — FIXED KEY
+                cur.execute('SELECT COALESCE(SUM(meme_download_counts), 0) AS total FROM memes')
+                total_downloads = cur.fetchone()['total']
 
+                # FETCH MEMES
                 cur.execute('''
                     SELECT m.meme_id, m.type, m.meme_description, m.meme_download_counts, m.owner, u.username
                     FROM memes m
@@ -95,7 +89,7 @@ def memes_page():
         users=users
     )
 
-# === REGISTER ===
+# === REGISTER / LOGIN / DOWNLOAD ===
 @app.route('/memes/register', methods=['POST'])
 def register():
     username = request.form['register_username'].strip()
@@ -111,22 +105,16 @@ def register():
                 if cur.fetchone():
                     return jsonify({'success': False, 'message': 'Username taken'})
 
-                cur.execute(
-                    'INSERT INTO users (username, password_hash) VALUES (%s, %s) RETURNING id',
-                    (username, password)
-                )
+                cur.execute('INSERT INTO users (username, password_hash) VALUES (%s, %s) RETURNING id', (username, password))
                 user_id = cur.fetchone()['id']
                 conn.commit()
 
-                session['username'] = username
-                session['user_id'] = user_id
-                session['user_type'] = 'User'
+                session.update(username=username, user_id=user_id, user_type='User')
                 return jsonify({'success': True})
     except Exception as e:
-        logger.error(f"Register error: {e}")
-        return jsonify({'success': False, 'message': 'Server error'})
+        logger.error(f"Register: {e}")
+        return jsonify({'success': False, 'message': 'Error'})
 
-# === LOGIN ===
 @app.route('/memes/login', methods=['POST'])
 def login():
     username = request.form['login_username'].strip()
@@ -138,53 +126,37 @@ def login():
                 cur.execute('SELECT id, password_hash FROM users WHERE username = %s', (username,))
                 user = cur.fetchone()
                 if user and user['password_hash'] == password:
-                    session['username'] = username
-                    session['user_id'] = user['id']
-                    session['user_type'] = 'User'
+                    session.update(username=username, user_id=user['id'], user_type='User')
                     return jsonify({'success': True})
-                else:
-                    return jsonify({'success': False, 'message': 'Invalid credentials'})
+                return jsonify({'success': False, 'message': 'Invalid'})
     except Exception as e:
-        logger.error(f"Login error: {e}")
-        return jsonify({'success': False, 'message': 'Server error'})
+        logger.error(f"Login: {e}")
+        return jsonify({'success': False, 'message': 'Error'})
 
-# === INCREMENT DOWNLOAD ===
 @app.route('/increment_download/<int:meme_id>', methods=['POST'])
 def increment_download(meme_id):
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute(
-                    'UPDATE memes SET meme_download_counts = meme_download_counts + 1 WHERE meme_id = %s',
-                    (meme_id,)
-                )
+                cur.execute('UPDATE memes SET meme_download_counts = meme_download_counts + 1 WHERE meme_id = %s', (meme_id,))
                 conn.commit()
         return jsonify({'success': True})
     except Exception as e:
-        logger.error(f"Download increment failed: {e}")
+        logger.error(f"Download: {e}")
         return jsonify({'success': False})
 
-# === LOG VIEWER ===
 @app.route('/import-log')
 def view_log():
-    try:
-        return send_file('import.log', mimetype='text/plain')
-    except FileNotFoundError:
-        return "No log yet.", 404
+    try: return send_file('import.log', mimetype='text/plain')
+    except: return "No log", 404
 
-# === PLACEHOLDERS ===
 @app.route('/profile')
-def profile():
-    return render_template('profile.html')
-
+def profile(): return render_template('profile.html')
 @app.route('/admin')
-def admin():
-    return render_template('admin.html')
+def admin(): return render_template('admin.html')
 
-# === INIT DB ON START ===
 with app.app_context():
     init_db()
 
-# === RUN ===
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
