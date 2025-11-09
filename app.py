@@ -4,7 +4,7 @@ import os
 import logging
 from datetime import datetime
 from db import get_conn, init_db
-from erate import erate_bp  # E-Rate SAFE
+from erate import erate_bp  # E-RATE SAFE
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-prod')
@@ -39,11 +39,11 @@ def memes_page():
             with conn.cursor() as cur:
                 # Total memes
                 cur.execute('SELECT COUNT(*) FROM memes')
-                meme_count = cur.fetchone()[0]
+                meme_count = cur.fetchone()['count']  # ← dict key
 
                 # Total downloads
-                cur.execute('SELECT COALESCE(SUM(meme_download_counts), 0) FROM memes')
-                total_downloads = cur.fetchone()[0]
+                cur.execute('SELECT COALESCE(SUM(meme_download_counts), 0) AS total FROM memes')
+                total_downloads = cur.fetchone()['total']
 
                 # Fetch memes with owner
                 cur.execute('''
@@ -74,7 +74,7 @@ def memes_page():
         memes = users = []
 
     return render_template(
-        'memes.html',  # DEDICATED MEMES PAGE
+        'memes.html',
         username=username,
         user_type=user_type,
         meme_count=meme_count,
@@ -101,9 +101,9 @@ def register():
 
                 cur.execute(
                     'INSERT INTO users (username, password_hash) VALUES (%s, %s) RETURNING id',
-                    (username, password)  # bcrypt in prod!
+                    (username, password)
                 )
-                user_id = cur.fetchone()[0]
+                user_id = cur.fetchone()['id']
                 conn.commit()
 
                 session['username'] = username
