@@ -26,13 +26,11 @@ logger = logging.getLogger(__name__)
 # === STRFTIME FILTER ===
 @app.template_filter('strftime')
 def _jinja2_filter_strftime(date, fmt='%m/%d/%Y'):
-    if date is None:
-        return ''
-    return date.strftime(fmt)
+    return date.strftime(fmt) if date else ''
 
-# === MEMES ROUTE ===
+# === MEMES PAGE ===
 @app.route('/memes')
-def memes():
+def memes_page():
     username = session.get('username')
     user_type = session.get('user_type', 'Guest')
 
@@ -49,8 +47,7 @@ def memes():
 
                 # Fetch memes with owner
                 cur.execute('''
-                    SELECT m.meme_id, m.type, m.meme_description, m.meme_download_counts, m.owner,
-                           u.username
+                    SELECT m.meme_id, m.type, m.meme_description, m.meme_download_counts, m.owner, u.username
                     FROM memes m
                     LEFT JOIN users u ON m.owner = u.id
                     ORDER BY m.meme_download_counts DESC
@@ -61,24 +58,23 @@ def memes():
                 users = []
                 for row in rows:
                     meme = {
-                        'meme_id': row[0],
-                        'type': row[1] or '',
-                        'meme_description': row[2] or '',
-                        'meme_download_counts': row[3],
-                        'owner': row[4]
+                        'meme_id': row['meme_id'],
+                        'type': row['type'] or '',
+                        'meme_description': row['meme_description'] or '',
+                        'meme_download_counts': row['meme_download_counts'],
+                        'owner': row['owner']
                     }
                     memes.append(meme)
-                    if row[5]:
-                        users.append({'id': row[4], 'username': row[5]})
+                    if row['username']:
+                        users.append({'id': row['owner'], 'username': row['username']})
 
     except Exception as e:
         logger.error(f"DB Error on /memes: {e}")
         meme_count = total_downloads = 0
-        memes = []
-        users = []
+        memes = users = []
 
     return render_template(
-        'index.html',  # Your memes template
+        'memes.html',  # DEDICATED MEMES PAGE
         username=username,
         user_type=user_type,
         meme_count=meme_count,
@@ -105,7 +101,7 @@ def register():
 
                 cur.execute(
                     'INSERT INTO users (username, password_hash) VALUES (%s, %s) RETURNING id',
-                    (username, password)  # bcrypt in prod
+                    (username, password)  # bcrypt in prod!
                 )
                 user_id = cur.fetchone()[0]
                 conn.commit()
@@ -129,9 +125,9 @@ def login():
             with conn.cursor() as cur:
                 cur.execute('SELECT id, password_hash FROM users WHERE username = %s', (username,))
                 user = cur.fetchone()
-                if user and user[1] == password:
+                if user and user['password_hash'] == password:
                     session['username'] = username
-                    session['user_id'] = user[0]
+                    session['user_id'] = user['id']
                     session['user_type'] = 'User'
                     return jsonify({'success': True})
                 else:
@@ -173,7 +169,7 @@ def profile():
 def admin():
     return render_template('admin.html')
 
-# === INIT DB ===
+# === INIT DB ON START ===
 with app.app_context():
     init_db()
 
