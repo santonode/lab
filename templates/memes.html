@@ -4,8 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Santo - Asset List</title>
+
+    <!-- FAVICON FROM /static/favicon.ico -->
+    <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+
     <!-- CACHE BUSTED CSS + HTTPS -->
     <link rel="stylesheet" href="{{ url_for('static2_files', filename='styles.css') }}?v={{ cache_buster }}">
+
     <style>
         body { min-height: 100%; margin: 0; padding: 0; box-sizing: border-box; }
         .header { position: fixed; top: 0; width: 100%; background-color: #263238; color: white; padding: 5px 0; text-align: center; z-index: 1000; font-family: Arial, sans-serif; font-weight: bold; border-bottom: 2px solid #000000; height: 45px; box-sizing: border-box; display: flex; justify-content: center; align-items: center; }
