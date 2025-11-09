@@ -35,7 +35,7 @@
         .meme-table th:nth-child(3), .meme-table td:nth-child(3) { width: 10%; min-width: 80px; }
         .meme-table th:nth-child(4), .meme-table td:nth-child(4) { width: 70%; min-width: 150px; }
         .meme-table th:nth-child(5), .meme-table td:nth-child(5) { width: 10%; min-width: 50px; }
-        .meme-thumb-na { color: #999; font-style: italic; font-size: 12px; text-align: center; display: block; line-height: 1.2; padding: 8px 0; }
+        .meme-thumb-na { color: #999; font-style: italic; font-size: 12px; text-align: center; display: block; line-height: 1.2; padding: 8px 0; cursor: pointer; }
         .meme-thumb img { max-height: calc(1.5em + 16px); width: auto; vertical-align: middle; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: block; margin: 0 auto; cursor: pointer; transition: transform 0.2s ease; }
         .meme-thumb img:hover { transform: scale(1.05); }
         .download-link { color: #26A69A; text-decoration: none; font-weight: bold; font-size: 14px; }
@@ -140,7 +140,7 @@
                             <img src="/static/thumbs/{{ meme.meme_id }}.jpg"
                                  alt="Thumb"
                                  loading="lazy"
-                                 onerror="this.parentNode.innerHTML='<span class=\"meme-thumb-na\">na</span>'"
+                                 onerror="this.onerror=null; this.outerHTML='<span class=\"meme-thumb-na\" onclick=\"openThumbModal({{ meme.meme_id }}, {{ (meme.meme_description or '')|tojson }})\">na</span>'"
                                  onclick="openThumbModal({{ meme.meme_id }}, {{ (meme.meme_description or '')|tojson }})">
                         </td>
                         <td class="meme-description">
