@@ -55,8 +55,6 @@
             text-decoration: none;
             font-weight: bold;
         }
-
-        /* GEAR ICON – 60% SMALLER */
         .header .gear-icon {
             position: absolute;
             top: 12px;
@@ -81,8 +79,6 @@
             height: 12px;
             filter: brightness(0) invert(1);
         }
-
-        /* ADMIN BUTTON – MOVED 20px LEFT */
         .header .admin-link {
             position: absolute;
             top: 50%;
@@ -101,7 +97,6 @@
             background-color: #26A69A;
             color: white;
         }
-
         .content {
             margin-top: 50px;
             margin-bottom: 0;
@@ -196,8 +191,6 @@
             text-decoration: underline;
             color: #00796b;
         }
-
-        /* TOOLTIP – PURELY POSITIONED, NO LAYOUT IMPACT */
         .sort-tooltip {
             position: absolute;
             top: 100%;
@@ -229,8 +222,6 @@
             opacity: 1;
             visibility: visible;
         }
-
-        /* THUMBNAIL POPUP MODAL */
         .thumb-modal-overlay {
             display: none;
             position: fixed;
@@ -329,7 +320,6 @@
             width: 16px;
             height: 16px;
         }
-
         @media (max-width: 600px) {
             .content { padding: 0 10px; }
             .summary { font-size: 0.9em; top: 50px; padding: 2px 5px; margin-bottom: 2px; }
@@ -342,39 +332,13 @@
             .meme-thumb-na { font-size: 10px; }
             .header .gear-icon { width: 20px; height: 20px; top: 13px; }
             .header .gear-icon img { width: 11px; height: 11px; }
-            .header .admin-link { 
-                font-size: 10px; 
-                padding: 1px 5px; 
-                right: 55px;
-            }
-            .thumb-modal {
-                width: 90%;
-                height: auto;
-                min-height: 400px;
-                padding: 15px;
-            }
-            .thumb-modal img {
-                max-width: 250px;
-                max-height: 250px;
-            }
-            .thumb-modal .video-link a {
-                font-size: 14px;
-            }
-            .thumb-modal .share-btn {
-                font-size: 13px;
-                padding: 8px 16px;
-            }
-            .sort-tooltip {
-                font-size: 10px;
-                padding: 3px 6px;
-            }
+            .header .admin-link { font-size: 10px; padding: 1px 5px; right: 55px; }
+            .thumb-modal { width: 90%; height: auto; min-height: 400px; padding: 15px; }
+            .thumb-modal img { max-width: 250px; max-height: 250px; }
+            .thumb-modal .video-link a { font-size: 14px; }
+            .thumb-modal .share-btn { font-size: 13px; padding: 8px 16px; }
+            .sort-tooltip { font-size: 10px; padding: 3px 6px; }
         }
-        @media only screen and (-webkit-min-device-pixel-ratio: 2) and (max-width: 767px) {
-            .meme-table { table-layout: fixed; width: 100%; max-width: 100vw; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-            .meme-table th, .meme-table td { width: min-content !important; min-width: 0; }
-            .meme-thumb img { max-height: calc(2.4em + 8px); }
-        }
-        @media (max-width: 600px) { .footer { position: relative; } }
         .footer {
             position: fixed;
             bottom: 0;
@@ -389,8 +353,6 @@
             box-sizing: border-box;
         }
         .footer p { margin: 3px 0; font-size: 12px; }
-
-        /* GUEST/AUTH POPUP */
         .popup {
             display: none;
             position: fixed;
@@ -442,21 +404,18 @@
 <body>
     <div class="header">
         <h1>Assets</h1>
-
         {% if username %}
             <a href="/" class="user-info">{{ username }}</a>
         {% endif %}
-
         <a href="/profile" class="gear-icon">
             <img src="/static2/gear-icon.png" alt="Settings">
         </a>
-
         <a href="/admin" class="admin-link">Admin</a>
     </div>
-    
+   
     <div class="content">
         <div class="summary">Total Assets: {{ meme_count|default(0) }} assets / Total Downloads: {{ total_downloads|default(0) }}</div>
-        
+       
         <table class="meme-table">
             <thead>
                 <tr>
@@ -503,8 +462,8 @@
                         <td class="meme-id">{{ meme.meme_id }}</td>
                         <td class="meme-type">{{ meme.type }}</td>
                         <td class="meme-thumb">
-                            <img src="/static/thumbs/{{ meme.meme_id }}.jpg" 
-                                 alt="Thumb" 
+                            <img src="/static/thumbs/{{ meme.meme_id }}.jpg"
+                                 alt="Thumb"
                                  loading="lazy"
                                  onerror="this.parentNode.innerHTML='<span class=&quot;meme-thumb-na&quot;>na</span>'"
                                  onclick="openThumbModal({{ meme.meme_id }}, '{{ meme.meme_description | replace("'", "\\'") | default('') }}')">
@@ -512,8 +471,8 @@
                         <td class="meme-description">
                             {{ meme.meme_description if meme.meme_description else 'No description' }}<br>
                             {% if meme.meme_description %}
-                                <a class="download-link" 
-                                   href="javascript:void(0)" 
+                                <a class="download-link"
+                                   href="javascript:void(0)"
                                    onclick="handleDownload('{{ meme.meme_id }}', '{{ meme.meme_description | replace(' ', '_') | replace('/', '_') }}')">
                                    Download
                                 </a> /
@@ -526,13 +485,9 @@
                 {% endfor %}
             </tbody>
         </table>
-        
-        {% if message %}
-            <div class="message">{{ message }}</div>
-        {% endif %}
     </div>
 
-    <!-- THUMBNAIL POPUP MODAL WITH SHARE BUTTON -->
+    <!-- THUMBNAIL MODAL -->
     <div class="thumb-modal-overlay" id="thumbModalOverlay">
         <div class="thumb-modal">
             <button class="close-btn" onclick="closeThumbModal()">X</button>
@@ -558,24 +513,20 @@
     <div id="guestPopup" class="popup">
         <h3>Welcome to Santo!</h3>
         <p>Choose how you'd like to continue:</p>
-
         <div style="margin-bottom: 15px;">
             <button class="tab-btn active" onclick="showTab('register')">Register</button>
             <button class="tab-btn" onclick="showTab('login')">Login</button>
         </div>
-
         <form id="registerForm" class="auth-form" method="POST" action="/memes/register" style="display: block;">
             <input type="text" name="register_username" placeholder="Username (1-12 chars)" required maxlength="12" pattern="[a-zA-Z0-9]+">
             <input type="password" name="register_password" placeholder="Password" required minlength="4">
             <button type="submit" class="register-btn">Register</button>
         </form>
-
         <form id="loginForm" class="auth-form" method="POST" action="/memes/login" style="display: none;">
             <input type="text" name="login_username" placeholder="Username" required>
             <input type="password" name="login_password" placeholder="Password" required>
             <button type="submit" class="login-btn">Login</button>
         </form>
-
         <button class="decline-btn" onclick="closePopup()">Continue as Guest</button>
     </div>
     <div id="popupOverlay" class="popup-overlay"></div>
@@ -585,40 +536,25 @@
     </div>
 
     <script>
-        // GLOBAL SHARE DATA
         let shareData = {};
-
-        // THUMBNAIL MODAL – OPEN + SHARE SETUP
         function openThumbModal(memeId, memeDesc) {
             document.getElementById('modalMemeId').textContent = memeId;
             document.getElementById('modalMemeDesc').textContent = memeDesc || 'No description';
             document.getElementById('modalThumbImg').src = `/static/thumbs/${memeId}.jpg`;
-
             const fullUrl = `https://lab.santoelectronics.com/static/vids/${memeId}.mp4`;
             const shortUrl = `.../vids/${memeId}.mp4`;
-
             const link = document.getElementById('modalVideoLink');
             link.href = fullUrl;
             link.textContent = shortUrl;
-
-            shareData = {
-                id: memeId,
-                desc: memeDesc || 'No description',
-                videoUrl: fullUrl
-            };
-
+            shareData = { id: memeId, desc: memeDesc || 'No description', videoUrl: fullUrl };
             document.getElementById('thumbModalOverlay').style.display = 'flex';
         }
-
         function closeThumbModal() {
             document.getElementById('thumbModalOverlay').style.display = 'none';
         }
-
         document.getElementById('thumbModalOverlay').addEventListener('click', function(e) {
             if (e.target === this) closeThumbModal();
         });
-
-        // COPY TO CLIPBOARD
         async function copyToClipboard() {
             const { id, desc, videoUrl } = shareData;
             const text = `MEME ID: ${id}\nDescription: ${desc}\nVideo: ${videoUrl}`;
@@ -635,8 +571,6 @@
                 alert('Copied to clipboard!');
             }
         }
-
-        // GUEST POPUP
         document.addEventListener('DOMContentLoaded', function() {
             const username = "{{ username }}";
             const user_type = "{{ user_type }}";
@@ -647,12 +581,10 @@
                 sessionStorage.setItem('showedGuestPopup', 'true');
             }
         });
-
         function closePopup() {
             document.getElementById('guestPopup').style.display = 'none';
             document.getElementById('popupOverlay').style.display = 'none';
         }
-
         function showTab(tab) {
             document.getElementById('registerForm').style.display = tab === 'register' ? 'block' : 'none';
             document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
@@ -663,7 +595,6 @@
                 }
             });
         }
-
         document.getElementById('registerForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const formData = new FormData(this);
@@ -675,7 +606,6 @@
             })
             .catch(() => alert('Error. Try again.'));
         });
-
         document.getElementById('loginForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const formData = new FormData(this);
@@ -687,7 +617,6 @@
             })
             .catch(() => alert('Error. Try again.'));
         });
-
         function handleDownload(memeId, description) {
             const videoFilename = `${description}.mp4`;
             const videoUrl = `/static/vids/${memeId}.mp4`;
