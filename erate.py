@@ -33,7 +33,7 @@ def reset_import_session():
 # === ROUTES ===
 @erate_bp.route('/')
 def dashboard():
-    return render_template('erate_dashboard.html')
+    return render_template('erate.html')
 
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
