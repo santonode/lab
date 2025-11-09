@@ -180,6 +180,7 @@ def _import_one_record():
                     session['import_progress'] = progress
                     return render_template('erate_import.html', row=row, progress=progress, error=error_msg)
 
+                # 70 VALUES = 70 PLACEHOLDERS
                 cur.execute('''
                     INSERT INTO erate (
                         app_number, form_nickname, form_pdf, funding_year, fcc_status,
@@ -200,7 +201,7 @@ def _import_one_record():
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                               %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                               %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                              %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                              %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ''', (
                     app_number,
                     row.get('Form Nickname',''),
@@ -218,7 +219,7 @@ def _import_one_record():
                     row.get('Billed Entity Name',''),
                     row.get('Organization Status',''),
                     row.get('Organization Type',''),
-                    row.get('Applicant Type',''),
+                    row.get('Applicant Type',''),  # 70TH COLUMN
                     row.get('Website URL',''),
                     float(row.get('Latitude') or 0),
                     float(row.get('Longitude') or 0),
@@ -278,7 +279,7 @@ def _import_one_record():
         progress['success'] += 1
     except Exception as e:
         error_msg = str(e)
-        logger.error(f"Record {progress['index']} failed | App: {app_number} | Error: {error_msg} | Row: {row}")
+        logger.error(f"Record {progress['index']} failed | App: {app_number} | Error: {error_msg}")
         progress['error'] += 1
         session['import_progress'] = progress
         return render_template('erate_import.html', row=row, progress=progress, error=error_msg)
@@ -287,7 +288,7 @@ def _import_one_record():
     session['import_progress'] = progress
     return render_template('erate_import.html', row=row, progress=progress, success=True)
 
-# === BULK IMPORT (69 = 69) ===
+# === BULK IMPORT (70 = 70) ===
 def _import_all_records():
     progress = session['import_progress']
     try:
@@ -333,7 +334,7 @@ def _import_all_records():
                                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                                           %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                                           %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                                          %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                          %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                             ''', (
                                 app_number,
                                 row.get('Form Nickname',''),
@@ -351,7 +352,7 @@ def _import_all_records():
                                 row.get('Billed Entity Name',''),
                                 row.get('Organization Status',''),
                                 row.get('Organization Type',''),
-                                row.get('Applicant Type',''),
+                                row.get('Applicant Type',''),  # 70TH VALUE
                                 row.get('Website URL',''),
                                 float(row.get('Latitude') or 0),
                                 float(row.get('Longitude') or 0),
