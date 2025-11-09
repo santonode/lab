@@ -163,7 +163,7 @@ def _import_one_record():
         app_number = row.get('Application Number', '').strip()
         if not app_number:
             error_msg = "Missing Application Number"
-            logger.warning(f"Record {progress['index']}: {error_msg} | Row: {row}")
+            logger.warning(f"Record {progress['index']}: {error_msg}")
             progress['error'] += 1
             progress['index'] += 1
             session['import_progress'] = progress
@@ -180,7 +180,6 @@ def _import_one_record():
                     session['import_progress'] = progress
                     return render_template('erate_import.html', row=row, progress=progress, error=error_msg)
 
-                # 70 VALUES = 70 PLACEHOLDERS
                 cur.execute('''
                     INSERT INTO erate (
                         app_number, form_nickname, form_pdf, funding_year, fcc_status,
@@ -219,7 +218,7 @@ def _import_one_record():
                     row.get('Billed Entity Name',''),
                     row.get('Organization Status',''),
                     row.get('Organization Type',''),
-                    row.get('Applicant Type',''),  # 70TH COLUMN
+                    row.get('Applicant Type',''),
                     row.get('Website URL',''),
                     float(row.get('Latitude') or 0),
                     float(row.get('Longitude') or 0),
@@ -354,7 +353,7 @@ def _import_all_records():
                                 row.get('Billed Entity Name',''),
                                 row.get('Organization Status',''),
                                 row.get('Organization Type',''),
-                                row.get('Applicant Type',''),  # 70TH VALUE
+                                row.get('Applicant Type',''),
                                 row.get('Website URL',''),
                                 float(row.get('Latitude') or 0),
                                 float(row.get('Longitude') or 0),
