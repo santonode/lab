@@ -167,7 +167,7 @@ def _import_one_record():
             progress['error'] += 1
             progress['index'] += 1
             session['import_progress'] = progress
-            return render_template('erate_import.html', row=row, progress=2025-11-09 00:33:59,330progress, error=error_msg)
+            return render_template('erate_import.html', row=row, progress=progress, error=error_msg)
 
         with get_conn() as conn:
             with conn.cursor() as cur:
@@ -351,7 +351,7 @@ def _import_all_records():
                                 row.get('Billed Entity Name',''),
                                 row.get('Organization Status',''),
                                 row.get('Organization Type',''),
-                                row.get('Applicant '),
+                                row.get('Applicant Type',''),
                                 row.get('Website URL',''),
                                 float(row.get('Latitude') or 0),
                                 float(row.get('Longitude') or 0),
