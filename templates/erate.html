@@ -3,9 +3,9 @@
 <head>
     <title>E-Rate Dashboard</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
     <!-- FAVICON -->
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary: #1a5d57;
@@ -40,17 +40,11 @@
             font-weight: 600;
             font-size: 2.2rem;
         }
-        .subtitle {
-            text-align: center;
-            color: #666;
-            margin-bottom: 20px;
-            font-size: 1.1rem;
-        }
         .filters {
             display: flex;
-            flex-wrap: wrap;
             gap: 12px;
             margin: 25px 0;
+            flex-wrap: wrap;
             align-items: center;
             padding: 15px;
             background: #f8f9fa;
@@ -157,7 +151,8 @@
 </head>
 <body>
 <div class="container">
-    <h1>E-Rate 470 Dashboard</h1>
+    <h1>E-Rate Dashboard</h1>
+
     <div class="filters">
         <form method="get" style="display: contents;">
             <label>
@@ -173,9 +168,11 @@
         </form>
         <a href="{{ url_for('erate.import_interactive') }}" class="btn btn-success">Resume Import</a>
     </div>
+
     <p class="summary">
         <strong>Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</strong>
     </p>
+
     <table>
         <thead>
             <tr>
@@ -210,6 +207,7 @@
             {% endif %}
         </tbody>
     </table>
+
     {% if has_more|default(false) %}
     <div class="pagination">
         <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&offset={{ next_offset|default(0) }}"
