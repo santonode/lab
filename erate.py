@@ -13,7 +13,7 @@ CSV_FILE = '470schema.csv'
 LOG_FILE = 'import.log'
 
 # Setup logger
-logging.basicConfig(filename=LOG_FILE, level=logging.INFO, 
+logging.basicConfig(filename=LOG_FILE, level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -30,44 +30,57 @@ def reset_import_session():
     session.pop('import_progress', None)
     log("Import session reset by user")
 
-# === ROUTES ===
+# === DASHBOARD ROUTE ===
 @erate_bp.route('/')
 def dashboard():
-    return render_template('erate.html')
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute('SELECT COUNT(*) FROM erate_forms')
+                total_records = cur.fetchone()[0]
+                
+                cur.execute('SELECT COUNT(*) FROM erate_forms WHERE imported = TRUE')
+                imported = cur.fetchone()[0]
+                
+                pending = total_records - imported
+    except Exception as e:
+        logger.error(f"Dashboard DB error: {e}")
+        total_records = imported = pending = 0
 
+    return render_template(
+        'erate.html',
+        total_records=total_records,
+        imported=imported,
+        pending=pending
+    )
+
+# === IMPORT INTERACTIVE ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     if not os.path.exists(CSV_FILE):
         log(f"CSV file not found: {CSV_FILE}", "ERROR")
         return "<h2>CSV not found: 470schema.csv</h2>", 404
 
-    # Count total rows
     with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
         total = sum(1 for _ in f) - 1 or 1
 
-    # Handle POST actions
     if request.method == 'POST':
         action = request.form.get('action')
-
-        # FORCE RESET
         if action == 'reset':
             reset_import_session()
             flash("Import session reset. Ready for new import.", "success")
             return redirect(url_for('erate.import_interactive'))
-
         if action == 'import_one':
             return _import_one_record()
         if action == 'import_all':
             return _import_all_records()
 
-    # Auto-reset if stuck
     if 'import_progress' in session:
         progress = session['import_progress']
         if progress.get('index', 0) > total:
             log("Stuck import detected - auto resetting")
             reset_import_session()
 
-    # Initialize session
     if 'import_progress' not in session:
         session['import_progress'] = {
             'index': 1,
@@ -78,11 +91,9 @@ def import_interactive():
 
     progress = session['import_progress']
 
-    # Check if import is complete
     if progress['index'] > progress['total']:
         return render_template('erate_import_complete.html', progress=progress)
 
-    # Load current row
     try:
         with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
@@ -97,6 +108,7 @@ def import_interactive():
 
     return render_template('erate_import.html', row=row, progress=progress)
 
+# === IMPORT ONE RECORD ===
 def _import_one_record():
     progress = session['import_progress']
     index = progress['index']
@@ -132,6 +144,7 @@ def _import_one_record():
         'error_count': progress['error']
     })
 
+# === IMPORT ALL RECORDS ===
 def _import_all_records():
     progress = session['import_progress']
     start_index = progress['index']
@@ -155,6 +168,7 @@ def _import_all_records():
     session['import_progress'] = progress
     return jsonify({'success': True, 'complete': True, 'progress': progress})
 
+# === SAVE TO DB ===
 def _save_to_db(row):
     try:
         with get_conn() as conn:
@@ -186,12 +200,14 @@ def _save_to_db(row):
         log(f"DB Error: {e}", "ERROR")
         return False
 
+# === VIEW LOG ===
 @erate_bp.route('/view-log')
 def view_log():
     if os.path.exists(LOG_FILE):
         return send_file(LOG_FILE, mimetype='text/plain')
     return "No log file found.", 404
 
+# === RESET IMPORT ===
 @erate_bp.route('/reset-import', methods=['POST'])
 def reset_import():
     reset_import_session()
