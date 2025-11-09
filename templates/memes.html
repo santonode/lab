@@ -63,7 +63,7 @@
             .meme-thumb img { max-height: calc(1.2em + 4px); }
             .meme-thumb-na { font-size: 10px; }
             .header .gear-icon { width: 20px; height: 20px; top: 13px; }
-            .header .gear-icon img { width: 11px; height: 11px; }
+            .header .gear-icon img { width: 11px; height: 11: 11px; }
             .header .admin-link { font-size: 10px; padding: 1px 5px; right: 55px; }
             .thumb-modal { width: 90%; height: auto; min-height: 400px; padding: 15px; }
             .thumb-modal img { max-width: 250px; max-height: 250px; }
@@ -209,7 +209,7 @@
         let shareData = {};
         function openThumbModal(memeId, memeDesc) {
             document.getElementById('modalMemeId').textContent = memeId;
-            document.getElementById('modalMemeDesc').textContent = memeDesc || 'No description';
+            document.getElementById('modalMemeDesc' ).textContent = memeDesc || 'No description';
             document.getElementById('modalThumbImg').src = `/static/thumbs/${memeId}.jpg`;
             const fullUrl = `https://lab.santoelectronics.com/static/vids/${memeId}.mp4`;
             const shortUrl = `.../vids/${memeId}.mp4`;
