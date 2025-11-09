@@ -4,14 +4,14 @@ import os
 import logging
 from datetime import datetime
 from db import get_conn, init_db
-from erate import erate_bp
+from erate import erate_bp  # E-Rate blueprint
 
 # === FLASK APP ===
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-prod')
 
-# === REGISTER E-RATE ===
-app.register_blueprint(erate_bp)
+# === REGISTER E-RATE BLUEPRINT WITH /erate PREFIX ===
+app.register_blueprint(erate_bp, url_prefix='/erate')  # THIS FIXES /erate/ 404
 
 # === SERVE static2/ (gear-icon, styles) ===
 @app.route('/static2/<path:filename>')
@@ -153,16 +153,23 @@ def increment_download(meme_id):
 
 @app.route('/import-log')
 def view_log():
-    try: return send_file('import.log', mimetype='text/plain')
-    except: return "No log", 404
+    try:
+        return send_file('import.log', mimetype='text/plain')
+    except:
+        return "No log", 404
 
 @app.route('/profile')
-def profile(): return render_template('profile.html')
-@app.route('/admin')
-def admin(): return render_template('admin.html')
+def profile():
+    return render_template('profile.html')
 
+@app.route('/admin')
+def admin():
+    return render_template('admin.html')
+
+# === INITIALIZE DB ===
 with app.app_context():
     init_db()
 
+# === RUN APP ===
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
