@@ -2,6 +2,7 @@
 from flask import Flask, render_template, request, session, redirect, url_for, jsonify, send_file
 import os
 import logging
+from datetime import datetime
 from db import get_conn
 from erate import erate_bp  # E-Rate untouched
 
@@ -22,6 +23,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# === ADD STRFTIME FILTER (SAFE) ===
+@app.template_filter('strftime')
+def _jinja2_filter_strftime(date, fmt):
+    if date is None:
+        return ''
+    return date.strftime(fmt)
+
 # === ROUTES ===
 @app.route('/')
 def index():
@@ -39,7 +47,7 @@ def index():
                 cur.execute('SELECT COALESCE(SUM(meme_download_counts), 0) FROM memes')
                 total_downloads = cur.fetchone()[0]
 
-                # Fetch all memes with owner
+                # Fetch memes with owner
                 cur.execute('''
                     SELECT m.meme_id, m.type, m.meme_description, m.meme_download_counts, m.owner,
                            u.username
@@ -49,7 +57,6 @@ def index():
                 ''')
                 rows = cur.fetchall()
 
-                # Convert to list of dicts
                 memes = []
                 users = []
                 for row in rows:
@@ -98,7 +105,7 @@ def register():
 
                 cur.execute(
                     'INSERT INTO users (username, password_hash) VALUES (%s, %s) RETURNING id',
-                    (username, password)  # Use bcrypt in production!
+                    (username, password)  # Use bcrypt in prod!
                 )
                 user_id = cur.fetchone()[0]
                 conn.commit()
@@ -122,7 +129,7 @@ def login():
             with conn.cursor() as cur:
                 cur.execute('SELECT id, password_hash FROM users WHERE username = %s', (username,))
                 user = cur.fetchone()
-                if user and user[1] == password:  # bcrypt.compare in prod
+                if user and user[1] == password:
                     session['username'] = username
                     session['user_id'] = user[0]
                     session['user_type'] = 'User'
@@ -157,12 +164,11 @@ def view_log():
     except FileNotFoundError:
         return "No log yet.", 404
 
-# === PROFILE (Placeholder) ===
+# === PROFILE / ADMIN PLACEHOLDERS ===
 @app.route('/profile')
 def profile():
     return render_template('profile.html')
 
-# === ADMIN (Placeholder) ===
 @app.route('/admin')
 def admin():
     return render_template('admin.html')
