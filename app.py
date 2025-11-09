@@ -13,18 +13,27 @@ app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-prod')
 # === REGISTER E-RATE ===
 app.register_blueprint(erate_bp)
 
-# === SERVE static2/ ===
+# === SERVE static2/ (gear-icon, styles) ===
 @app.route('/static2/<path:filename>')
 def static2_files(filename):
     response = send_from_directory('static2', filename)
     response.headers['Cache-Control'] = 'no-cache'
     return response
 
+# === SERVE /static/thumbs/ AND /static/vids/ ===
+@app.route('/static/thumbs/<path:filename>')
+def serve_thumbs(filename):
+    return send_from_directory('static/thumbs', filename)
+
+@app.route('/static/vids/<path:filename>')
+def serve_vids(filename):
+    return send_from_directory('static/vids', filename)
+
 # === LOGGING ===
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# === STRFTIME ===
+# === STRFTIME FILTER ===
 @app.template_filter('strftime')
 def _jinja2_filter_strftime(date, fmt='%m/%d/%Y'):
     return date.strftime(fmt) if date else ''
@@ -44,15 +53,12 @@ def memes_page():
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                # TOTAL MEMES
                 cur.execute('SELECT COUNT(*) AS count FROM memes')
                 meme_count = cur.fetchone()['count']
 
-                # TOTAL DOWNLOADS — FIXED KEY
                 cur.execute('SELECT COALESCE(SUM(meme_download_counts), 0) AS total FROM memes')
                 total_downloads = cur.fetchone()['total']
 
-                # FETCH MEMES
                 cur.execute('''
                     SELECT m.meme_id, m.type, m.meme_description, m.meme_download_counts, m.owner, u.username
                     FROM memes m
