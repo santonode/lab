@@ -288,6 +288,7 @@ def _import_all_records():
                             skipped += 1
                             continue
 
+                        # FIXED: 69 placeholders, 69 values
                         cur.execute('''
                             INSERT INTO erate (
                                 app_number, form_nickname, form_pdf, funding_year, fcc_status,
@@ -393,4 +394,5 @@ def _import_all_records():
     except Exception as e:
         progress['error'] += 1
         session['import_progress'] = progress
+        # FIXED: No 'row' in error case
         return render_template('erate_import.html', progress=progress, error=str(e))
