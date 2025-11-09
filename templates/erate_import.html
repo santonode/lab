@@ -29,7 +29,12 @@
         | Errors: <strong style="color:red">{{ progress.error }}</strong>
     </div>
 
-    {% if progress.index > progress.total %}
+    {% if error %}
+        <p class="error">Error: {{ error }}</p>
+        <p style="text-align: center;">
+            <a href="/erate/import-interactive" class="btn btn-primary">Try Again</a>
+        </p>
+    {% elif progress.index > progress.total %}
         <p class="success">IMPORT COMPLETE!</p>
         <p style="text-align: center;">
             <a href="/erate/" class="btn btn-primary">Back to Dashboard</a>
@@ -38,18 +43,14 @@
 
         <div class="record">
             <h3>Record {{ progress.index }}</h3>
-            <p><strong>App #:</strong> {{ row['Application Number'] or 'N/A' }}</p>
-            <p><strong>Entity:</strong> {{ row['Billed Entity Name'] or 'N/A' }}</p>
-            <p><strong>State:</strong> {{ row['Billed Entity State'] or 'N/A' }}</p>
-            <p><strong>Modified:</strong> {{ row['Last Modified Date/Time'] or 'N/A' }}</p>
+            <p><strong>App #:</strong> {{ row['Application Number'] | default('N/A') }}</p>
+            <p><strong>Entity:</strong> {{ row['Billed Entity Name'] | default('N/A') }}</p>
+            <p><strong>State:</strong> {{ row['Billed Entity State'] | default('N/A') }}</p>
+            <p><strong>Modified:</strong> {{ row['Last Modified Date/Time'] | default('N/A') }}</p>
         </div>
 
         {% if success %}
             <p class="success">Imported successfully!</p>
-        {% endif %}
-
-        {% if error %}
-            <p class="error">Error: {{ error }}</p>
         {% endif %}
 
         <!-- IMPORT THIS RECORD -->
