@@ -10,7 +10,7 @@ app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-prod')
 
 # === REGISTER BLUEPRINTS ===
-app.register_blueprint(erate_bp)
+app.register_blueprint(erate_bp)  # E-Rate works
 
 # === LOGGING ===
 logging.basicConfig(
@@ -37,15 +37,12 @@ def memes_page():
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                # Total memes
-                cur.execute('SELECT COUNT(*) FROM memes')
-                meme_count = cur.fetchone()['count']  # ← dict key
+                cur.execute('SELECT COUNT(*) AS count FROM memes')
+                meme_count = cur.fetchone()['count']
 
-                # Total downloads
                 cur.execute('SELECT COALESCE(SUM(meme_download_counts), 0) AS total FROM memes')
                 total_downloads = cur.fetchone()['total']
 
-                # Fetch memes with owner
                 cur.execute('''
                     SELECT m.meme_id, m.type, m.meme_description, m.meme_download_counts, m.owner, u.username
                     FROM memes m
@@ -67,7 +64,6 @@ def memes_page():
                     memes.append(meme)
                     if row['username']:
                         users.append({'id': row['owner'], 'username': row['username']})
-
     except Exception as e:
         logger.error(f"DB Error on /memes: {e}")
         meme_count = total_downloads = 0
