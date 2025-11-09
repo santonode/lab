@@ -7,320 +7,51 @@
     <!-- CSS from static2/ -->
     <link rel="stylesheet" href="/static2/styles.css">
     <style>
-        body {
-            min-height: 100%;
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        .header {
-            position: fixed;
-            top: 0;
-            width: 100%;
-            background-color: #263238;
-            color: white;
-            padding: 5px 0;
-            text-align: center;
-            z-index: 1000;
-            font-family: Arial, sans-serif;
-            font-weight: bold;
-            border-bottom: 2px solid #000000;
-            height: 45px;
-            box-sizing: border-box;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .header h1 {
-            margin: 0;
-            font-size: 28px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            border-radius: 10px;
-            display: inline-block;
-            padding: 5px 10px;
-            background: linear-gradient(45deg, #26A69A, #FFCA28);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-        }
-        .header .user-info {
-            position: absolute;
-            top: 50%;
-            left: 10px;
-            transform: translateY(-50%);
-            font-size: 14px;
-            color: #FFCA28;
-            padding: 2px 5px;
-            line-height: 1;
-            text-decoration: none;
-            font-weight: bold;
-        }
-        .header .gear-icon {
-            position: absolute;
-            top: 12px;
-            right: 10px;
-            width: 22px;
-            height: 22px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: #000000;
-            border-radius: 5px;
-            text-decoration: none;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.3);
-            transition: all 0.2s ease;
-        }
-        .header .gear-icon:hover {
-            background-color: #333;
-            transform: scale(1.1);
-        }
-        .header .gear-icon img {
-            width: 12px;
-            height: 12px;
-            filter: brightness(0) invert(1);
-        }
-        .header .admin-link {
-            position: absolute;
-            top: 50%;
-            right: 60px;
-            transform: translateY(-50%);
-            font-size: 11px;
-            color: #26A69A;
-            padding: 1px 6px;
-            line-height: 1;
-            text-decoration: none;
-            background-color: rgba(38, 166, 154, 0.1);
-            border: 1px solid #26A69A;
-            border-radius: 4px;
-        }
-        .header .admin-link:hover {
-            background-color: #26A69A;
-            color: white;
-        }
-        .content {
-            margin-top: 50px;
-            margin-bottom: 0;
-            min-height: calc(100vh - 75px);
-            padding-top: 5px;
-            text-align: center;
-            padding-bottom: 45px;
-        }
-        .summary {
-            font-size: 1.2em;
-            margin-bottom: 5px;
-            color: #333;
-            font-weight: bold;
-            position: sticky;
-            top: 50px;
-            background-color: #fff;
-            z-index: 10;
-            padding: 5px 10px;
-            width: 100%;
-            box-sizing: border-box;
-            border-bottom: 3px solid #26A69A;
-        }
-        .meme-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 0;
-        }
-        .meme-table th, .meme-table td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-            vertical-align: middle;
-        }
-        .meme-table th {
-            background: linear-gradient(45deg, #263238, #37474f);
-            color: white;
-            cursor: pointer;
-            position: relative;
-            padding: 8px;
-        }
-        .meme-table th a {
-            color: white;
-            text-decoration: none;
-            display: block;
-            width: 100%;
-            height: 100%;
-        }
-        .meme-table th a:hover {
-            text-decoration: underline;
-        }
-        .meme-table tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        .meme-table tr:hover {
-            background-color: #e3f2fd;
-        }
+        body { min-height: 100%; margin: 0; padding: 0; box-sizing: border-box; }
+        .header { position: fixed; top: 0; width: 100%; background-color: #263238; color: white; padding: 5px 0; text-align: center; z-index: 1000; font-family: Arial, sans-serif; font-weight: bold; border-bottom: 2px solid #000000; height: 45px; box-sizing: border-box; display: flex; justify-content: center; align-items: center; }
+        .header h1 { margin: 0; font-size: 28px; text-transform: uppercase; letter-spacing: 2px; border-radius: 10px; display: inline-block; padding: 5px 10px; background: linear-gradient(45deg, #26A69A, #FFCA28); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .header .user-info { position: absolute; top: 50%; left: 10px; transform: translateY(-50%); font-size: 14px; color: #FFCA28; padding: 2px 5px; line-height: 1; text-decoration: none; font-weight: bold; }
+        .header .gear-icon { position: absolute; top: 12px; right: 10px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background-color: #000000; border-radius: 5px; text-decoration: none; box-shadow: 0 1px 2px rgba(0,0,0,0.3); transition: all 0.2s ease; }
+        .header .gear-icon:hover { background-color: #333; transform: scale(1.1); }
+        .header .gear-icon img { width: 12px; height: 12px; filter: brightness(0) invert(1); }
+        .header .admin-link { position: absolute; top: 50%; right: 60px; transform: translateY(-50%); font-size: 11px; color: #26A69A; padding: 1px 6px; line-height: 1; text-decoration: none; background-color: rgba(38, 166, 154, 0.1); border: 1px solid #26A69A; border-radius: 4px; }
+        .header .admin-link:hover { background-color: #26A69A; color: white; }
+        .content { margin-top: 50px; margin-bottom: 0; min-height: calc(100vh - 75px); padding-top: 5px; text-align: center; padding-bottom: 45px; }
+        .summary { font-size: 1.2em; margin-bottom: 5px; color: #333; font-weight: bold; position: sticky; top: 50px; background-color: #fff; z-index: 10; padding: 5px 10px; width: 100%; box-sizing: border-box; border-bottom: 3px solid #26A69A; }
+        .meme-table { width: 100%; border-collapse: collapse; margin-top: 0; }
+        .meme-table th, .meme-table td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: middle; }
+        .meme-table th { background: linear-gradient(45deg, #263238, #37474f); color: white; cursor: pointer; position: relative; padding: 8px; }
+        .meme-table th a { color: white; text-decoration: none; display: block; width: 100%; height: 100%; }
+        .meme-table th a:hover { text-decoration: underline; }
+        .meme-table tr:nth-child(even) { background-color: #f9f9f9; }
+        .meme-table tr:hover { background-color: #e3f2fd; }
         .meme-table th:nth-child(1), .meme-table td:nth-child(1) { width: 5%; min-width: 40px; }
         .meme-table th:nth-child(2), .meme-table td:nth-child(2) { width: 5%; min-width: 60px; }
         .meme-table th:nth-child(3), .meme-table td:nth-child(3) { width: 10%; min-width: 80px; }
         .meme-table th:nth-child(4), .meme-table td:nth-child(4) { width: 70%; min-width: 150px; }
         .meme-table th:nth-child(5), .meme-table td:nth-child(5) { width: 10%; min-width: 50px; }
-        .meme-thumb-na {
-            color: #999;
-            font-style: italic;
-            font-size: 12px;
-            text-align: center;
-            display: block;
-            line-height: 1.2;
-            padding: 8px 0;
-        }
-        .meme-thumb img {
-            max-height: calc(1.5em + 16px);
-            width: auto;
-            vertical-align: middle;
-            border-radius: 4px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            display: block;
-            margin: 0 auto;
-            cursor: pointer;
-            transition: transform 0.2s ease;
-        }
-        .meme-thumb img:hover {
-            transform: scale(1.05);
-        }
-        .download-link {
-            color: #26A69A;
-            text-decoration: none;
-            font-weight: bold;
-            font-size: 14px;
-        }
-        .download-link:hover {
-            text-decoration: underline;
-            color: #00796b;
-        }
-        .sort-tooltip {
-            position: absolute;
-            top: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: #333;
-            color: #fff;
-            font-size: 11px;
-            padding: 4px 8px;
-            border-radius: 4px;
-            white-space: nowrap;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.2s ease;
-            z-index: 10;
-            pointer-events: none;
-            margin-top: 4px;
-        }
-        .sort-tooltip::after {
-            content: "";
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            margin-left: -5px;
-            border: 5px solid transparent;
-            border-bottom-color: #333;
-        }
-        .meme-table th:hover .sort-tooltip {
-            opacity: 1;
-            visibility: visible;
-        }
-        .thumb-modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-color: rgba(0, 0, 0, 0.75);
-            z-index: 2000;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-        .thumb-modal {
-            background-color: white;
-            width: 500px;
-            height: 500px;
-            border-radius: 12px;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-            box-sizing: border-box;
-            position: relative;
-        }
-        .thumb-modal .close-btn {
-            position: absolute;
-            top: 12px;
-            right: 16px;
-            background: none;
-            border: none;
-            font-size: 24px;
-            cursor: pointer;
-            color: #999;
-        }
-        .thumb-modal .close-btn:hover {
-            color: #000;
-        }
-        .thumb-modal .meme-info {
-            margin-bottom: 15px;
-            text-align: center;
-            font-family: Arial, sans-serif;
-        }
-        .thumb-modal .meme-id {
-            font-size: 20px;
-            font-weight: bold;
-            color: #263238;
-            margin-bottom: 5px;
-        }
-        .thumb-modal .meme-desc {
-            font-size: 16px;
-            color: #555;
-            max-width: 90%;
-            word-wrap: break-word;
-        }
-        .thumb-modal img {
-            max-width: 300px;
-            max-height: 300px;
-            object-fit: contain;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-            margin: 15px 0;
-        }
-        .thumb-modal .video-link {
-            margin-top: 10px;
-            font-size: 16px;
-        }
-        .thumb-modal .video-link a {
-            color: #26A69A;
-            text-decoration: underline;
-            font-weight: bold;
-            font-family: monospace;
-            word-break: break-all;
-        }
-        .thumb-modal .video-link a:hover {
-            color: #1e7d71;
-        }
-        .thumb-modal .share-btn {
-            margin-top: 15px;
-            padding: 10px 20px;
-            background-color: #FFCA28;
-            color: #000;
-            border: none;
-            border-radius: 6px;
-            font-weight: bold;
-            cursor: pointer;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: background-color 0.2s;
-        }
-        .thumb-modal .share-btn:hover {
-            background-color: #FFB300;
-        }
-        .thumb-modal .share-btn svg {
-            width: 16px;
-            height: 16px;
-        }
+        .meme-thumb-na { color: #999; font-style: italic; font-size: 12px; text-align: center; display: block; line-height: 1.2; padding: 8px 0; }
+        .meme-thumb img { max-height: calc(1.5em + 16px); width: auto; vertical-align: middle; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: block; margin: 0 auto; cursor: pointer; transition: transform 0.2s ease; }
+        .meme-thumb img:hover { transform: scale(1.05); }
+        .download-link { color: #26A69A; text-decoration: none; font-weight: bold; font-size: 14px; }
+        .download-link:hover { text-decoration: underline; color: #00796b; }
+        .sort-tooltip { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); background-color: #333; color: #fff; font-size: 11px; padding: 4px 8px; border-radius: 4px; white-space: nowrap; opacity: 0; visibility: hidden; transition: opacity 0.2s ease; z-index: 10; pointer-events: none; margin-top: 4px; }
+        .sort-tooltip::after { content: ""; position: absolute; bottom: 100%; left: 50%; margin-left: -5px; border: 5px solid transparent; border-bottom-color: #333; }
+        .meme-table th:hover .sort-tooltip { opacity: 1; visibility: visible; }
+        .thumb-modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.75); z-index: 2000; justify-content: center; align-items: center; padding: 20px; }
+        .thumb-modal { background-color: white; width: 500px; height: 500px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; position: relative; }
+        .thumb-modal .close-btn { position: absolute; top: 12px; right: 16px; background: none; border: none; font-size: 24px; cursor: pointer; color: #999; }
+        .thumb-modal .close-btn:hover { color: #000; }
+        .thumb-modal .meme-info { margin-bottom: 15px; text-align: center; font-family: Arial, sans-serif; }
+        .thumb-modal .meme-id { font-size: 20px; font-weight: bold; color: #263238; margin-bottom: 5px; }
+        .thumb-modal .meme-desc { font-size: 16px; color: #555; max-width: 90%; word-wrap: break-word; }
+        .thumb-modal img { max-width: 300px; max-height: 300px; object-fit: contain; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); margin: 15px 0; }
+        .thumb-modal .video-link { margin-top: 10px; font-size: 16px; }
+        .thumb-modal .video-link a { color: #26A69A; text-decoration: underline; font-weight: bold; font-family: monospace; word-break: break-all; }
+        .thumb-modal .video-link a:hover { color: #1e7d71; }
+        .thumb-modal .share-btn { margin-top: 15px; padding: 10px 20px; background-color: #FFCA28; color: #000; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 8px; transition: background-color 0.2s; }
+        .thumb-modal .share-btn:hover { background-color: #FFB300; }
+        .thumb-modal .share-btn svg { width: 16px; height: 16px; }
         @media (max-width: 600px) {
             .content { padding: 0 10px; }
             .summary { font-size: 0.9em; top: 50px; padding: 2px 5px; margin-bottom: 2px; }
@@ -340,45 +71,10 @@
             .thumb-modal .share-btn { font-size: 13px; padding: 8px 16px; }
             .sort-tooltip { font-size: 10px; padding: 3px 6px; }
         }
-        .footer {
-            position: fixed;
-            bottom: 0;
-            width: 100%;
-            background-color: #263238;
-            color: white;
-            padding: 5px 0;
-            text-align: center;
-            z-index: 1000;
-            border-top: 2px solid #000000;
-            height: 35px;
-            box-sizing: border-box;
-        }
+        .footer { position: fixed; bottom: 0; width: 100%; background-color: #263238; color: white; padding: 5px 0; text-align: center; z-index: 1000; border-top: 2px solid #000000; height: 35px; box-sizing: border-box; }
         .footer p { margin: 3px 0; font-size: 12px; }
-        .popup {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: white;
-            padding: 20px;
-            border: 2px solid #263238;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
-            z-index: 2000;
-            width: 300px;
-            text-align: center;
-            border-radius: 8px;
-        }
-        .popup-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1500;
-        }
+        .popup { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; padding: 20px; border: 2px solid #263238; box-shadow: 0 0 10px rgba(0,0,0,0.5); z-index: 2000; width: 300px; text-align: center; border-radius: 8px; }
+        .popup-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1500; }
         .popup h3 { margin: 0 0 15px; color: #263238; }
         .popup input { width: 80%; padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; }
         .popup button { padding: 8px 15px; margin: 5px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
@@ -386,20 +82,8 @@
         .popup .login-btn { background-color: #1976D2; color: white; }
         .popup .decline-btn { background-color: #FFCA28; color: black; }
         .popup button:hover { opacity: 0.9; }
-        .popup .tab-btn {
-            padding: 8px 15px;
-            margin: 5px 2px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-            background-color: #ddd;
-            color: #333;
-        }
-        .popup .tab-btn.active {
-            background-color: #26A69A;
-            color: white;
-        }
+        .popup .tab-btn { padding: 8px 15px; margin: 5px 2px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; background-color: #ddd; color: #333; }
+        .popup .tab-btn.active { background-color: #26A69A; color: white; }
     </style>
 </head>
 <body>
@@ -467,14 +151,14 @@
                                  alt="Thumb"
                                  loading="lazy"
                                  onerror="this.parentNode.innerHTML='<span class=\"meme-thumb-na\">na</span>'"
-                                 onclick="openThumbModal({{ meme.meme_id }}, '{{ meme.meme_description | replace(\"'\", \"\\\\'\") | default('') }}')">
+                                 onclick="openThumbModal({{ meme.meme_id }}, {{ meme.meme_description|e|default('')|tojson }})">
                         </td>
                         <td class="meme-description">
                             {{ meme.meme_description if meme.meme_description else 'No description' }}<br>
                             {% if meme.meme_description %}
                                 <a class="download-link"
                                    href="javascript:void(0)"
-                                   onclick="handleDownload('{{ meme.meme_id }}', '{{ meme.meme_description | replace(' ', '_') | replace('/', '_') }}')">
+                                   onclick="handleDownload('{{ meme.meme_id }}', {{ meme.meme_description|e|default('')|tojson }})">
                                    Download
                                 </a> /
                             {% endif %}
