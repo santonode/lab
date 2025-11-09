@@ -394,4 +394,5 @@ def _import_all_records():
     except Exception as e:
         progress['error'] += 1
         session['import_progress'] = progress
+        # FIXED: No 'row' in error case
         return render_template('erate_import.html', progress=progress, error=str(e))
