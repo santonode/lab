@@ -3,65 +3,218 @@
 <head>
     <title>E-Rate Dashboard</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Segoe UI', sans-serif; margin: 40px; background: #f4f7f9; color: #333; }
-        .container { max-width: 1200px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
-        h1 { text-align: center; color: #1a5d57; margin-bottom: 10px; }
-        .filters { display: flex; gap: 10px; margin: 20px 0; flex-wrap: wrap; align-items: center; }
-        .filters label { font-weight: 600; }
-        .filters input[type="text"] { padding: 8px; border: 1px solid #ccc; border-radius: 6px; width: 80px; }
-        .filters input[type="date"] { padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
-        .btn { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; text-decoration: none; display: inline-block; }
-        .btn-primary { background: #007bff; color: white; }
-        .btn-success { background: #27ae60; color: white; }
-        .btn:hover { opacity: 0.9; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-        th { background-color: #1a5d57; color: white; }
+        :root {
+            --primary: #1a5d57;
+            --accent: #007bff;
+            --success: #27ae60;
+            --bg: #f4f7f9;
+            --card: white;
+            --border: #ddd;
+            --text: #333;
+            --hover: #f0f7ff;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            background: var(--card);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: var(--primary);
+            margin: 0 0 10px;
+            font-weight: 600;
+            font-size: 2.2rem;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 20px;
+            font-size: 1.1rem;
+        }
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin: 25px 0;
+            align-items: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        .filters label {
+            font-weight: 600;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+        .filters input[type="text"],
+        .filters input[type="date"] {
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.95rem;
+            min-width: 100px;
+        }
+        .filters input[type="text"] {
+            width: 60px;
+            text-transform: uppercase;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn:active { transform: translateY(0); }
+        .summary {
+            font-weight: 600;
+            color: var(--primary);
+            margin: 20px 0;
+            font-size: 1.1rem;
+            text-align: center;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 0.95rem;
+        }
+        th, td {
+            border: 1px solid var(--border);
+            padding: 12px 10px;
+            text-align: left;
+            vertical-align: middle;
+        }
+        th {
+            background: var(--primary);
+            color: white;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
         tr:nth-child(even) { background-color: #f9f9f9; }
-        .pagination { text-align: center; margin: 20px 0; }
+        tr:hover { background-color: var(--hover); }
+        td { word-wrap: break-word; }
+        .app-number { font-family: monospace; font-weight: 600; }
+        .modified { font-size: 0.9rem; color: #666; }
+        .pagination {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .load-more {
+            display: inline-block;
+            padding: 12px 30px;
+            background: var(--accent);
+            color: white;
+            border-radius: 8px;
+            font-weight: 600;
+            text-decoration: none;
+            box-shadow: 0 2px 8px rgba(0,123,255,0.3);
+        }
+        .load-more:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,123,255,0.4);
+        }
+        @media (max-width: 768px) {
+            .container { margin: 20px; padding: 20px; }
+            .filters { flex-direction: column; align-items: stretch; }
+            .filters label { justify-content: center; }
+            table { font-size: 0.85rem; }
+            th, td { padding: 8px 6px; }
+            .btn { width: 100%; margin: 5px 0; }
+        }
     </style>
 </head>
 <body>
 <div class="container">
     <h1>E-Rate Dashboard</h1>
+    <p class="subtitle">FCC Form 470 Applications</p>
 
     <div class="filters">
-        <form method="get" style="display: inline;">
-            <label>State: <input type="text" name="state" value="{{ filters.state }}" maxlength="2" placeholder="KS"></label>
-            <label>Modified After: <input type="date" name="modified_after" value="{{ filters.modified_after }}"></label>
+        <form method="get" style="display: contents;">
+            <label>
+                State:
+                <input type="text" name="state" value="{{ filters.state }}" maxlength="2" placeholder="KS">
+            </label>
+            <label>
+                Modified After:
+                <input type="date" name="modified_after" value="{{ filters.modified_after }}">
+            </label>
             <button type="submit" class="btn btn-primary">Filter</button>
-            <a href="/erate/" class="btn">Reset</a>
+            <a href="{{ url_for('erate.dashboard') }}" class="btn btn-secondary">Reset</a>
         </form>
-        <a href="/erate/import-interactive" class="btn btn-success">Resume Import</a>
+        <a href="{{ url_for('erate.import_interactive') }}" class="btn btn-success">Resume Import</a>
     </div>
 
-    <p><strong>Showing {{ total_filtered }} of {{ total_count }} records</strong></p>
+    <p class="summary">
+        <strong>Showing {{ total_filtered }} of {{ total_count }} records</strong>
+    </p>
 
     <table>
-        <tr>
-            <th>Application #</th>
-            <th>Entity Name</th>
-            <th>State</th>
-            <th>Funding Year</th>
-            <th>FCC Status</th>
-            <th>Modified</th>
-        </tr>
-        {% for row in table_data %}
-        <tr>
-            <td>{{ row[0] }}</td>
-            <td>{{ row[1] }}</td>
-            <td>{{ row[2] }}</td>
-            <td>{{ row[3] }}</td>
-            <td>{{ row[4] }}</td>
-            <td>{{ row[5] | strftime }}</td>
-        </tr>
-        {% endfor %}
+        <thead>
+            <tr>
+                <th>Application #</th>
+                <th>Entity Name</th>
+                <th>State</th>
+                <th>Funding Year</th>
+                <th>FCC Status</th>
+                <th>Modified</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in table_data %}
+            <tr>
+                <td class="app-number">{{ row.app_number }}</td>
+                <td>{{ row.entity_name or '—' }}</td>
+                <td>{{ row.state or '—' }}</td>
+                <td>{{ row.funding_year or '—' }}</td>
+                <td>{{ row.fcc_status or '—' }}</td>
+                <td class="modified">
+                    {{ row.last_modified_datetime | strftime('%m/%d/%Y') if row.last_modified_datetime else '—' }}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" style="text-align:center; color:#999; padding:30px;">
+                    No records found. Try adjusting filters or <a href="{{ url_for('erate.import_interactive') }}">import data</a>.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
     </table>
 
     {% if has_more %}
     <div class="pagination">
-        <a href="?state={{ filters.state }}&modified_after={{ filters.modified_after }}&offset={{ next_offset }}" class="btn btn-primary">
+        <a href="?state={{ filters.state or '' }}&modified_after={{ filters.modified_after or '' }}&offset={{ next_offset }}"
+           class="load-more">
             Load More (+)
         </a>
     </div>
