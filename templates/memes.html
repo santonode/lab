@@ -4,9 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Santo - Asset List</title>
-    <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+
+    <!-- FAVICON FROM /static/favicon.ico -->
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+
+    <!-- CACHE BUSTED CSS -->
     <link rel="stylesheet" href="{{ url_for('static2_files', filename='styles.css') }}?v={{ cache_buster }}">
+
     <style>
+        /* [ALL YOUR STYLES - UNCHANGED] */
         body { min-height: 100%; margin: 0; padding: 0; box-sizing: border-box; }
         .header { position: fixed; top: 0; width: 100%; background-color: #263238; color: white; padding: 5px 0; text-align: center; z-index: 1000; font-family: Arial, sans-serif; font-weight: bold; border-bottom: 2px solid #000000; height: 45px; box-sizing: border-box; display: flex; justify-content: center; align-items: center; }
         .header h1 { margin: 0; font-size: 28px; text-transform: uppercase; letter-spacing: 2px; border-radius: 10px; display: inline-block; padding: 5px 10px; background: linear-gradient(45deg, #26A69A, #FFCA28); -webkit-background-clip: text; background-clip: text; color: transparent; }
@@ -63,7 +69,7 @@
             .meme-thumb img { max-height: calc(1.2em + 4px); }
             .meme-thumb-na { font-size: 10px; }
             .header .gear-icon { width: 20px; height: 20px; top: 13px; }
-            .header .gear-icon img { width: 11px; height: 11: 11px; }
+            .header .gear-icon img { width: 11px; height: 11px; }
             .header .admin-link { font-size: 10px; padding: 1px 5px; right: 55px; }
             .thumb-modal { width: 90%; height: auto; min-height: 400px; padding: 15px; }
             .thumb-modal img { max-width: 250px; max-height: 250px; }
@@ -132,7 +138,7 @@
                         <td class="meme-id">{{ meme.meme_id }}</td>
                         <td class="meme-type">{{ meme.type }}</td>
                         <td class="meme-thumb">
-                            <img src="/static/thumbs/{{ meme.meme_id }}.jpg"
+                            <img src="{{ url_for('serve_thumbs', filename=meme.meme_id + '.jpg') }}"
                                  alt="Thumb"
                                  loading="lazy"
                                  onerror="this.onerror=null; this.parentNode.innerHTML={{ '<span class=\"meme-thumb-na\" onclick=\"openThumbModal(' ~ meme.meme_id ~ ', ' ~ (meme.meme_description or '')|tojson ~ ')\">na</span>'|safe }}"
@@ -209,9 +215,9 @@
         let shareData = {};
         function openThumbModal(memeId, memeDesc) {
             document.getElementById('modalMemeId').textContent = memeId;
-            document.getElementById('modalMemeDesc' ).textContent = memeDesc || 'No description';
-            document.getElementById('modalThumbImg').src = `/static/thumbs/${memeId}.jpg`;
-            const fullUrl = `https://lab.santoelectronics.com/static/vids/${memeId}.mp4`;
+            document.getElementById('modalMemeDesc').textContent = memeDesc || 'No description';
+            document.getElementById('modalThumbImg').src = `{{ url_for('serve_thumbs', filename='${memeId}.jpg') }}`;
+            const fullUrl = `{{ url_for('serve_vids', filename='${memeId}.mp4') }}`;
             const shortUrl = `.../vids/${memeId}.mp4`;
             const link = document.getElementById('modalVideoLink');
             link.href = fullUrl;
@@ -289,7 +295,7 @@
         });
         function handleDownload(memeId, description) {
             const videoFilename = `${description}.mp4`;
-            const videoUrl = `/static/vids/${memeId}.mp4`;
+            const videoUrl = `{{ url_for('serve_vids', filename='${memeId}.mp4') }}`;
             fetch(`/increment_download/${memeId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
             .then(r => r.json())
             .then(data => {
