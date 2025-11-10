@@ -90,7 +90,6 @@ def dashboard():
                 cur.execute(sql, params)
                 rows = cur.fetchall()
 
-                # CONVERT TO LIST OF DICTS
                 table_data = [
                     {
                         'app_number': row[0],
@@ -121,11 +120,13 @@ def dashboard():
         logger.error(f"Dashboard error: {e}")
         return f"<pre>ERROR: {e}</pre>", 500
 
-# === EXTRACT CSV FROM USAC — BACKGROUND + PASS APP ===
+# === EXTRACT CSV FROM USAC — ROBUST + SIZE CHECK ===
 @erate_bp.route('/extract-csv')
 def extract_csv():
     if current_app.config.get('CSV_DOWNLOAD_IN_PROGRESS'):
         flash("CSV download already in progress. Please wait.", "info")
+    elif os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 500_000_000:
+        flash("Large CSV already exists. Delete it first if you want to re-download.", "warning")
     else:
         current_app.config['CSV_DOWNLOAD_IN_PROGRESS'] = True
         thread = threading.Thread(
@@ -141,23 +142,51 @@ def _download_csv_background(app):
     time.sleep(1)
     try:
         url = "https://opendata.usac.org/api/views/jp7a-89nd/rows.csv?accessType=DOWNLOAD"
+        logger.info("Starting CSV download from USAC...")
+
         response = requests.get(url, stream=True, timeout=600)
-        response.raise_for_status()
+        
+        if response.status_code != 200:
+            logger.error(f"Download failed: HTTP {response.status_code}")
+            return
+        if 'text/csv' not in response.headers.get('Content-Type', ''):
+            logger.error(f"Unexpected content type: {response.headers.get('Content-Type')}")
+            return
+
+        expected_size = int(response.headers.get('Content-Length', 0))
+        downloaded = 0
 
         with open(CSV_FILE, 'wb') as f:
             for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if downloaded % (10 * 1024 * 1024) == 0:
+                        logger.info(f"Downloaded {downloaded / (1024*1024):.1f} MB...")
 
-        # Reset import progress
-        _reset_import_progress(app)
+        actual_size = os.path.getsize(CSV_FILE)
+        if expected_size and abs(actual_size - expected_size) > 1024 * 1024:
+            logger.error(f"Size mismatch! Expected {expected_size}, got {actual_size}")
+            os.remove(CSV_FILE)
+        else:
+            logger.info(f"CSV downloaded successfully: {actual_size / (1024*1024):.1f} MB")
+            _reset_import_progress(app)
 
-        size = response.headers.get('Content-Length', 'Unknown')
-        logger.info(f"CSV downloaded: {size} bytes")
     except Exception as e:
         logger.error(f"Background CSV download failed: {e}")
+        if os.path.exists(CSV_FILE):
+            os.remove(CSV_FILE)
     finally:
         with app.app_context():
             app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
+
+# === PROGRESS ENDPOINT ===
+@erate_bp.route('/progress')
+def get_progress():
+    progress = session.get('import_progress', {
+        'index': 1, 'total': 1, 'success': 0, 'error': 0
+    })
+    return jsonify(progress)
 
 # === IMPORT INTERACTIVE ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
@@ -191,7 +220,6 @@ def import_interactive():
             if current_app.config.get('BULK_IMPORT_IN_PROGRESS'):
                 return jsonify({'error': 'Bulk import already running'}), 429
 
-            # Copy progress for thread
             progress_copy = progress.copy()
             current_app.config['BULK_IMPORT_IN_PROGRESS'] = True
             thread = threading.Thread(
@@ -360,7 +388,7 @@ def _import_one_record():
     session['import_progress'] = progress
     return render_template('erate_import.html', row=row, progress=progress, success=True)
 
-# === BULK IMPORT — BACKGROUND + PASS APP & PROGRESS ===
+# === BULK IMPORT — BACKGROUND + SAFE SESSION UPDATE ===
 def _import_all_background(app, progress):
     time.sleep(1)
     start_index = progress['index']
@@ -494,7 +522,6 @@ def _import_all_background(app, progress):
             progress['error'] += skipped
             progress['index'] = progress['total'] + 1
 
-            # Update session in app context
             with app.app_context():
                 session['import_progress'] = progress
 
@@ -509,7 +536,7 @@ def _import_all_background(app, progress):
         with app.app_context():
             app.config['BULK_IMPORT_IN_PROGRESS'] = False
 
-# === HELPER: Reset import progress with app context ===
+# === HELPER: Reset import progress ===
 def _reset_import_progress(app):
     with app.app_context():
         if 'import_progress' in session:
