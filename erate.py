@@ -9,7 +9,6 @@ import logging
 import requests
 import threading
 import time
-import shutil
 from db import get_conn
 from datetime import datetime
 
@@ -29,6 +28,30 @@ erate_bp = Blueprint('erate', __name__, url_prefix='/erate', template_folder='te
 
 # === CONFIG ===
 CSV_FILE = os.path.join(os.path.dirname(__file__), "470schema.csv")
+INSERT_SQL = '''
+    INSERT INTO erate (
+        app_number, form_nickname, form_pdf, funding_year, fcc_status,
+        allowable_contract_date, created_datetime, created_by,
+        certified_datetime, certified_by, last_modified_datetime, last_modified_by,
+        ben, entity_name, org_status, org_type, applicant_type, website,
+        latitude, longitude, fcc_reg_num, address1, address2, city, state,
+        zip_code, zip_ext, email, phone, phone_ext, num_eligible,
+        contact_name, contact_address1, contact_address2, contact_city,
+        contact_state, contact_zip, contact_zip_ext, contact_phone,
+        contact_phone_ext, contact_email, tech_name, tech_title,
+        tech_phone, tech_phone_ext, tech_email, auth_name, auth_address,
+        auth_city, auth_state, auth_zip, auth_zip_ext, auth_phone,
+        auth_phone_ext, auth_email, auth_title, auth_employer,
+        cat1_desc, cat2_desc, installment_type, installment_min,
+        installment_max, rfp_id, state_restrictions, restriction_desc,
+        statewide, all_public, all_nonpublic, all_libraries, form_version
+    ) VALUES (
+        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s Mehr, %s,
+        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+    )
+'''
 
 # === TIME PARSING ===
 def parse_datetime(value):
@@ -47,7 +70,81 @@ def parse_datetime(value):
             continue
     return None
 
-# === DASHBOARD WITH FILTERS + PAGINATION ===
+def _row_to_tuple(row):
+    return (
+        row.get('Application Number', '').strip(),
+        row.get('Form Nickname', ''),
+        row.get('Form PDF', ''),
+        row.get('Funding Year', ''),
+        row.get('FCC Form 470 Status', ''),
+        parse_datetime(row.get('Allowable Contract Date')),
+        parse_datetime(row.get('Created Date/Time')),
+        row.get('Created By', ''),
+        parse_datetime(row.get('Certified Date/Time')),
+        row.get('Certified By', ''),
+        parse_datetime(row.get('Last Modified Date/Time')),
+        row.get('Last Modified By', ''),
+        row.get('Billed Entity Number', ''),
+        row.get('Billed Entity Name', ''),
+        row.get('Organization Status', ''),
+        row.get('Organization Type', ''),
+        row.get('Applicant Type', ''),
+        row.get('Website URL', ''),
+        float(row.get('Latitude') or 0),
+        float(row.get('Longitude') or 0),
+        row.get('Billed Entity FCC Registration Number', ''),
+        row.get('Billed Entity Address 1', ''),
+        row.get('Billed Entity Address 2', ''),
+        row.get('Billed Entity City', ''),
+        row.get('Billed Entity State', ''),
+        row.get('Billed Entity Zip Code', ''),
+        row.get('Billed Entity Zip Code Ext', ''),
+        row.get('Billed Entity Email', ''),
+        row.get('Billed Entity Phone', ''),
+        row.get('Billed Entity Phone Ext', ''),
+        int(row.get('Number of Eligible Entities') or 0),
+        row.get('Contact Name', ''),
+        row.get('Contact Address 1', ''),
+        row.get('Contact Address 2', ''),
+        row.get('Contact City', ''),
+        row.get('Contact State', ''),
+        row.get('Contact Zip', ''),
+        row.get('Contact Zip Ext', ''),
+        row.get('Contact Phone', ''),
+        row.get('Contact Phone Ext', ''),
+        row.get('Contact Email', ''),
+        row.get('Technical Contact Name', ''),
+        row.get('Technical Contact Title', ''),
+        row.get('Technical Contact Phone', ''),
+        row.get('Technical Contact Phone Ext', ''),
+        row.get('Technical Contact Email', ''),
+        row.get('Authorized Person Name', ''),
+        row.get('Authorized Person Address', ''),
+        row.get('Authorized Person City', ''),
+        row.get('Authorized Person State', ''),
+        row.get('Authorized Person Zip', ''),
+        row.get('Authorized Person Zip Ext', ''),
+        row.get('Authorized Person Phone Number', ''),
+        row.get('Authorized Person Phone Number Ext', ''),
+        row.get('Authorized Person Email', ''),
+        row.get('Authorized Person Title', ''),
+        row.get('Authorized Person Employer', ''),
+        row.get('Category One Description', ''),
+        row.get('Category Two Description', ''),
+        row.get('Installment Type', ''),
+        int(row.get('Installment Min Range Years') or 0),
+        int(row.get('Installment Max Range Years') or 0),
+        row.get('Request for Proposal Identifier', ''),
+        row.get('State or Local Restrictions', ''),
+        row.get('State or Local Restrictions Description', ''),
+        row.get('Statewide State', ''),
+        row.get('All Public Schools Districts', ''),
+        row.get('All Non-Public schools', ''),
+        row.get('All Libraries', ''),
+        row.get('Form Version', '')
+    )
+
+# === DASHBOARD ===
 @erate_bp.route('/')
 def dashboard():
     state_filter = request.args.get('state', '').strip().upper()
@@ -55,15 +152,11 @@ def dashboard():
     offset = max(int(request.args.get('offset', 0)), 0)
     limit = 10
 
-    filters = {
-        'state': state_filter,
-        'modified_after': modified_after_str
-    }
+    filters = {'state': state_filter, 'modified_after': modified_after_str}
 
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                # Count total
                 count_sql = 'SELECT COUNT(*) FROM erate'
                 count_params = []
                 where_clauses = []
@@ -78,11 +171,9 @@ def dashboard():
                 cur.execute(count_sql, count_params)
                 total_count = cur.fetchone()[0]
 
-                # Fetch page
                 sql = '''
-                    SELECT
-                        app_number, entity_name, state, funding_year,
-                        fcc_status, last_modified_datetime
+                    SELECT app_number, entity_name, state, funding_year,
+                           fcc_status, last_modified_datetime
                     FROM erate
                 '''
                 params = []
@@ -96,14 +187,11 @@ def dashboard():
 
                 table_data = [
                     {
-                        'app_number': row[0],
-                        'entity_name': row[1],
-                        'state': row[2],
-                        'funding_year': row[3],
-                        'fcc_status': row[4],
-                        'last_modified_datetime': row[5]
+                        'app_number': r[0], 'entity_name': r[1], 'state': r[2],
+                        'funding_year': r[3], 'fcc_status': r[4],
+                        'last_modified_datetime': r[5]
                     }
-                    for row in rows
+                    for r in rows
                 ]
 
         has_more = len(table_data) > limit
@@ -112,11 +200,8 @@ def dashboard():
 
         return render_template(
             'erate.html',
-            table_data=table_data,
-            filters=filters,
-            total_count=total_count,
-            total_filtered=offset + len(table_data),
-            has_more=has_more,
+            table_data=table_data, filters=filters, total_count=total_count,
+            total_filtered=offset + len(table_data), has_more=has_more,
             next_offset=next_offset
         )
 
@@ -124,15 +209,14 @@ def dashboard():
         logger.error(f"Dashboard error: {e}")
         return f"<pre>ERROR: {e}</pre>", 500
 
-# === EXTRACT CSV FROM USAC — ROBUST + NO SESSION IN THREAD ===
+# === EXTRACT CSV ===
 @erate_bp.route('/extract-csv')
 def extract_csv():
     if current_app.config.get('CSV_DOWNLOAD_IN_PROGRESS'):
-        flash("CSV download already in progress. Please wait.", "info")
+        flash("CSV download already in progress.", "info")
     elif os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 500_000_000:
-        flash("Large CSV already exists. Delete it first if you want to re-download.", "warning")
+        flash("Large CSV exists. Delete to re-download.", "warning")
     else:
-        # RESET SESSION IN REQUEST CONTEXT
         if 'import_progress' in session:
             session.pop('import_progress', None)
             flash("Import progress reset for new CSV.", "info")
@@ -144,102 +228,95 @@ def extract_csv():
         )
         thread.daemon = True
         thread.start()
-        flash("CSV download started in background. Check back in 2-5 minutes.", "info")
+        flash("CSV download started. Check in 2-5 min.", "info")
     return redirect(url_for('erate.dashboard'))
 
 def _download_csv_background(app):
     time.sleep(1)
     try:
         url = "https://opendata.usac.org/api/views/jp7a-89nd/rows.csv?accessType=DOWNLOAD"
-        logger.info("Starting CSV download from USAC...")
-
+        logger.info("Starting CSV download...")
         response = requests.get(url, stream=True, timeout=600)
-        
         if response.status_code != 200:
-            logger.error(f"Download failed: HTTP {response.status_code}")
+            logger.error(f"Download failed: {response.status_code}")
             return
-        if 'text/csv' not in response.headers.get('Content-Type', ''):
-            logger.error(f"Unexpected content type: {response.headers.get('Content-Type')}")
-            return
-
-        expected_size = int(response.headers.get('Content-Length', 0))
+        expected = int(response.headers.get('Content-Length', 0))
         downloaded = 0
-
         with open(CSV_FILE, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
+            for chunk in response.iter_content(8192):
                 if chunk:
                     f.write(chunk)
                     downloaded += len(chunk)
-                    if downloaded % (10 * 1024 * 1024) == 0:
-                        logger.info(f"Downloaded {downloaded / (1024*1024):.1f} MB...")
-
-        actual_size = os.path.getsize(CSV_FILE)
-        if expected_size and abs(actual_size - expected_size) > 1024 * 1024:
-            logger.error(f"Size mismatch! Expected {expected_size}, got {actual_size}")
+                    if downloaded % (10*1024*1024) == 0:
+                        logger.info(f"Downloaded {downloaded/(1024*1024):.1f} MB")
+        actual = os.path.getsize(CSV_FILE)
+        if expected and abs(actual - expected) > 1024*1024:
+            logger.error(f"Size mismatch! Expected {expected}, got {actual}")
             os.remove(CSV_FILE)
         else:
-            logger.info(f"CSV downloaded successfully: {actual_size / (1024*1024):.1f} MB")
-
+            logger.info(f"CSV downloaded: {actual/(1024*1024):.1f} MB")
     except Exception as e:
-        logger.error(f"Background CSV download failed: {e}")
+        logger.error(f"Download failed: {e}")
         if os.path.exists(CSV_FILE):
             os.remove(CSV_FILE)
     finally:
         with app.app_context():
             app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
 
-# === PROGRESS ENDPOINT ===
+# === PROGRESS & STATUS ===
 @erate_bp.route('/progress')
 def get_progress():
-    progress = session.get('import_progress', {
+    progress = current_app.config.get('IMPORT_PROGRESS', {
         'index': 1, 'total': 1, 'success': 0, 'error': 0
     })
     return jsonify(progress)
+
+@erate_bp.route('/status')
+def get_status():
+    thread = current_app.config.get('IMPORT_THREAD')
+    return jsonify({
+        'running': current_app.config.get('BULK_IMPORT_IN_PROGRESS', False),
+        'thread_alive': thread.is_alive() if thread else False
+    })
 
 # === IMPORT INTERACTIVE ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     if not os.path.exists(CSV_FILE):
-        logger.error(f"CSV file not found: {CSV_FILE}")
         return "<h2>CSV not found: 470schema.csv</h2>", 404
 
     with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
         total = sum(1 for _ in f) - 1 or 1
 
     if 'import_progress' not in session:
-        session['import_progress'] = {
-            'index': 1,
-            'total': total,
-            'success': 0,
-            'error': 0
-        }
+        session['import_progress'] = {'index': 1, 'total': total, 'success': 0, 'error': 0}
 
     progress = session['import_progress']
 
     if request.method == 'POST':
         action = request.form.get('action')
         if action == 'reset':
-            logger.info("Import reset by user")
             session.pop('import_progress', None)
             return redirect(url_for('erate.import_interactive'))
-        if action == 'import_one':
-            return _import_one_record()
         if action == 'import_all':
             if current_app.config.get('BULK_IMPORT_IN_PROGRESS'):
-                return jsonify({'error': 'Bulk import already running'}), 429
+                return jsonify({'error': 'Import already running'}), 429
 
             progress_copy = progress.copy()
             current_app.config['BULK_IMPORT_IN_PROGRESS'] = True
+            current_app.config['IMPORT_PROGRESS'] = progress_copy
+            current_app.config['IMPORT_THREAD'] = None
+
             thread = threading.Thread(
                 target=_import_all_background,
                 args=(current_app._get_current_object(), progress_copy)
             )
             thread.daemon = True
+            current_app.config['IMPORT_THREAD'] = thread
             thread.start()
             return jsonify({'status': 'started'})
 
     if progress['index'] > progress['total']:
-        logger.info(f"Import completed: {progress['success']} success, {progress['error']} errors")
         return render_template('erate_import_complete.html', progress=progress)
 
     try:
@@ -256,150 +333,11 @@ def import_interactive():
 
     return render_template('erate_import.html', row=row, progress=progress)
 
-# === IMPORT ONE RECORD ===
-def _import_one_record():
-    progress = session['import_progress']
-    try:
-        with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
-            reader = csv.DictReader(f)
-            reader.fieldnames = [n.strip().lstrip('\ufeff') for n in reader.fieldnames]
-            for _ in range(progress['index'] - 1):
-                next(reader)
-            row = next(reader)
-
-        app_number = row.get('Application Number', '').strip()
-        if not app_number:
-            error_msg = "Missing Application Number"
-            logger.warning(f"Record {progress['index']}: {error_msg}")
-            progress['error'] += 1
-            progress['index'] += 1
-            session['import_progress'] = progress
-            return render_template('erate_import.html', row=row, progress=progress, error=error_msg)
-
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
-                if cur.fetchone():
-                    error_msg = "Already exists"
-                    logger.info(f"Record {progress['index']}: Skipped (duplicate) | App: {app_number}")
-                    progress['error'] += 1
-                    progress['index'] += 1
-                    session['import_progress'] = progress
-                    return render_template('erate_import.html', row=row, progress=progress, error=error_msg)
-
-                cur.execute('''
-                    INSERT INTO erate (
-                        app_number, form_nickname, form_pdf, funding_year, fcc_status,
-                        allowable_contract_date, created_datetime, created_by,
-                        certified_datetime, certified_by, last_modified_datetime, last_modified_by,
-                        ben, entity_name, org_status, org_type, applicant_type, website,
-                        latitude, longitude, fcc_reg_num, address1, address2, city, state,
-                        zip_code, zip_ext, email, phone, phone_ext, num_eligible,
-                        contact_name, contact_address1, contact_address2, contact_city,
-                        contact_state, contact_zip, contact_zip_ext, contact_phone,
-                        contact_phone_ext, contact_email, tech_name, tech_title,
-                        tech_phone, tech_phone_ext, tech_email, auth_name, auth_address,
-                        auth_city, auth_state, auth_zip, auth_zip_ext, auth_phone,
-                        auth_phone_ext, auth_email, auth_title, auth_employer,
-                        cat1_desc, cat2_desc, installment_type, installment_min,
-                        installment_max, rfp_id, state_restrictions, restriction_desc,
-                        statewide, all_public, all_nonpublic, all_libraries, form_version
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                              %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                              %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                              %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ''', (
-                    app_number,
-                    row.get('Form Nickname',''),
-                    row.get('Form PDF',''),
-                    row.get('Funding Year',''),
-                    row.get('FCC Form 470 Status',''),
-                    parse_datetime(row.get('Allowable Contract Date')),
-                    parse_datetime(row.get('Created Date/Time')),
-                    row.get('Created By',''),
-                    parse_datetime(row.get('Certified Date/Time')),
-                    row.get('Certified By',''),
-                    parse_datetime(row.get('Last Modified Date/Time')),
-                    row.get('Last Modified By',''),
-                    row.get('Billed Entity Number',''),
-                    row.get('Billed Entity Name',''),
-                    row.get('Organization Status',''),
-                    row.get('Organization Type',''),
-                    row.get('Applicant Type',''),
-                    row.get('Website URL',''),
-                    float(row.get('Latitude') or 0),
-                    float(row.get('Longitude') or 0),
-                    row.get('Billed Entity FCC Registration Number',''),
-                    row.get('Billed Entity Address 1',''),
-                    row.get('Billed Entity Address 2',''),
-                    row.get('Billed Entity City',''),
-                    row.get('Billed Entity State',''),
-                    row.get('Billed Entity Zip Code',''),
-                    row.get('Billed Entity Zip Code Ext',''),
-                    row.get('Billed Entity Email',''),
-                    row.get('Billed Entity Phone',''),
-                    row.get('Billed Entity Phone Ext',''),
-                    int(row.get('Number of Eligible Entities') or 0),
-                    row.get('Contact Name',''),
-                    row.get('Contact Address 1',''),
-                    row.get('Contact Address 2',''),
-                    row.get('Contact City',''),
-                    row.get('Contact State',''),
-                    row.get('Contact Zip',''),
-                    row.get('Contact Zip Ext',''),
-                    row.get('Contact Phone',''),
-                    row.get('Contact Phone Ext',''),
-                    row.get('Contact Email',''),
-                    row.get('Technical Contact Name',''),
-                    row.get('Technical Contact Title',''),
-                    row.get('Technical Contact Phone',''),
-                    row.get('Technical Contact Phone Ext',''),
-                    row.get('Technical Contact Email',''),
-                    row.get('Authorized Person Name',''),
-                    row.get('Authorized Person Address',''),
-                    row.get('Authorized Person City',''),
-                    row.get('Authorized Person State',''),
-                    row.get('Authorized Person Zip',''),
-                    row.get('Authorized Person Zip Ext',''),
-                    row.get('Authorized Person Phone Number',''),
-                    row.get('Authorized Person Phone Number Ext',''),
-                    row.get('Authorized Person Email',''),
-                    row.get('Authorized Person Title',''),
-                    row.get('Authorized Person Employer',''),
-                    row.get('Category One Description',''),
-                    row.get('Category Two Description',''),
-                    row.get('Installment Type',''),
-                    int(row.get('Installment Min Range Years') or 0),
-                    int(row.get('Installment Max Range Years') or 0),
-                    row.get('Request for Proposal Identifier',''),
-                    row.get('State or Local Restrictions',''),
-                    row.get('State or Local Restrictions Description',''),
-                    row.get('Statewide State',''),
-                    row.get('All Public Schools Districts',''),
-                    row.get('All Non-Public schools',''),
-                    row.get('All Libraries',''),
-                    row.get('Form Version','')
-                ))
-                conn.commit()
-
-        logger.info(f"Record {progress['index']} imported | App: {app_number}")
-        progress['success'] += 1
-
-    except Exception as e:
-        error_msg = str(e)
-        logger.error(f"Record {progress['index']} failed | App: {app_number} | Error: {error_msg}")
-        progress['error'] += 1
-        session['import_progress'] = progress
-        return render_template('erate_import.html', row=row, progress=progress, error=error_msg)
-
-    progress['index'] += 1
-    session['import_progress'] = progress
-    return render_template('erate_import.html', row=row, progress=progress, success=True)
-
-# === BULK IMPORT — SAFE + REAL-TIME PROGRESS ===
+# === BULK IMPORT — BULLETPROOF ===
 def _import_all_background(app, progress):
     time.sleep(1)
     start_index = progress['index']
+    batch_size = 1000
 
     try:
         with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
@@ -409,152 +347,83 @@ def _import_all_background(app, progress):
                 next(reader)
 
             imported = skipped = 0
-            with get_conn() as conn:
-                with conn.cursor() as cur:
-                    for row in reader:
-                        app_number = row.get('Application Number', '').strip()
-                        if not app_number:
-                            logger.warning(f"Skipped row {progress['index'] + imported + skipped}")
-                            skipped += 1
-                            continue
+            batch = []
+
+            for row in reader:
+                app_number = row.get('Application Number', '').strip()
+                if not app_number:
+                    skipped += 1
+                    continue
+
+                with get_conn() as conn:
+                    with conn.cursor() as cur:
                         cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
                         if cur.fetchone():
-                            logger.info(f"Skipped duplicate: {app_number}")
                             skipped += 1
                             continue
-                        try:
-                            cur.execute('''
-                                INSERT INTO erate (
-                                    app_number, form_nickname, form_pdf, funding_year, fcc_status,
-                                    allowable_contract_date, created_datetime, created_by,
-                                    certified_datetime, certified_by, last_modified_datetime, last_modified_by,
-                                    ben, entity_name, org_status, org_type, applicant_type, website,
-                                    latitude, longitude, fcc_reg_num, address1, address2, city, state,
-                                    zip_code, zip_ext, email, phone, phone_ext, num_eligible,
-                                    contact_name, contact_address1, contact_address2, contact_city,
-                                    contact_state, contact_zip, contact_zip_ext, contact_phone,
-                                    contact_phone_ext, contact_email, tech_name, tech_title,
-                                    tech_phone, tech_phone_ext, tech_email, auth_name, auth_address,
-                                    auth_city, auth_state, auth_zip, auth_zip_ext, auth_phone,
-                                    auth_phone_ext, auth_email, auth_title, auth_employer,
-                                    cat1_desc, cat2_desc, installment_type, installment_min,
-                                    installment_max, rfp_id, state_restrictions, restriction_desc,
-                                    statewide, all_public, all_nonpublic, all_libraries, form_version
-                                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                                          %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                                          %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                                          %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                            ''', (
-                                app_number,
-                                row.get('Form Nickname',''),
-                                row.get('Form PDF',''),
-                                row.get('Funding Year',''),
-                                row.get('FCC Form 470 Status',''),
-                                parse_datetime(row.get('Allowable Contract Date')),
-                                parse_datetime(row.get('Created Date/Time')),
-                                row.get('Created By',''),
-                                parse_datetime(row.get('Certified Date/Time')),
-                                row.get('Certified By',''),
-                                parse_datetime(row.get('Last Modified Date/Time')),
-                                row.get('Last Modified By',''),
-                                row.get('Billed Entity Number',''),
-                                row.get('Billed Entity Name',''),
-                                row.get('Organization Status',''),
-                                row.get('Organization Type',''),
-                                row.get('Applicant Type',''),
-                                row.get('Website URL',''),
-                                float(row.get('Latitude') or 0),
-                                float(row.get('Longitude') or 0),
-                                row.get('Billed Entity FCC Registration Number',''),
-                                row.get('Billed Entity Address 1',''),
-                                row.get('Billed Entity Address 2',''),
-                                row.get('Billed Entity City',''),
-                                row.get('Billed Entity State',''),
-                                row.get('Billed Entity Zip Code',''),
-                                row.get('Billed Entity Zip Code Ext',''),
-                                row.get('Billed Entity Email',''),
-                                row.get('Billed Entity Phone',''),
-                                row.get('Billed Entity Phone Ext',''),
-                                int(row.get('Number of Eligible Entities') or 0),
-                                row.get('Contact Name',''),
-                                row.get('Contact Address 1',''),
-                                row.get('Contact Address 2',''),
-                                row.get('Contact City',''),
-                                row.get('Contact State',''),
-                                row.get('Contact Zip',''),
-                                row.get('Contact Zip Ext',''),
-                                row.get('Contact Phone',''),
-                                row.get('Contact Phone Ext',''),
-                                row.get('Contact Email',''),
-                                row.get('Technical Contact Name',''),
-                                row.get('Technical Contact Title',''),
-                                row.get('Technical Contact Phone',''),
-                                row.get('Technical Contact Phone Ext',''),
-                                row.get('Technical Contact Email',''),
-                                row.get('Authorized Person Name',''),
-                                row.get('Authorized Person Address',''),
-                                row.get('Authorized Person City',''),
-                                row.get('Authorized Person State',''),
-                                row.get('Authorized Person Zip',''),
-                                row.get('Authorized Person Zip Ext',''),
-                                row.get('Authorized Person Phone Number',''),
-                                row.get('Authorized Person Phone Number Ext',''),
-                                row.get('Authorized Person Email',''),
-                                row.get('Authorized Person Title',''),
-                                row.get('Authorized Person Employer',''),
-                                row.get('Category One Description',''),
-                                row.get('Category Two Description',''),
-                                row.get('Installment Type',''),
-                                int(row.get('Installment Min Range Years') or 0),
-                                int(row.get('Installment Max Range Years') or 0),
-                                row.get('Request for Proposal Identifier',''),
-                                row.get('State or Local Restrictions',''),
-                                row.get('State or Local Restrictions Description',''),
-                                row.get('Statewide State',''),
-                                row.get('All Public Schools Districts',''),
-                                row.get('All Non-Public schools',''),
-                                row.get('All Libraries',''),
-                                row.get('Form Version','')
-                            ))
-                            imported += 1
-                            if imported % 100 == 0:
-                                conn.commit()
-                                logger.info(f"Bulk import: {imported} records processed")
-                        except Exception as e:
-                            logger.error(f"Bulk import failed at row {progress['index'] + imported + skipped} | App: {app_number} | Error: {e}")
-                            skipped += 1
-                            conn.rollback()
-                    conn.commit()
 
-            progress['success'] += imported
-            progress['error'] += skipped
-            progress['index'] = progress['total'] + 1
+                batch.append(row)
+                imported += 1
 
-            with app.app_context():
-                session['import_progress'] = progress
+                if len(batch) >= batch_size:
+                    _commit_batch(app, batch)
+                    batch = []
+                    progress['index'] += batch_size
+                    progress['success'] += batch_size
+                    _save_progress(app, progress)
+                    logger.info(f"Imported: {progress['index'] - 1}")
 
-            logger.info(f"Bulk import completed: {imported} imported, {skipped} skipped")
+            if batch:
+                _commit_batch(app, batch)
+                progress['index'] = progress['total'] + 1
+                progress['success'] += len(batch)
+                _save_progress(app, progress)
+
+            logger.info(f"Bulk import complete: {imported} imported, {skipped} skipped")
 
     except Exception as e:
+        logger.critical(f"Import failed: {e}")
         progress['error'] += 1
-        with app.app_context():
-            session['import_progress'] = progress
-        logger.critical(f"Bulk import crashed: {e}")
+        _save_progress(app, progress)
     finally:
         with app.app_context():
             app.config['BULK_IMPORT_IN_PROGRESS'] = False
+            app.config['IMPORT_THREAD'] = None
+
+def _commit_batch(app, batch):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            for row in batch:
+                try:
+                    cur.execute(INSERT_SQL, _row_to_tuple(row))
+                except Exception as e:
+                    logger.error(f"Row failed: {e}")
+            conn.commit()
+
+def _save_progress(app, progress):
+    with app.app_context():
+        current_app.config['IMPORT_PROGRESS'] = progress.copy()
+
+# === CANCEL IMPORT ===
+@erate_bp.route('/cancel-import', methods=['POST'])
+def cancel_import():
+    thread = current_app.config.get('IMPORT_THREAD')
+    if thread and thread.is_alive():
+        current_app.config['BULK_IMPORT_IN_PROGRESS'] = False
+        flash("Import cancelled.", "warning")
+    return redirect(url_for('erate.import_interactive'))
 
 # === VIEW LOG ===
 @erate_bp.route('/view-log')
 def view_log():
     log_path = os.path.join(os.path.dirname(__file__), "import.log")
     if os.path.exists(log_path):
-        return send_file(log_path, mimetype='text/plain', as_attachment=False)
-    return "No log file found.", 404
+        return send_file(log_path, mimetype='text/plain')
+    return "No log file.", 404
 
 # === RESET IMPORT ===
 @erate_bp.route('/reset-import', methods=['POST'])
 def reset_import():
     session.pop('import_progress', None)
-    flash("Import session fully reset.", "success")
+    flash("Import reset.", "success")
     return redirect(url_for('erate.import_interactive'))
