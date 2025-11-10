@@ -36,7 +36,7 @@ log("=== ERATE MODULE LOADED ===")
 log("Python version: %s", __import__('sys').version.split()[0])
 log("Flask version: %s", __import__('flask').__version__)
 log("psycopg version: %s", psycopg.__version__)
-log("DATABASE_URL: %s", os.getenv('DATABASE_URL', 'NOT SET')[:50] + '...')
+log("DATABASE_URL: %3", os.getenv('DATABASE_URL', 'NOT SET')[:50] + '...')
 CSV_FILE = os.path.join(os.path.dirname(__file__), "470schema.csv")
 log("CSV_FILE: %s", CSV_FILE)
 log("CSV exists: %s, size: %s", os.path.exists(CSV_FILE), os.path.getsize(CSV_FILE) if os.path.exists(CSV_FILE) else 0)
@@ -348,7 +348,7 @@ def import_interactive():
 
     return render_template('erate_import.html', row=row, progress=progress)
 
-# === BULK IMPORT — STREAMING, 512 MB SAFE ===
+# === BULK IMPORT — STREAMING, 512 MB SAFE, NO FILE CLOSE CRASH ===
 def _import_all_background(app, progress):
     time.sleep(1)
     batch_size = 1000
