@@ -12,12 +12,19 @@ import time
 from db import get_conn
 from datetime import datetime
 
-# === SETUP LOGGING ===
+# === SETUP LOGGING (FORCE FILE + PERMISSIONS) ===
+LOG_FILE = os.path.join(os.path.dirname(__file__), "import.log")
+# Ensure directory is writable
+try:
+    open(LOG_FILE, 'a').close()
+except Exception as e:
+    print(f"WARNING: Cannot write to {LOG_FILE}: {e}")
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s %(levelname)s: %(message)s',
     handlers=[
-        logging.FileHandler("import.log"),
+        logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
@@ -28,6 +35,7 @@ erate_bp = Blueprint('erate', __name__, url_prefix='/erate', template_folder='te
 
 # === CONFIG ===
 CSV_FILE = os.path.join(os.path.dirname(__file__), "470schema.csv")
+EXPECTED_CSV_SIZE = 550_000_000  # ~557MB
 
 # === SQL STATEMENTS ===
 INSERT_SQL = '''
@@ -146,7 +154,7 @@ def _row_to_tuple(row):
         row.get('Form Version', '')
     )
 
-# === DASHBOARD — NO QUERY TIMEOUT, INDEXES REQUIRED ===
+# === DASHBOARD — NO QUERY TIMEOUT ===
 @erate_bp.route('/')
 def dashboard():
     state_filter = request.args.get('state', '').strip().upper()
@@ -159,9 +167,6 @@ def dashboard():
     try:
         conn = get_conn()
         with conn.cursor() as cur:
-            # REMOVED: SET statement_timeout = '15s';
-            # Let Gunicorn's 300s timeout handle it
-
             # Count total
             count_sql = 'SELECT COUNT(*) FROM erate'
             count_params = []
@@ -245,7 +250,7 @@ def _download_csv_background(app):
         logger.info("Starting CSV download...")
         response = requests.get(url, stream=True, timeout=600)
         if response.status_code != 200:
-            logger.error(f"Download failed: {response.status_code}")
+            logger.error(f"Download failed: HTTP {response.status_code}")
             return
         expected = int(response.headers.get('Content-Length', 0))
         downloaded = 0
@@ -409,7 +414,7 @@ def _commit_batch(app, batch):
 
 def _save_progress(app, progress):
     with app.app_context():
-        current_app.config['IMPORT_PROGRESS'] = progress.copy()
+        current guy.config['IMPORT_PROGRESS'] = progress.copy()
 
 # === CANCEL IMPORT ===
 @erate_bp.route('/cancel-import', methods=['POST'])
