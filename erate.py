@@ -9,40 +9,28 @@ import logging
 import requests
 import threading
 import time
-import sys
-from logging.handlers import RotatingFileHandler
 from db import get_conn
 from datetime import datetime
 
-# === LOGGING SETUP (RENDER + FILE + GUARANTEED) ===
+# === LOGGING SETUP (ONE LINE TO RENDER + import.log) ===
 LOG_FILE = os.path.join(os.path.dirname(__file__), "import.log")
+open(LOG_FILE, 'a').close()
 
-# Ensure file exists
-try:
-    open(LOG_FILE, 'a').close()
-except Exception as e:
-    print(f"WARNING: Cannot access {LOG_FILE}: {e}")
-
-# Use RotatingFileHandler to force flush
-handler_file = RotatingFileHandler(LOG_FILE, maxBytes=10*1024*1024, backupCount=1)
-handler_stdout = logging.StreamHandler(sys.stdout)
-formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
-handler_file.setFormatter(formatter)
-handler_stdout.setFormatter(formatter)
+# Single handler: write to file + stdout (Render)
+handler = logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8')
+handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
 
 logger = logging.getLogger('erate')
 logger.setLevel(logging.INFO)
 for h in logger.handlers[:]: logger.removeHandler(h)
-logger.addHandler(handler_file)
-logger.addHandler(handler_stdout)
+logger.addHandler(handler)
 
-# Force log + flush + print
+# Log once → appears in both Render logs AND import.log
 def log(msg, *args):
     formatted = msg % args if args else msg
     logger.info(formatted)
-    handler_file.flush()
-    handler_stdout.flush()
-    print(formatted, flush=True)  # Force Render
+    handler.flush()
+    print(formatted, flush=True)  # Only one line in Render
 
 # === BLUEPRINT ===
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate', template_folder='templates')
@@ -269,7 +257,7 @@ def _download_csv_background(app):
         with app.app_context():
             app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
 
-# === IMPORT INTERACTIVE (NO PROGRESS POLLING, SHOW COMPLETE PAGE WHEN RUNNING) ===
+# === IMPORT INTERACTIVE (NO PROGRESS POLLING) ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     if not os.path.exists(CSV_FILE):
@@ -278,7 +266,6 @@ def import_interactive():
     total = sum(1 for _ in open(CSV_FILE, 'r', encoding='utf-8-sig')) - 1
     progress = session.get('import_progress', {'index': 1, 'total': total, 'success': 0, 'error': 0})
 
-    # Show complete page if import is running or finished
     if current_app.config.get('BULK_IMPORT_IN_PROGRESS') or progress['index'] > progress['total']:
         return render_template('erate_import_complete.html', progress=progress)
 
@@ -296,7 +283,7 @@ def import_interactive():
         thread.daemon = True
         current_app.config['IMPORT_THREAD'] = thread
         thread.start()
-        flash("Bulk import started in background. Check /erate/view-log", "success")
+        flash("Bulk import started. Check /erate/view-log", "success")
         return redirect(url_for('erate.import_interactive'))
 
     try:
@@ -312,7 +299,7 @@ def import_interactive():
 
     return render_template('erate_import.html', row=row, progress=progress)
 
-# === BULK IMPORT (LOG TO FILE + RENDER) ===
+# === BULK IMPORT — FINAL, WORKING ===
 def _import_all_background(app, progress):
     time.sleep(1)
     batch_size = 1000
@@ -330,11 +317,20 @@ def _import_all_background(app, progress):
                 app_number = row.get('Application Number', '').strip()
                 if not app_number: continue
 
+                # CRITICAL: Use app context for EVERY DB call
                 with app.app_context():
-                    with get_conn() as conn:
+                    try:
+                        conn = get_conn()
+                        if conn is None:
+                            log("get_conn() returned None")
+                            continue
                         with conn.cursor() as cur:
                             cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
-                            if cur.fetchone(): continue
+                            if cur.fetchone():
+                                continue
+                    except Exception as e:
+                        log("DB ERROR on app_number %s: %s", app_number, e)
+                        continue
 
                 batch.append(row)
                 imported += 1
