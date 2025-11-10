@@ -286,7 +286,7 @@ def _download_csv_background(app):
         with app.app_context():
             app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
 
-# === IMPORT INTERACTIVE — SAFE row + NO READER EXHAUSTION ===
+# === IMPORT INTERACTIVE — SAFE row + is_importing + NO READER EXHAUSTION ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     log("Import interactive page accessed")
@@ -311,13 +311,15 @@ def import_interactive():
     else:
         progress = current_progress
 
-    if current_app.config.get('BULK_IMPORT_IN_PROGRESS') or progress['index'] > progress['total']:
+    is_importing = current_app.config.get('BULK_IMPORT_IN_PROGRESS', False)
+
+    if is_importing or progress['index'] > progress['total']:
         log("Import complete page shown")
         return render_template('erate_import_complete.html', progress=progress)
 
     if request.method == 'POST' and request.form.get('action') == 'import_all':
         log("Bulk import requested")
-        if current_app.config.get('BULK_IMPORT_IN_PROGRESS'):
+        if is_importing:
             flash("Import already running.", "info")
             return redirect(url_for('erate.import_interactive'))
 
@@ -347,7 +349,7 @@ def import_interactive():
             progress['index'] = progress['total'] + 1
             session['import_progress'] = progress
 
-    return render_template('erate_import.html', row=row, progress=progress)
+    return render_template('erate_import.html', row=row, progress=progress, is_importing=is_importing)
 
 # === BULK IMPORT — RE-OPEN CSV IN THREAD, NO ITERATOR EXHAUSTION ===
 def _import_all_background(app, progress):
