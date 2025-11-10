@@ -1,7 +1,6 @@
 # db.py
 from flask import g
 import psycopg
-from psycopg_pool import ConnectionPool
 import os
 import logging
 
@@ -14,69 +13,37 @@ DATABASE_URL = os.getenv('DATABASE_URL')
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# === GLOBAL CONNECTION POOL ===
-pool = None
-
-# === INITIALIZE CONNECTION POOL ===
-def init_db_pool(app):
-    global pool
-    if pool is None:
-        logger.info("Initializing database connection pool...")
-        
-        # Get connection string
-        conninfo = app.config.get('DATABASE_URL', DATABASE_URL)
-        
-        # Insert sslmode=require as query param BEFORE database name
-        if 'sslmode=' not in conninfo.lower():
-            if '/' in conninfo:
-                base, dbname = conninfo.rsplit('/', 1)
-                conninfo = f"{base}/{dbname}?sslmode=require"
-            else:
-                conninfo += '?sslmode=require'
-
-        pool = ConnectionPool(
-            conninfo=conninfo,
-            min_size=1,
-            max_size=10,
-            timeout=30.0,
-            open=True
-        )
-        logger.info("Connection pool initialized with sslmode=require (max_size=10)")
-
-# === GET CONNECTION FROM POOL ===
+# === GET FRESH CONNECTION (NO POOL) ===
 def get_conn():
-    """Get a connection from the pool (thread-safe)"""
+    """Get a fresh connection every time — avoids SSL reuse issues"""
     if 'db' not in g:
-        if pool is None:
-            raise RuntimeError("Connection pool not initialized. Call init_db_pool(app) first.")
         try:
-            g.db = pool.getconn(timeout=10.0)
+            conninfo = DATABASE_URL
+            if 'sslmode' not in conninfo.lower():
+                conninfo += '?sslmode=require'
+            g.db = psycopg.connect(conninfo, sslmode='require')
+            g.db.autocommit = False
         except Exception as e:
-            logger.error(f"Failed to get connection from pool: {e}")
+            logger.error(f"Failed to connect to database: {e}")
             raise
     return g.db
 
-# === RETURN CONNECTION TO POOL ===
+# === CLOSE CONNECTION ===
 def close_conn(e=None):
-    """Return connection to pool on Flask request teardown"""
     db = g.pop('db', None)
     if db is not None:
         try:
-            pool.putconn(db)
+            db.close()
         except Exception as e:
-            logger.warning(f"Error returning connection to pool: {e}")
+            logger.warning(f"Error closing connection: {e}")
 
 # === INIT DB SCHEMA (IDEMPOTENT) ===
 def init_db():
-    """Initialize database tables — safe, idempotent"""
     try:
         conn = get_conn()
         with conn.cursor() as cur:
             logger.info("Initializing database schema...")
-
-            # === VOTES TABLE: Recreate safely with FK ===
             cur.execute('DROP TABLE IF EXISTS votes')
-            logger.info("Dropped existing votes table")
             cur.execute('''
                 CREATE TABLE votes (
                     id SERIAL PRIMARY KEY,
@@ -88,8 +55,6 @@ def init_db():
                     FOREIGN KEY (meme_id) REFERENCES memes(meme_id) ON DELETE CASCADE
                 )
             ''')
-            logger.info("Created votes table with constraints")
-
             conn.commit()
             logger.info("Database initialization complete")
     except Exception as e:
@@ -98,10 +63,8 @@ def init_db():
             conn.rollback()
         raise
 
-# === INIT FLASK APP (CALL FROM app.py) ===
+# === INIT FLASK APP ===
 def init_app(app):
-    """Register teardown and initialize pool + schema"""
     app.teardown_appcontext(close_conn)
     with app.app_context():
-        init_db_pool(app)
         init_db()
