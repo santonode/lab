@@ -3,7 +3,6 @@
 <head>
     <title>E-Rate Import</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
     <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -135,79 +134,45 @@
         | Errors: <strong class="error-count">{{ progress.error|default(0) }}</strong>
     </div>
 
-    {% if error %}
-        <div class="error">Error: {{ error }}</div>
-        <div class="form-group">
-            <a href="{{ url_for('erate.import_interactive') }}" class="btn btn-primary">Try Again</a>
-        </div>
-    {% elif progress.index > progress.total %}
-        <div class="success">IMPORT COMPLETE!</div>
-        <div class="form-group">
-            <a href="{{ url_for('erate.dashboard') }}" class="btn btn-primary">Back to Dashboard</a>
-            <a href="{{ url_for('erate.view_log') }}" class="btn btn-warning">View Import Log</a>
-        </div>
-    {% else %}
+    {% if row %}
         <div class="record">
-            <h3>Record {{ progress.index|default(0) }}</h3>
+            <h3>Record {{ progress.index }}</h3>
             <p><strong>App #:</strong> {{ row['Application Number']|default('N/A') }}</p>
             <p><strong>Entity:</strong> {{ row['Billed Entity Name']|default('N/A') }}</p>
             <p><strong>State:</strong> {{ row['Billed Entity State']|default('N/A') }}</p>
             <p><strong>Modified:</strong> {{ row['Last Modified Date/Time']|default('N/A') }}</p>
         </div>
-
-        {% if success %}
-            <div class="success">Imported successfully!</div>
-        {% endif %}
-
-        <!-- IMPORT THIS RECORD -->
-        <div class="form-group">
-            <form method="post" onsubmit="return confirm('Import this record?');">
-                <input type="hidden" name="action" value="import_one">
-                <button type="submit" class="btn btn-primary">Import This Record</button>
-            </form>
-        </div>
-
-        <!-- BULK IMPORT BUTTON -->
-        <div class="form-group">
-            <button type="button" onclick="startBulkImport()" class="btn btn-success" id="bulkBtn">
-                Import All Remaining ({{ (progress.total|default(0)) - (progress.index|default(0)) + 1 }})
-            </button>
-        </div>
-
-        <!-- START OVER -->
-        <div class="form-group">
-            <form method="post" onsubmit="return confirm('Start over from record 1?');">
-                <input type="hidden" name="action" value="reset">
-                <button type="submit" class="btn btn-danger">Start Over</button>
-            </form>
+    {% else %}
+        <div class="record">
+            <p><em>No preview available (import in progress or complete)</em></p>
         </div>
     {% endif %}
+
+    <!-- BULK IMPORT BUTTON -->
+    <div class="form-group">
+        <form method="post" onsubmit="this.querySelector('button').disabled=true;">
+            <input type="hidden" name="action" value="import_all">
+            <button type="submit" class="btn btn-success" {% if current_app.config.BULK_IMPORT_IN_PROGRESS %}disabled{% endif %}>
+                {% if current_app.config.BULK_IMPORT_IN_PROGRESS %}
+                    Import Running...
+                {% else %}
+                    Import All Remaining ({{ (progress.total|default(0)) - (progress.index|default(0)) + 1 }})
+                {% endif %}
+            </button>
+        </form>
+    </div>
+
+    <!-- START OVER -->
+    <div class="form-group">
+        <form method="post" onsubmit="return confirm('Start over from record 1?');">
+            <input type="hidden" name="action" value="reset">
+            <button type="submit" class="btn btn-danger">Start Over</button>
+        </form>
+    </div>
 
     <div class="back-link">
         <a href="{{ url_for('erate.dashboard') }}">Back to Dashboard</a>
     </div>
 </div>
-
-<script>
-function startBulkImport() {
-    const btn = document.getElementById('bulkBtn');
-    btn.disabled = true;
-    btn.textContent = 'Starting...';
-
-    fetch('{{ url_for("erate.import_interactive") }}', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'action=import_all'
-    })
-    .then(() => {
-        btn.textContent = 'Running in background...';
-        location.reload();
-    })
-    .catch(() => {
-        btn.disabled = false;
-        btn.textContent = 'Import All Remaining';
-    });
-}
-</script>
 </body>
 </html>
