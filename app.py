@@ -2,7 +2,7 @@
 from flask import Flask, send_from_directory
 import os
 from datetime import datetime
-from db import init_db, init_db_pool, init_app as init_db_app  # Updated db.py
+from db import init_db, init_app as init_db_app  # REMOVED init_db_pool
 from erate import erate_bp
 from memes import memes_bp
 
@@ -31,7 +31,7 @@ def inject_cache_buster():
 
 # === REGISTER BLUEPRINTS WITH PREFIXES ===
 app.register_blueprint(erate_bp, url_prefix='/erate')  # /erate/, /erate/import-interactive
-app.register_blueprint(memes_bp, url_prefix='/memes')  # /memes, /memes/register, etc.
+app.register_blueprint(memes_bp, url_prefix='/memes')   # /memes, /memes/register, etc.
 
 # === SERVE /static/thumbs/ AND /static/vids/ ===
 @app.route('/static/thumbs/<path:filename>')
@@ -49,9 +49,8 @@ def static2_files(filename):
     response.headers['Cache-Control'] = 'no-cache'
     return response
 
-# === INIT DB + CONNECTION POOL ON START ===
-init_db_app(app)  # This calls: init_db_pool(app) + init_db() + teardown
+# === INIT DB ON START (NO POOL) ===
+init_db_app(app)  # Calls: init_db() + teardown
 
-# === REMOVED: app.run() BLOCK ===
-# Gunicorn (Render) handles binding to $PORT
+# === GUNICORN HANDLES $PORT — NO app.run() ===
 # DO NOT run Flask dev server in production
