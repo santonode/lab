@@ -4,6 +4,8 @@ import csv
 import os
 import logging
 import requests
+import threading
+import time
 from db import get_conn
 from datetime import datetime
 
@@ -119,12 +121,24 @@ def dashboard():
         logger.error(f"Dashboard error: {e}")
         return f"<pre>ERROR: {e}</pre>", 500
 
-# === EXTRACT CSV FROM USAC ===
+# === EXTRACT CSV FROM USAC — BACKGROUND + NO TIMEOUT ===
 @erate_bp.route('/extract-csv')
 def extract_csv():
+    if 'csv_download' in session and time.time() - session['csv_download'] < 300:
+        flash("CSV download already in progress. Please wait.", "info")
+    else:
+        session['csv_download'] = time.time()
+        thread = threading.Thread(target=_download_csv_background)
+        thread.daemon = True
+        thread.start()
+        flash("CSV download started in background. Check back in 2-5 minutes.", "info")
+    return redirect(url_for('erate.dashboard'))
+
+def _download_csv_background():
+    time.sleep(1)  # Let response return
     try:
         url = "https://opendata.usac.org/api/views/jp7a-89nd/rows.csv?accessType=DOWNLOAD"
-        response = requests.get(url, stream=True, timeout=300)
+        response = requests.get(url, stream=True, timeout=600)
         response.raise_for_status()
 
         with open(CSV_FILE, 'wb') as f:
@@ -136,14 +150,11 @@ def extract_csv():
             session.pop('import_progress', None)
 
         size = response.headers.get('Content-Length', 'Unknown')
-        logger.info(f"CSV extracted: {size} bytes")
-        flash(f"CSV updated! {size} bytes downloaded. Ready for new import.", "success")
-        return redirect(url_for('erate.import_interactive'))
-
+        logger.info(f"CSV downloaded: {size} bytes")
     except Exception as e:
-        logger.error(f"CSV extract failed: {e}")
-        flash(f"Error downloading CSV: {e}", "error")
-        return redirect(url_for('erate.dashboard'))
+        logger.error(f"Background CSV download failed: {e}")
+    finally:
+        session.pop('csv_download', None)
 
 # === IMPORT INTERACTIVE ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
@@ -174,7 +185,13 @@ def import_interactive():
         if action == 'import_one':
             return _import_one_record()
         if action == 'import_all':
-            return _import_all_records()
+            if 'bulk_import' in session and time.time() - session['bulk_import'] < 600:
+                return jsonify({'error': 'Bulk import already running'}), 429
+            session['bulk_import'] = time.time()
+            thread = threading.Thread(target=_import_all_background)
+            thread.daemon = True
+            thread.start()
+            return jsonify({'status': 'started', 'message': 'Bulk import running in background'})
 
     if progress['index'] > progress['total']:
         logger.info(f"Import completed: {progress['success']} success, {progress['error']} errors")
@@ -334,8 +351,9 @@ def _import_one_record():
     session['import_progress'] = progress
     return render_template('erate_import.html', row=row, progress=progress, success=True)
 
-# === BULK IMPORT WITH JSON PROGRESS ===
-def _import_all_records():
+# === BULK IMPORT — BACKGROUND + JSON RESPONSE ===
+def _import_all_background():
+    time.sleep(1)  # Let response return
     progress = session['import_progress']
     start_index = progress['index']
 
@@ -470,16 +488,12 @@ def _import_all_records():
             session['import_progress'] = progress
             logger.info(f"Bulk import completed: {imported} imported, {skipped} skipped")
 
-            return jsonify({
-                'complete': True,
-                'progress': progress
-            })
-
     except Exception as e:
         progress['error'] += 1
         session['import_progress'] = progress
         logger.critical(f"Bulk import crashed: {e}")
-        return jsonify({'error': str(e)}), 500
+    finally:
+        session.pop('bulk_import', None)
 
 # === VIEW LOG ===
 @erate_bp.route('/view-log')
