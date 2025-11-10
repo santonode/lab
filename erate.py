@@ -361,24 +361,21 @@ def _import_all_background(app, progress):
         test_conn.close()
         log("DB connection test in thread: SUCCESS")
 
-        # OPEN CSV WITH ERROR CATCH
-        try:
-            log("Opening CSV: %s", CSV_FILE)
-            with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
-                log("CSV opened, starting reader")
-                reader = csv.DictReader(f)
-                log("CSV reader created, fieldnames: %s", reader.fieldnames[:3])
-                for _ in range(progress['index'] - 1): 
-                    next(reader)
-                log("Skipped to record %s", progress['index'])
-        except Exception as e:
-            log("FATAL: Failed to open CSV: %s", e)
-            raise
+        # READ ENTIRE CSV INTO MEMORY
+        log("Reading CSV into memory: %s", CSV_FILE)
+        with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
+            all_rows = list(csv.DictReader(f))
+        log("CSV loaded: %s rows", len(all_rows))
+
+        # Skip to start
+        start_idx = progress['index'] - 1
+        rows_to_process = all_rows[start_idx:]
+        log("Starting import from row %s (%s remaining)", progress['index'], len(rows_to_process))
 
         batch = []
         imported = 0
 
-        for row in reader:
+        for row in rows_to_process:
             app_number = row.get('Application Number', '').strip()
             if not app_number: continue
 
