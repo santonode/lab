@@ -146,7 +146,7 @@ def _row_to_tuple(row):
         row.get('Form Version', '')
     )
 
-# === DASHBOARD WITH QUERY TIMEOUT & CONNECTION POOL SUPPORT ===
+# === DASHBOARD — NO QUERY TIMEOUT, INDEXES REQUIRED ===
 @erate_bp.route('/')
 def dashboard():
     state_filter = request.args.get('state', '').strip().upper()
@@ -159,8 +159,8 @@ def dashboard():
     try:
         conn = get_conn()
         with conn.cursor() as cur:
-            # Set query timeout to prevent worker timeout
-            cur.execute("SET statement_timeout = '15s';")
+            # REMOVED: SET statement_timeout = '15s';
+            # Let Gunicorn's 300s timeout handle it
 
             # Count total
             count_sql = 'SELECT COUNT(*) FROM erate'
