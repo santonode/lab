@@ -28,6 +28,8 @@ erate_bp = Blueprint('erate', __name__, url_prefix='/erate', template_folder='te
 
 # === CONFIG ===
 CSV_FILE = os.path.join(os.path.dirname(__file__), "470schema.csv")
+
+# === SQL STATEMENTS ===
 INSERT_SQL = '''
     INSERT INTO erate (
         app_number, form_nickname, form_pdf, funding_year, fcc_status,
@@ -47,7 +49,7 @@ INSERT_SQL = '''
         statewide, all_public, all_nonpublic, all_libraries, form_version
     ) VALUES (
         %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s Mehr, %s,
+        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
         %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
         %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
     )
@@ -144,7 +146,7 @@ def _row_to_tuple(row):
         row.get('Form Version', '')
     )
 
-# === DASHBOARD ===
+# === DASHBOARD WITH QUERY TIMEOUT & CONNECTION POOL SUPPORT ===
 @erate_bp.route('/')
 def dashboard():
     state_filter = request.args.get('state', '').strip().upper()
@@ -155,44 +157,49 @@ def dashboard():
     filters = {'state': state_filter, 'modified_after': modified_after_str}
 
     try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                count_sql = 'SELECT COUNT(*) FROM erate'
-                count_params = []
-                where_clauses = []
-                if state_filter:
-                    where_clauses.append('state = %s')
-                    count_params.append(state_filter)
-                if modified_after_str:
-                    where_clauses.append('last_modified_datetime >= %s')
-                    count_params.append(modified_after_str)
-                if where_clauses:
-                    count_sql += ' WHERE ' + ' AND '.join(where_clauses)
-                cur.execute(count_sql, count_params)
-                total_count = cur.fetchone()[0]
+        conn = get_conn()
+        with conn.cursor() as cur:
+            # Set query timeout to prevent worker timeout
+            cur.execute("SET statement_timeout = '15s';")
 
-                sql = '''
-                    SELECT app_number, entity_name, state, funding_year,
-                           fcc_status, last_modified_datetime
-                    FROM erate
-                '''
-                params = []
-                if where_clauses:
-                    sql += ' WHERE ' + ' AND '.join(where_clauses)
-                    params.extend(count_params)
-                sql += ' ORDER BY app_number LIMIT %s OFFSET %s'
-                params.extend([limit + 1, offset])
-                cur.execute(sql, params)
-                rows = cur.fetchall()
+            # Count total
+            count_sql = 'SELECT COUNT(*) FROM erate'
+            count_params = []
+            where_clauses = []
+            if state_filter:
+                where_clauses.append('state = %s')
+                count_params.append(state_filter)
+            if modified_after_str:
+                where_clauses.append('last_modified_datetime >= %s')
+                count_params.append(modified_after_str)
+            if where_clauses:
+                count_sql += ' WHERE ' + ' AND '.join(where_clauses)
+            cur.execute(count_sql, count_params)
+            total_count = cur.fetchone()[0]
 
-                table_data = [
-                    {
-                        'app_number': r[0], 'entity_name': r[1], 'state': r[2],
-                        'funding_year': r[3], 'fcc_status': r[4],
-                        'last_modified_datetime': r[5]
-                    }
-                    for r in rows
-                ]
+            # Fetch page
+            sql = '''
+                SELECT app_number, entity_name, state, funding_year,
+                       fcc_status, last_modified_datetime
+                FROM erate
+            '''
+            params = []
+            if where_clauses:
+                sql += ' WHERE ' + ' AND '.join(where_clauses)
+                params.extend(count_params)
+            sql += ' ORDER BY app_number LIMIT %s OFFSET %s'
+            params.extend([limit + 1, offset])
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+
+            table_data = [
+                {
+                    'app_number': r[0], 'entity_name': r[1], 'state': r[2],
+                    'funding_year': r[3], 'fcc_status': r[4],
+                    'last_modified_datetime': r[5]
+                }
+                for r in rows
+            ]
 
         has_more = len(table_data) > limit
         table_data = table_data[:limit]
@@ -209,7 +216,7 @@ def dashboard():
         logger.error(f"Dashboard error: {e}")
         return f"<pre>ERROR: {e}</pre>", 500
 
-# === EXTRACT CSV ===
+# === EXTRACT CSV FROM USAC ===
 @erate_bp.route('/extract-csv')
 def extract_csv():
     if current_app.config.get('CSV_DOWNLOAD_IN_PROGRESS'):
@@ -263,7 +270,7 @@ def _download_csv_background(app):
         with app.app_context():
             app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
 
-# === PROGRESS & STATUS ===
+# === PROGRESS & STATUS ENDPOINTS ===
 @erate_bp.route('/progress')
 def get_progress():
     progress = current_app.config.get('IMPORT_PROGRESS', {
@@ -333,7 +340,7 @@ def import_interactive():
 
     return render_template('erate_import.html', row=row, progress=progress)
 
-# === BULK IMPORT — BULLETPROOF ===
+# === BULK IMPORT — BULLETPROOF, THREAD-SAFE, BATCHED ===
 def _import_all_background(app, progress):
     time.sleep(1)
     start_index = progress['index']
