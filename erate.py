@@ -9,29 +9,40 @@ import logging
 import requests
 import threading
 import time
+import sys
+from logging.handlers import RotatingFileHandler
 from db import get_conn
 from datetime import datetime
 
-# === LOGGING TO import.log ONLY (NO RENDER/stdout) ===
+# === LOGGING SETUP (RENDER + FILE + GUARANTEED) ===
 LOG_FILE = os.path.join(os.path.dirname(__file__), "import.log")
 
 # Ensure file exists
-open(LOG_FILE, 'a').close()
+try:
+    open(LOG_FILE, 'a').close()
+except Exception as e:
+    print(f"WARNING: Cannot access {LOG_FILE}: {e}")
 
-# Log ONLY to file
-handler = logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8')
-handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
+# Use RotatingFileHandler to force flush
+handler_file = RotatingFileHandler(LOG_FILE, maxBytes=10*1024*1024, backupCount=1)
+handler_stdout = logging.StreamHandler(sys.stdout)
+formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
+handler_file.setFormatter(formatter)
+handler_stdout.setFormatter(formatter)
 
 logger = logging.getLogger('erate')
 logger.setLevel(logging.INFO)
 for h in logger.handlers[:]: logger.removeHandler(h)
-logger.addHandler(handler)
+logger.addHandler(handler_file)
+logger.addHandler(handler_stdout)
 
-# Log only to file (no print, no stdout)
+# Force log + flush + print
 def log(msg, *args):
     formatted = msg % args if args else msg
     logger.info(formatted)
-    handler.flush()
+    handler_file.flush()
+    handler_stdout.flush()
+    print(formatted, flush=True)  # Force Render
 
 # === BLUEPRINT ===
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate', template_folder='templates')
@@ -301,7 +312,7 @@ def import_interactive():
 
     return render_template('erate_import.html', row=row, progress=progress)
 
-# === BULK IMPORT (LOG TO FILE ONLY) ===
+# === BULK IMPORT (LOG TO FILE + RENDER) ===
 def _import_all_background(app, progress):
     time.sleep(1)
     batch_size = 1000
