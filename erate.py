@@ -334,17 +334,28 @@ def _import_all_background(app, progress):
             for _ in range(progress['index'] - 1): next(reader)
 
             batch = []
+            imported = 0
+
             for row in reader:
                 app_number = row.get('Application Number', '').strip()
-                if not app_number: continue
+                if not app_number:
+                    continue
 
+                # CRITICAL: app context for EVERY DB call
                 with app.app_context():
-                    with get_conn() as conn:
-                        with conn.cursor() as cur:
-                            cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
-                            if cur.fetchone(): continue
+                    try:
+                        with get_conn() as conn:
+                            with conn.cursor() as cur:
+                                cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
+                                if cur.fetchone():
+                                    continue
+                    except Exception as e:
+                        log("DB check failed: %s", e)
+                        continue
 
                 batch.append(row)
+                imported += 1
+
                 if len(batch) >= batch_size:
                     with app.app_context():
                         _commit_batch(app, batch)
@@ -363,7 +374,8 @@ def _import_all_background(app, progress):
                 with app.app_context():
                     current_app.config['IMPORT_PROGRESS'] = progress.copy()
 
-        log("Bulk import complete: %s imported", progress['success'])
+            log("Bulk import complete: %s imported", progress['success'])
+
     except Exception as e:
         log("Import failed: %s", e)
     finally:
