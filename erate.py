@@ -12,29 +12,35 @@ import time
 from db import get_conn
 from datetime import datetime
 
-# === SETUP LOGGING (FORCE FILE + PERMISSIONS) ===
+# === SETUP LOGGING (FORCE FILE + THREAD-SAFE + FLUSH) ===
 LOG_FILE = os.path.join(os.path.dirname(__file__), "import.log")
+
+# Ensure file exists
 try:
     open(LOG_FILE, 'a').close()
 except Exception as e:
-    print(f"WARNING: Cannot write to {LOG_FILE}: {e}")
+    print(f"WARNING: Cannot access {LOG_FILE}: {e}")
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s %(levelname)s: %(message)s',
-    handlers=[
-        logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+# Configure root logger
+handler = logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8')
+handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
+
+logger = logging.getLogger('erate')
+logger.setLevel(logging.INFO)
+logger.addHandler(handler)
+logger.addHandler(logging.StreamHandler())
+
+# Force flush after every log
+def log_and_flush(msg, *args, **kwargs):
+    logger.info(msg, *args, **kwargs)
+    for h in logger.handlers:
+        h.flush()
 
 # === BLUEPRINT ===
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate', template_folder='templates')
 
 # === CONFIG ===
 CSV_FILE = os.path.join(os.path.dirname(__file__), "470schema.csv")
-EXPECTED_CSV_SIZE = 550_000_000  # ~557MB
 
 # === SQL STATEMENTS ===
 INSERT_SQL = '''
@@ -166,7 +172,6 @@ def dashboard():
     try:
         conn = get_conn()
         with conn.cursor() as cur:
-            # Count total
             count_sql = 'SELECT COUNT(*) FROM erate'
             count_params = []
             where_clauses = []
@@ -181,7 +186,6 @@ def dashboard():
             cur.execute(count_sql, count_params)
             total_count = cur.fetchone()[0]
 
-            # Fetch page
             sql = '''
                 SELECT app_number, entity_name, state, funding_year,
                        fcc_status, last_modified_datetime
@@ -246,10 +250,10 @@ def _download_csv_background(app):
     time.sleep(1)
     try:
         url = "https://opendata.usac.org/api/views/jp7a-89nd/rows.csv?accessType=DOWNLOAD"
-        logger.info("Starting CSV download...")
+        log_and_flush("Starting CSV download...")
         response = requests.get(url, stream=True, timeout=600)
         if response.status_code != 200:
-            logger.error(f"Download failed: HTTP {response.status_code}")
+            log_and_flush(f"Download failed: HTTP {response.status_code}")
             return
         expected = int(response.headers.get('Content-Length', 0))
         downloaded = 0
@@ -259,15 +263,15 @@ def _download_csv_background(app):
                     f.write(chunk)
                     downloaded += len(chunk)
                     if downloaded % (10*1024*1024) == 0:
-                        logger.info(f"Downloaded {downloaded/(1024*1024):.1f} MB")
+                        log_and_flush(f"Downloaded {downloaded/(1024*1024):.1f} MB")
         actual = os.path.getsize(CSV_FILE)
         if expected and abs(actual - expected) > 1024*1024:
-            logger.error(f"Size mismatch! Expected {expected}, got {actual}")
+            log_and_flush(f"Size mismatch! Expected {expected}, got {actual}")
             os.remove(CSV_FILE)
         else:
-            logger.info(f"CSV downloaded: {actual/(1024*1024):.1f} MB")
+            log_and_flush(f"CSV downloaded: {actual/(1024*1024):.1f} MB")
     except Exception as e:
-        logger.error(f"Download failed: {e}")
+        log_and_flush(f"Download failed: {e}")
         if os.path.exists(CSV_FILE):
             os.remove(CSV_FILE)
     finally:
@@ -366,7 +370,6 @@ def _import_all_background(app, progress):
                     skipped += 1
                     continue
 
-                # DB CHECK — USE APP CONTEXT
                 with app.app_context():
                     with get_conn() as conn:
                         with conn.cursor() as cur:
@@ -379,7 +382,6 @@ def _import_all_background(app, progress):
                 imported += 1
 
                 if len(batch) >= batch_size:
-                    # COMMIT BATCH — USE APP CONTEXT
                     with app.app_context():
                         _commit_batch(app, batch)
                     batch = []
@@ -387,7 +389,7 @@ def _import_all_background(app, progress):
                     progress['success'] += batch_size
                     with app.app_context():
                         _save_progress(app, progress)
-                    logger.info(f"Imported: {progress['index'] - 1}")
+                    log_and_flush(f"Imported: {progress['index'] - 1}")
 
             if batch:
                 with app.app_context():
@@ -397,10 +399,10 @@ def _import_all_background(app, progress):
                 with app.app_context():
                     _save_progress(app, progress)
 
-            logger.info(f"Bulk import complete: {imported} imported, {skipped} skipped")
+            log_and_flush(f"Bulk import complete: {imported} imported, {skipped} skipped")
 
     except Exception as e:
-        logger.critical(f"Import failed: {e}")
+        log_and_flush(f"Import failed: {e}")
         progress['error'] += 1
         with app.app_context():
             _save_progress(app, progress)
