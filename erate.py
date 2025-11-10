@@ -9,6 +9,7 @@ import logging
 import requests
 import threading
 import time
+import traceback
 from db import get_conn
 from datetime import datetime
 
@@ -299,43 +300,57 @@ def import_interactive():
 
     return render_template('erate_import.html', row=row, progress=progress)
 
-# === BULK IMPORT — FINAL, WORKING ===
+# === BULK IMPORT — FINAL, FULL DEBUG ===
 def _import_all_background(app, progress):
     time.sleep(1)
     batch_size = 1000
     try:
         log("Bulk import started from record %s", progress['index'])
+        log("Opening CSV: %s", CSV_FILE)
         with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
+            log("CSV opened, size: %s bytes", os.path.getsize(CSV_FILE))
             reader = csv.DictReader(f)
-            reader.fieldnames = [n.strip().lstrip('\ufeff') for n in reader.fieldnames]
-            for _ in range(progress['index'] - 1): next(reader)
+            log("CSV reader created, fieldnames: %s", reader.fieldnames[:3])
+
+            # Skip to start
+            for _ in range(progress['index'] - 1):
+                next(reader)
+
+            log("Starting import loop")
 
             batch = []
             imported = 0
+            row_count = 0
 
             for row in reader:
-                app_number = row.get('Application Number', '').strip()
-                if not app_number: continue
+                row_count += 1
+                if row_count % 1000 == 0:
+                    log("Processing row %s", row_count)
 
-                # CRITICAL: Use app context for EVERY DB call
-                with app.app_context():
-                    try:
+                app_number = row.get('Application Number', '').strip()
+                if not app_number:
+                    continue
+
+                # CRITICAL: FULL DB CHECK WITH DEBUG
+                try:
+                    with app.app_context():
                         conn = get_conn()
                         if conn is None:
-                            log("get_conn() returned None")
-                            continue
+                            log("FATAL: get_conn() returned None")
+                            raise Exception("get_conn() failed")
                         with conn.cursor() as cur:
                             cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
                             if cur.fetchone():
                                 continue
-                    except Exception as e:
-                        log("DB ERROR on app_number %s: %s", app_number, e)
-                        continue
+                except Exception as e:
+                    log("DB ERROR on row %s (app_number=%s): %s", row_count, app_number, e)
+                    continue
 
                 batch.append(row)
                 imported += 1
 
                 if len(batch) >= batch_size:
+                    log("Committing batch of %s (total imported: %s)", batch_size, imported)
                     with app.app_context():
                         _commit_batch(app, batch)
                     progress['index'] += batch_size
@@ -344,6 +359,7 @@ def _import_all_background(app, progress):
                     batch = []
 
             if batch:
+                log("Committing final batch of %s", len(batch))
                 with app.app_context():
                     _commit_batch(app, batch)
                 progress['index'] = progress['total'] + 1
@@ -352,13 +368,15 @@ def _import_all_background(app, progress):
             log("Bulk import complete: %s imported", progress['success'])
 
     except Exception as e:
-        log("Import failed: %s", e)
+        log("FATAL IMPORT ERROR: %s", e)
+        log("Traceback: %s", traceback.format_exc())
     finally:
         with app.app_context():
             app.config.update({
                 'BULK_IMPORT_IN_PROGRESS': False,
                 'IMPORT_THREAD': None
             })
+        log("Import thread finished")
 
 def _commit_batch(app, batch):
     with app.app_context():
