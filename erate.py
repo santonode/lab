@@ -34,7 +34,7 @@ def log(msg, *args):
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate', template_folder='templates')
 CSV_FILE = os.path.join(os.path.dirname(__file__), "470schema.csv")
 
-# === GET DATABASE_URL FROM ENV ===
+# === DATABASE_URL ===
 DATABASE_URL = os.getenv('DATABASE_URL')
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
@@ -103,7 +103,7 @@ def _row_to_tuple(row):
         row.get('Billed Entity Name', ''),
         row.get('Organization Status', ''),
         row.get('Organization Type', ''),
-        row(the 'Applicant Type', ''),
+        row.get('Applicant Type', ''),
         row.get('Website URL', ''),
         float(row.get('Latitude') or 0),
         float(row.get('Longitude') or 0),
@@ -159,6 +159,153 @@ def _row_to_tuple(row):
         row.get('Form Version', '')
     )
 
+# === DASHBOARD ===
+@erate_bp.route('/')
+def dashboard():
+    state_filter = request.args.get('state', '').strip().upper()
+    modified_after_str = request.args.get('modified_after', '').strip()
+    offset = max(int(request.args.get('offset', 0)), 0)
+    limit = 10
+
+    filters = {'state': state_filter, 'modified_after': modified_after_str}
+
+    try:
+        conn = psycopg.connect(DATABASE_URL)
+        with conn.cursor() as cur:
+            count_sql = 'SELECT COUNT(*) FROM erate'
+            count_params = []
+            where_clauses = []
+            if state_filter:
+                where_clauses.append('state = %s')
+                count_params.append(state_filter)
+            if modified_after_str:
+                where_clauses.append('last_modified_datetime >= %s')
+                count_params.append(modified_after_str)
+            if where_clauses:
+                count_sql += ' WHERE ' + ' AND '.join(where_clauses)
+            cur.execute(count_sql, count_params)
+            total_count = cur.fetchone()[0]
+
+            sql = '''
+                SELECT app_number, entity_name, state, funding_year,
+                       fcc_status, last_modified_datetime
+                FROM erate
+            '''
+            params = []
+            if where_clauses:
+                sql += ' WHERE ' + ' AND '.join(where_clauses)
+                params.extend(count_params)
+            sql += ' ORDER BY app_number LIMIT %s OFFSET %s'
+            params.extend([limit + 1, offset])
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+
+            table_data = [
+                {
+                    'app_number': r[0], 'entity_name': r[1], 'state': r[2],
+                    'funding_year': r[3], 'fcc_status': r[4],
+                    'last_modified_datetime': r[5]
+                }
+                for r in rows
+            ]
+
+        has_more = len(table_data) > limit
+        table_data = table_data[:limit]
+        next_offset = offset + limit
+
+        conn.close()
+        return render_template(
+            'erate.html',
+            table_data=table_data, filters=filters, total_count=total_count,
+            total_filtered=offset + len(table_data), has_more=has_more,
+            next_offset=next_offset
+        )
+
+    except Exception as e:
+        log("Dashboard error: %s", e)
+        return f"<pre>ERROR: {e}</pre>", 500
+
+# === EXTRACT CSV ===
+@erate_bp.route('/extract-csv')
+def extract_csv():
+    if current_app.config.get('CSV_DOWNLOAD_IN_PROGRESS'):
+        flash("CSV download already in progress.", "info")
+        return redirect(url_for('erate.dashboard'))
+    if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 500_000_000:
+        flash("Large CSV exists. Delete to re-download.", "warning")
+        return redirect(url_for('erate.dashboard'))
+
+    current_app.config['CSV_DOWNLOAD_IN_PROGRESS'] = True
+    thread = threading.Thread(target=_download_csv_background, args=(current_app._get_current_object(),))
+    thread.daemon = True
+    thread.start()
+    flash("CSV download started. Check in 2-5 min.", "info")
+    return redirect(url_for('erate.dashboard'))
+
+def _download_csv_background(app):
+    time.sleep(1)
+    try:
+        log("Starting CSV download...")
+        response = requests.get("https://opendata.usac.org/api/views/jp7a-89nd/rows.csv?accessType=DOWNLOAD", stream=True, timeout=600)
+        response.raise_for_status()
+        downloaded = 0
+        with open(CSV_FILE, 'wb') as f:
+            for chunk in response.iter_content(8192):
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if downloaded % (10*1024*1024) == 0:
+                        log("Downloaded %.1f MB", downloaded/(1024*1024))
+        log("CSV downloaded: %.1f MB", os.path.getsize(CSV_FILE)/(1024*1024))
+    except Exception as e:
+        log("Download failed: %s", e)
+        if os.path.exists(CSV_FILE): os.remove(CSV_FILE)
+    finally:
+        with app.app_context():
+            app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
+
+# === IMPORT INTERACTIVE (NO PROGRESS POLLING) ===
+@erate_bp.route('/import-interactive', methods=['GET', 'POST'])
+def import_interactive():
+    if not os.path.exists(CSV_FILE):
+        return "<h2>CSV not found: 470schema.csv</h2>", 404
+
+    total = sum(1 for _ in open(CSV_FILE, 'r', encoding='utf-8-sig')) - 1
+    progress = session.get('import_progress', {'index': 1, 'total': total, 'success': 0, 'error': 0})
+
+    if current_app.config.get('BULK_IMPORT_IN_PROGRESS') or progress['index'] > progress['total']:
+        return render_template('erate_import_complete.html', progress=progress)
+
+    if request.method == 'POST' and request.form.get('action') == 'import_all':
+        if current_app.config.get('BULK_IMPORT_IN_PROGRESS'):
+            flash("Import already running.", "info")
+            return redirect(url_for('erate.import_interactive'))
+
+        current_app.config.update({
+            'BULK_IMPORT_IN_PROGRESS': True,
+            'IMPORT_THREAD': None
+        })
+
+        thread = threading.Thread(target=_import_all_background, args=(current_app._get_current_object(), progress.copy()))
+        thread.daemon = True
+        current_app.config['IMPORT_THREAD'] = thread
+        thread.start()
+        flash("Bulk import started. Check /erate/view-log", "success")
+        return redirect(url_for('erate.import_interactive'))
+
+    try:
+        with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
+            reader = csv.DictReader(f)
+            reader.fieldnames = [n.strip().lstrip('\ufeff') for n in reader.fieldnames]
+            for _ in range(progress['index'] - 1): next(reader)
+            row = next(reader)
+    except StopIteration:
+        progress['index'] = progress['total'] + 1
+        session['import_progress'] = progress
+        return render_template('erate_import_complete.html', progress=progress)
+
+    return render_template('erate_import.html', row=row, progress=progress)
+
 # === BULK IMPORT — USE psycopg.connect() DIRECTLY ===
 def _import_all_background(app, progress):
     time.sleep(1)
@@ -177,7 +324,6 @@ def _import_all_background(app, progress):
                 app_number = row.get('Application Number', '').strip()
                 if not app_number: continue
 
-                # CONNECT DIRECTLY — NO g
                 conn = psycopg.connect(DATABASE_URL)
                 try:
                     with conn.cursor() as cur:
@@ -235,3 +381,17 @@ def _import_all_background(app, progress):
                 'BULK_IMPORT_IN_PROGRESS': False,
                 'IMPORT_THREAD': None
             })
+
+# === VIEW LOG ===
+@erate_bp.route('/view-log')
+def view_log():
+    if os.path.exists(LOG_FILE):
+        return send_file(LOG_FILE, mimetype='text/plain')
+    return "No log file.", 404
+
+# === RESET IMPORT ===
+@erate_bp.route('/reset-import', methods=['POST'])
+def reset_import():
+    session.pop('import_progress', None)
+    flash("Import reset.", "success")
+    return redirect(url_for('erate.import_interactive'))
