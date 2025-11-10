@@ -152,8 +152,8 @@
     <div class="form-group">
         <form method="post" onsubmit="this.querySelector('button').disabled=true;">
             <input type="hidden" name="action" value="import_all">
-            <button type="submit" class="btn btn-success" {% if current_app.config.BULK_IMPORT_IN_PROGRESS %}disabled{% endif %}>
-                {% if current_app.config.BULK_IMPORT_IN_PROGRESS %}
+            <button type="submit" class="btn btn-success" {% if is_importing %}disabled{% endif %}>
+                {% if is_importing %}
                     Import Running...
                 {% else %}
                     Import All Remaining ({{ (progress.total|default(0)) - (progress.index|default(0)) + 1 }})
