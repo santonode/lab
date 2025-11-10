@@ -1,11 +1,15 @@
 # erate.py
-from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify, send_file, flash, current_app
+from flask import (
+    Blueprint, render_template, request, session, redirect, url_for,
+    jsonify, send_file, flash, current_app
+)
 import csv
 import os
 import logging
 import requests
 import threading
 import time
+import shutil
 from db import get_conn
 from datetime import datetime
 
@@ -43,7 +47,7 @@ def parse_datetime(value):
             continue
     return None
 
-# === DASHBOARD WITH FILTERS + PAGINATION + DATA LOADS ===
+# === DASHBOARD WITH FILTERS + PAGINATION ===
 @erate_bp.route('/')
 def dashboard():
     state_filter = request.args.get('state', '').strip().upper()
@@ -120,7 +124,7 @@ def dashboard():
         logger.error(f"Dashboard error: {e}")
         return f"<pre>ERROR: {e}</pre>", 500
 
-# === EXTRACT CSV FROM USAC — ROBUST + SIZE CHECK ===
+# === EXTRACT CSV FROM USAC — ROBUST + NO SESSION IN THREAD ===
 @erate_bp.route('/extract-csv')
 def extract_csv():
     if current_app.config.get('CSV_DOWNLOAD_IN_PROGRESS'):
@@ -128,6 +132,11 @@ def extract_csv():
     elif os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 500_000_000:
         flash("Large CSV already exists. Delete it first if you want to re-download.", "warning")
     else:
+        # RESET SESSION IN REQUEST CONTEXT
+        if 'import_progress' in session:
+            session.pop('import_progress', None)
+            flash("Import progress reset for new CSV.", "info")
+
         current_app.config['CSV_DOWNLOAD_IN_PROGRESS'] = True
         thread = threading.Thread(
             target=_download_csv_background,
@@ -170,7 +179,6 @@ def _download_csv_background(app):
             os.remove(CSV_FILE)
         else:
             logger.info(f"CSV downloaded successfully: {actual_size / (1024*1024):.1f} MB")
-            _reset_import_progress(app)
 
     except Exception as e:
         logger.error(f"Background CSV download failed: {e}")
@@ -388,7 +396,7 @@ def _import_one_record():
     session['import_progress'] = progress
     return render_template('erate_import.html', row=row, progress=progress, success=True)
 
-# === BULK IMPORT — BACKGROUND + SAFE SESSION UPDATE ===
+# === BULK IMPORT — SAFE + REAL-TIME PROGRESS ===
 def _import_all_background(app, progress):
     time.sleep(1)
     start_index = progress['index']
@@ -535,12 +543,6 @@ def _import_all_background(app, progress):
     finally:
         with app.app_context():
             app.config['BULK_IMPORT_IN_PROGRESS'] = False
-
-# === HELPER: Reset import progress ===
-def _reset_import_progress(app):
-    with app.app_context():
-        if 'import_progress' in session:
-            session.pop('import_progress', None)
 
 # === VIEW LOG ===
 @erate_bp.route('/view-log')
