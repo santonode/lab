@@ -351,7 +351,7 @@ def import_interactive():
 
     return render_template('erate_import.html', row=row, progress=progress, is_importing=is_importing)
 
-# === BULK IMPORT — RE-OPEN CSV IN THREAD, NO ITERATOR EXHAUSTION ===
+# === BULK IMPORT — SESSION UPDATED IN THREAD ===
 def _import_all_background(app, progress):
     time.sleep(1)
     batch_size = 1000
@@ -415,9 +415,14 @@ def _import_all_background(app, progress):
                         conn.execute('ROLLBACK')
                     finally:
                         conn.close()
-                    progress['index'] += batch_size
-                    progress['success'] += batch_size
-                    log("Imported: %s", progress['index'] - 1)
+
+                    # UPDATE SESSION IN APP CONTEXT
+                    with app.app_context():
+                        session['import_progress']['index'] += batch_size
+                        session['import_progress']['success'] += batch_size
+                        session.modified = True
+                        log("Updated session: Imported %s", session['import_progress']['index'] - 1)
+
                     batch = []
 
             if batch:
@@ -431,10 +436,13 @@ def _import_all_background(app, progress):
                     log("Final batch failed: %s", e)
                 finally:
                     conn.close()
-                progress['index'] = progress['total'] + 1
-                progress['success'] += len(batch)
 
-            log("Bulk import complete: %s imported", progress['success'])
+                with app.app_context():
+                    session['import_progress']['index'] = progress['total'] + 1
+                    session['import_progress']['success'] += len(batch)
+                    session.modified = True
+
+            log("Bulk import complete: %s imported", session['import_progress']['success'])
 
     except Exception as e:
         log("IMPORT THREAD CRASHED: %s", e)
@@ -445,6 +453,7 @@ def _import_all_background(app, progress):
                 'BULK_IMPORT_IN_PROGRESS': False,
                 'IMPORT_THREAD': None
             })
+            session.modified = True
         log("Import thread finished")
 
 # === VIEW LOG ===
