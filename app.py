@@ -52,7 +52,6 @@ def static2_files(filename):
 # === INIT DB + CONNECTION POOL ON START ===
 init_db_app(app)  # This calls: init_db_pool(app) + init_db() + teardown
 
-# === RUN ===
-if __name__ == '__main__':
-    port = int(os.getenv("PORT", 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+# === REMOVED: app.run() BLOCK ===
+# Gunicorn (Render) handles binding to $PORT
+# DO NOT run Flask dev server in production
