@@ -286,7 +286,7 @@ def _download_csv_background(app):
         with app.app_context():
             app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
 
-# === IMPORT INTERACTIVE — CORRECT ROW COUNT + RESET PROGRESS ===
+# === IMPORT INTERACTIVE — CORRECT ROW COUNT + RESET PROGRESS + NO READER ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     log("Import interactive page accessed")
@@ -333,22 +333,10 @@ def import_interactive():
         flash("Bulk import started. Check /erate/view-log", "success")
         return redirect(url_for('erate.import_interactive'))
 
-    # Load current row
-    try:
-        with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
-            reader = csv.DictReader(f)
-            reader.fieldnames = [n.strip().lstrip('\ufeff') for n in reader.fieldnames]
-            for _ in range(progress['index'] - 1):
-                next(reader)
-            row = next(reader)
-    except StopIteration:
-        progress['index'] = progress['total'] + 1
-        session['import_progress'] = progress
-        return render_template('erate_import_complete.html', progress=progress)
+    # DO NOT LOAD ROW HERE — causes iterator exhaustion
+    return render_template('erate_import.html', progress=progress)
 
-    return render_template('erate_import.html', row=row, progress=progress)
-
-# === BULK IMPORT — FINAL, NO TIMEOUT, FULL ERROR LOGGING ===
+# === BULK IMPORT — RE-OPEN CSV IN THREAD, NO ITERATOR EXHAUSTION ===
 def _import_all_background(app, progress):
     time.sleep(1)
     batch_size = 1000
@@ -365,8 +353,8 @@ def _import_all_background(app, progress):
             log("DB connection test in thread: FAILED → %s", e)
             raise
 
-        # STREAM CSV
-        log("Streaming CSV: %s", CSV_FILE)
+        # RE-OPEN CSV IN THREAD
+        log("Re-opening CSV in thread: %s", CSV_FILE)
         with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='', buffering=8192) as f:
             reader = csv.DictReader(f)
             log("CSV reader created, fieldnames: %s", reader.fieldnames[:3])
@@ -383,13 +371,7 @@ def _import_all_background(app, progress):
                 app_number = row.get('Application Number', '').strip()
                 if not app_number: continue
 
-                # CONNECT WITH FULL ERROR CATCH
-                try:
-                    conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
-                except Exception as e:
-                    log("FATAL: psycopg.connect() failed: %s", e)
-                    raise
-
+                conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
                 try:
                     with conn.cursor() as cur:
                         cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
