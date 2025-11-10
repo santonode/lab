@@ -14,7 +14,6 @@ from datetime import datetime
 
 # === SETUP LOGGING (FORCE FILE + PERMISSIONS) ===
 LOG_FILE = os.path.join(os.path.dirname(__file__), "import.log")
-# Ensure directory is writable
 try:
     open(LOG_FILE, 'a').close()
 except Exception as e:
