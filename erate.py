@@ -36,7 +36,7 @@ log("=== ERATE MODULE LOADED ===")
 log("Python version: %s", __import__('sys').version.split()[0])
 log("Flask version: %s", __import__('flask').__version__)
 log("psycopg version: %s", psycopg.__version__)
-log("DATABASE_URL: %3", os.getenv('DATABASE_URL', 'NOT SET')[:50] + '...')
+log("DATABASE_URL: %s", os.getenv('DATABASE_URL', 'NOT SET')[:50] + '...')
 CSV_FILE = os.path.join(os.path.dirname(__file__), "470schema.csv")
 log("CSV_FILE: %s", CSV_FILE)
 log("CSV exists: %s, size: %s", os.path.exists(CSV_FILE), os.path.getsize(CSV_FILE) if os.path.exists(CSV_FILE) else 0)
@@ -83,7 +83,7 @@ INSERT_SQL = '''
         statewide, all_public, all_nonpublic, all_libraries, form_version
     ) VALUES (
         %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+        %s, %s, %s, %s, %, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
         %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
         %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
     )
@@ -168,8 +168,8 @@ def _row_to_tuple(row):
         row.get('Category One Description', ''),
         row.get('Category Two Description', ''),
         row.get('Installment Type', ''),
-        int(row.get('Installment Min Range Years') or 0),
-        int(row.get('Installment Max Range Years') or 0),
+        int(row.get('Installment Min Range 1', 0)),
+        int(row.get('Installment Max Range 1', 0)),
         row.get('Request for Proposal Identifier', ''),
         row.get('State or Local Restrictions', ''),
         row.get('State or Local Restrictions Description', ''),
@@ -348,7 +348,7 @@ def import_interactive():
 
     return render_template('erate_import.html', row=row, progress=progress)
 
-# === BULK IMPORT — STREAMING, 512 MB SAFE, NO FILE CLOSE CRASH ===
+# === BULK IMPORT — STREAMING, 512 MB SAFE ===
 def _import_all_background(app, progress):
     time.sleep(1)
     batch_size = 1000
