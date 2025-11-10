@@ -5,12 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <!-- FAVICON -->
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <!-- GOOGLE FONTS -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary: #1a5d57;
             --accent: #007bff;
             --success: #27ae60;
+            --warning: #ffc107;
             --bg: #f4f7f9;
             --card: white;
             --border: #ddd;
@@ -85,6 +89,7 @@
         }
         .btn-primary { background: var(--accent); color: white; }
         .btn-success { background: var(--success); color: white; }
+        .btn-warning { background: var(--warning); color: #212529; }
         .btn-secondary { background: #6c757d; color: white; }
         .btn:hover { opacity: 0.9; transform: translateY(-1px); }
         .btn:active { transform: translateY(0); }
@@ -139,6 +144,15 @@
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(0,123,255,0.4);
         }
+        .flash {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: 600;
+        }
+        .flash.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .flash.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
         @media (max-width: 768px) {
             .container { margin: 20px; padding: 20px; }
             .filters { flex-direction: column; align-items: stretch; }
@@ -153,6 +167,15 @@
 <div class="container">
     <h1>E-Rate Dashboard</h1>
 
+    <!-- FLASH MESSAGES -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
     <div class="filters">
         <form method="get" style="display: contents;">
             <label>
@@ -166,6 +189,7 @@
             <button type="submit" class="btn btn-primary">Filter</button>
             <a href="{{ url_for('erate.dashboard') }}" class="btn btn-secondary">Reset</a>
         </form>
+        <a href="{{ url_for('erate.extract_csv') }}" class="btn btn-warning">Extract CSV (Refresh Data)</a>
         <a href="{{ url_for('erate.import_interactive') }}" class="btn btn-success">Resume Import</a>
     </div>
 
