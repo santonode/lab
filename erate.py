@@ -90,7 +90,7 @@ def dashboard():
                 cur.execute(sql, params)
                 rows = cur.fetchall()
 
-                # CONVERT TO LIST OF DICTS (CRITICAL FOR erate.html)
+                # CONVERT TO LIST OF DICTS
                 table_data = [
                     {
                         'app_number': row[0],
@@ -121,21 +121,24 @@ def dashboard():
         logger.error(f"Dashboard error: {e}")
         return f"<pre>ERROR: {e}</pre>", 500
 
-# === EXTRACT CSV FROM USAC — BACKGROUND + NO SESSION IN THREAD ===
+# === EXTRACT CSV FROM USAC — BACKGROUND + PASS APP ===
 @erate_bp.route('/extract-csv')
 def extract_csv():
     if current_app.config.get('CSV_DOWNLOAD_IN_PROGRESS'):
         flash("CSV download already in progress. Please wait.", "info")
     else:
         current_app.config['CSV_DOWNLOAD_IN_PROGRESS'] = True
-        thread = threading.Thread(target=_download_csv_background)
+        thread = threading.Thread(
+            target=_download_csv_background,
+            args=(current_app._get_current_object(),)
+        )
         thread.daemon = True
         thread.start()
         flash("CSV download started in background. Check back in 2-5 minutes.", "info")
     return redirect(url_for('erate.dashboard'))
 
-def _download_csv_background():
-    time.sleep(1)  # Let response return
+def _download_csv_background(app):
+    time.sleep(1)
     try:
         url = "https://opendata.usac.org/api/views/jp7a-89nd/rows.csv?accessType=DOWNLOAD"
         response = requests.get(url, stream=True, timeout=600)
@@ -145,19 +148,18 @@ def _download_csv_background():
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
 
-        # Reset import progress (no session)
-        _reset_import_progress()
+        # Reset import progress
+        _reset_import_progress(app)
 
         size = response.headers.get('Content-Length', 'Unknown')
         logger.info(f"CSV downloaded: {size} bytes")
     except Exception as e:
         logger.error(f"Background CSV download failed: {e}")
     finally:
-        # Clear flag using app context
-        with current_app.app_context():
-            current_app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
+        with app.app_context():
+            app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
 
-# === BULK IMPORT — BACKGROUND + NO SESSION IN THREAD ===
+# === IMPORT INTERACTIVE ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     if not os.path.exists(CSV_FILE):
@@ -188,11 +190,17 @@ def import_interactive():
         if action == 'import_all':
             if current_app.config.get('BULK_IMPORT_IN_PROGRESS'):
                 return jsonify({'error': 'Bulk import already running'}), 429
+
+            # Copy progress for thread
+            progress_copy = progress.copy()
             current_app.config['BULK_IMPORT_IN_PROGRESS'] = True
-            thread = threading.Thread(target=_import_all_background)
+            thread = threading.Thread(
+                target=_import_all_background,
+                args=(current_app._get_current_object(), progress_copy)
+            )
             thread.daemon = True
             thread.start()
-            return jsonify({'status': 'started', 'message': 'Bulk import running in background'})
+            return jsonify({'status': 'started'})
 
     if progress['index'] > progress['total']:
         logger.info(f"Import completed: {progress['success']} success, {progress['error']} errors")
@@ -273,7 +281,7 @@ def _import_one_record():
                     parse_datetime(row.get('Allowable Contract Date')),
                     parse_datetime(row.get('Created Date/Time')),
                     row.get('Created By',''),
-                    parse_datetime(row.get('Certified Date/Time ')),
+                    parse_datetime(row.get('Certified Date/Time')),
                     row.get('Certified By',''),
                     parse_datetime(row.get('Last Modified Date/Time')),
                     row.get('Last Modified By',''),
@@ -352,10 +360,9 @@ def _import_one_record():
     session['import_progress'] = progress
     return render_template('erate_import.html', row=row, progress=progress, success=True)
 
-# === BULK IMPORT — BACKGROUND + NO SESSION IN THREAD ===
-def _import_all_background():
-    time.sleep(1)  # Let response return
-    progress = session.get('import_progress', {'index': 1, 'total': 1, 'success': 0, 'error': 0})
+# === BULK IMPORT — BACKGROUND + PASS APP & PROGRESS ===
+def _import_all_background(app, progress):
+    time.sleep(1)
     start_index = progress['index']
 
     try:
@@ -371,12 +378,12 @@ def _import_all_background():
                     for row in reader:
                         app_number = row.get('Application Number', '').strip()
                         if not app_number:
-                            logger.warning(f"Skipped row {progress['index'] + imported + skipped}: Missing Application Number")
+                            logger.warning(f"Skipped row {progress['index'] + imported + skipped}")
                             skipped += 1
                             continue
                         cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
                         if cur.fetchone():
-                            logger.info(f"Skipped row {progress['index'] + imported + skipped}: Duplicate App {app_number}")
+                            logger.info(f"Skipped duplicate: {app_number}")
                             skipped += 1
                             continue
                         try:
@@ -395,7 +402,7 @@ def _import_all_background():
                                     auth_city, auth_state, auth_zip, auth_zip_ext, auth_phone,
                                     auth_phone_ext, auth_email, auth_title, auth_employer,
                                     cat1_desc, cat2_desc, installment_type, installment_min,
-                                    installment_max  rfp_id, state_restrictions, restriction_desc,
+                                    installment_max, rfp_id, state_restrictions, restriction_desc,
                                     statewide, all_public, all_nonpublic, all_libraries, form_version
                                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                                           %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
@@ -486,21 +493,25 @@ def _import_all_background():
             progress['success'] += imported
             progress['error'] += skipped
             progress['index'] = progress['total'] + 1
-            session['import_progress'] = progress
+
+            # Update session in app context
+            with app.app_context():
+                session['import_progress'] = progress
+
             logger.info(f"Bulk import completed: {imported} imported, {skipped} skipped")
 
     except Exception as e:
         progress['error'] += 1
-        session['import_progress'] = progress
+        with app.app_context():
+            session['import_progress'] = progress
         logger.critical(f"Bulk import crashed: {e}")
     finally:
-        with current_app.app_context():
-            current_app.config['BULK_IMPORT_IN_PROGRESS'] = False
+        with app.app_context():
+            app.config['BULK_IMPORT_IN_PROGRESS'] = False
 
-# === HELPER: Reset import progress (no session) ===
-def _reset_import_progress():
-    # Create app context to access session
-    with current_app.app_context():
+# === HELPER: Reset import progress with app context ===
+def _reset_import_progress(app):
+    with app.app_context():
         if 'import_progress' in session:
             session.pop('import_progress', None)
 
