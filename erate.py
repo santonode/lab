@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request, session, redirect, url_fo
 import csv
 import os
 import logging
+import requests
 from db import get_conn
 from datetime import datetime
 
@@ -117,6 +118,32 @@ def dashboard():
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
         return f"<pre>ERROR: {e}</pre>", 500
+
+# === EXTRACT CSV FROM USAC ===
+@erate_bp.route('/extract-csv')
+def extract_csv():
+    try:
+        url = "https://opendata.usac.org/api/views/jp7a-89nd/rows.csv?accessType=DOWNLOAD"
+        response = requests.get(url, stream=True, timeout=300)
+        response.raise_for_status()
+
+        with open(CSV_FILE, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+
+        # Reset import session
+        if 'import_progress' in session:
+            session.pop('import_progress', None)
+
+        size = response.headers.get('Content-Length', 'Unknown')
+        logger.info(f"CSV extracted: {size} bytes")
+        flash(f"CSV updated! {size} bytes downloaded. Ready for new import.", "success")
+        return redirect(url_for('erate.import_interactive'))
+
+    except Exception as e:
+        logger.error(f"CSV extract failed: {e}")
+        flash(f"Error downloading CSV: {e}", "error")
+        return redirect(url_for('erate.dashboard'))
 
 # === IMPORT INTERACTIVE ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
