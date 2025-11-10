@@ -366,50 +366,59 @@ def _import_all_background(app, progress):
                     skipped += 1
                     continue
 
-                with get_conn() as conn:
-                    with conn.cursor() as cur:
-                        cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
-                        if cur.fetchone():
-                            skipped += 1
-                            continue
+                # DB CHECK — USE APP CONTEXT
+                with app.app_context():
+                    with get_conn() as conn:
+                        with conn.cursor() as cur:
+                            cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
+                            if cur.fetchone():
+                                skipped += 1
+                                continue
 
                 batch.append(row)
                 imported += 1
 
                 if len(batch) >= batch_size:
-                    _commit_batch(app, batch)
+                    # COMMIT BATCH — USE APP CONTEXT
+                    with app.app_context():
+                        _commit_batch(app, batch)
                     batch = []
                     progress['index'] += batch_size
                     progress['success'] += batch_size
-                    _save_progress(app, progress)
+                    with app.app_context():
+                        _save_progress(app, progress)
                     logger.info(f"Imported: {progress['index'] - 1}")
 
             if batch:
-                _commit_batch(app, batch)
+                with app.app_context():
+                    _commit_batch(app, batch)
                 progress['index'] = progress['total'] + 1
                 progress['success'] += len(batch)
-                _save_progress(app, progress)
+                with app.app_context():
+                    _save_progress(app, progress)
 
             logger.info(f"Bulk import complete: {imported} imported, {skipped} skipped")
 
     except Exception as e:
         logger.critical(f"Import failed: {e}")
         progress['error'] += 1
-        _save_progress(app, progress)
+        with app.app_context():
+            _save_progress(app, progress)
     finally:
         with app.app_context():
             app.config['BULK_IMPORT_IN_PROGRESS'] = False
             app.config['IMPORT_THREAD'] = None
 
 def _commit_batch(app, batch):
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            for row in batch:
-                try:
-                    cur.execute(INSERT_SQL, _row_to_tuple(row))
-                except Exception as e:
-                    logger.error(f"Row failed: {e}")
-            conn.commit()
+    with app.app_context():
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                for row in batch:
+                    try:
+                        cur.execute(INSERT_SQL, _row_to_tuple(row))
+                    except Exception as e:
+                        logger.error(f"Row failed: {e}")
+                conn.commit()
 
 def _save_progress(app, progress):
     with app.app_context():
