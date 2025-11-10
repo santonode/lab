@@ -4,8 +4,6 @@
     <title>E-Rate Import</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -16,10 +14,7 @@
             --warning: #ffc107;
             --bg: #f4f7f9;
             --card: white;
-            --border: #ddd;
             --text: #333;
-            --hover: #f0f7ff;
-            --shadow: 0 4px 20px rgba(0,0,0,0.1);
         }
         * { box-sizing: border-box; }
         body {
@@ -28,45 +23,15 @@
             background: var(--bg);
             color: var(--text);
             line-height: 1.6;
-            position: relative;
         }
-
-        /* SPINNER OVERLAY — LIGHT & NON-BLOCKING */
-        .overlay {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255, 255, 255, 0.7); /* Light, not gray */
-            z-index: 1000; /* Below progress bar */
-            justify-content: center;
-            align-items: center;
-        }
-        .overlay.show { display: flex; }
-
-        .spinner {
-            width: 70px;
-            height: 70px;
-            border: 7px solid #f3f3f3;
-            border-top: 7px solid var(--accent);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
         .container {
             max-width: 800px;
             margin: 40px auto;
             background: var(--card);
             padding: 30px;
             border-radius: 12px;
-            box-shadow: var(--shadow);
-            position: relative;
-            z-index: 1001; /* Above overlay */
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
         }
-
         h1 {
             text-align: center;
             color: var(--primary);
@@ -74,7 +39,6 @@
             font-weight: 600;
             font-size: 2.2rem;
         }
-
         .progress {
             text-align: center;
             font-size: 1.2em;
@@ -87,203 +51,163 @@
         .progress strong { font-weight: 700; }
         .success-count { color: var(--success); }
         .error-count { color: var(--danger); }
-
-        /* BULK PROGRESS BAR — ALWAYS VISIBLE */
-        .bulk-progress {
-            margin: 30px 0;
-            text-align: center;
-            display: none;
-            z-index: 1002; /* On top of everything */
-            position: relative;
-        }
-        .progress-container {
-            background: #eee;
+        .record {
+            background: #f0f8ff;
+            padding: 20px;
             border-radius: 8px;
-            height: 50px;
-            overflow: hidden;
-            margin: 20px 0;
-            box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+            margin: 25px 0;
+            border-left: 5px solid var(--accent);
         }
-        #bulkBar {
-            background: var(--success);
-            width: 0%;
-            height: 100%;
-            transition: width 0.3s ease;
-        }
-        .progress-text {
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            line-height: 50px;
-            color: white;
-            font-weight: bold;
+        .record h3 {
+            margin: 0 0 12px;
+            color: var(--primary);
             font-size: 1.3rem;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
         }
-        #bulkStatus { margin: 15px 0; font-size: 1.1rem; }
-
-        .record, .form-group, .back-link {
-            position: relative;
-            z-index: 1001;
+        .record p {
+            margin: 8px 0;
+            font-size: 1rem;
         }
-
-        @media (max-width: 768px) {
-            .container { margin: 20px; padding: 20px; }
-            .btn { width: 100%; margin: 8px 0; }
+        .record strong {
+            color: var(--primary);
+            min-width: 120px;
+            display: inline-block;
         }
+        .btn {
+            padding: 12px 24px;
+            margin: 8px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+            text-align: center;
+            min-width: 160px;
+        }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-warning { background: var(--warning); color: #212529; }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .form-group { text-align: center; margin: 20px 0; }
+        .success, .error, .info {
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin: 15px 0;
+            padding: 12px;
+            border-radius: 6px;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .back-link {
+            text-align: center;
+            margin-top: 30px;
+        }
+        .back-link a {
+            color: #666;
+            text-decoration: none;
+            font-size: 0.95rem;
+        }
+        .back-link a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
-    <!-- LIGHT SPINNER OVERLAY -->
-    <div class="overlay" id="loading">
-        <div class="spinner"></div>
+<div class="container">
+    <h1>E-Rate Interactive Import</h1>
+
+    <!-- FLASH MESSAGES -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="{{ 'success' if category == 'success' else 'error' if category == 'error' else 'info' }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="progress">
+        Progress: <strong>{{ progress.index|default(0) }}</strong> / <strong>{{ progress.total|default(0) }}</strong>
+        | Success: <strong class="success-count">{{ progress.success|default(0) }}</strong>
+        | Errors: <strong class="error-count">{{ progress.error|default(0) }}</strong>
     </div>
 
-    <div class="container">
-        <h1>E-Rate Interactive Import</h1>
-
-        <!-- FLASH MESSAGES -->
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="{{ 'success' if category == 'success' else 'error' if category == 'error' else 'info' }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-
-        <div class="progress">
-            Progress: <strong id="progress-index">{{ progress.index|default(0) }}</strong> / <strong id="progress-total">{{ progress.total|default(0) }}</strong>
-            | Success: <strong class="success-count" id="progress-success">{{ progress.success|default(0) }}</strong>
-            | Errors: <strong class="error-count" id="progress-error">{{ progress.error|default(0) }}</strong>
+    {% if error %}
+        <div class="error">Error: {{ error }}</div>
+        <div class="form-group">
+            <a href="{{ url_for('erate.import_interactive') }}" class="btn btn-primary">Try Again</a>
+        </div>
+    {% elif progress.index > progress.total %}
+        <div class="success">IMPORT COMPLETE!</div>
+        <div class="form-group">
+            <a href="{{ url_for('erate.dashboard') }}" class="btn btn-primary">Back to Dashboard</a>
+            <a href="{{ url_for('erate.view_log') }}" class="btn btn-warning">View Import Log</a>
+        </div>
+    {% else %}
+        <div class="record">
+            <h3>Record {{ progress.index|default(0) }}</h3>
+            <p><strong>App #:</strong> {{ row['Application Number']|default('N/A') }}</p>
+            <p><strong>Entity:</strong> {{ row['Billed Entity Name']|default('N/A') }}</p>
+            <p><strong>State:</strong> {{ row['Billed Entity State']|default('N/A') }}</p>
+            <p><strong>Modified:</strong> {{ row['Last Modified Date/Time']|default('N/A') }}</p>
         </div>
 
-        <!-- BULK PROGRESS BAR — ALWAYS ON TOP -->
-        <div class="bulk-progress" id="bulkProgress">
-            <div class="progress-container">
-                <div id="bulkBar"></div>
-                <div class="progress-text" id="bulkText">0%</div>
-            </div>
-            <p id="bulkStatus">Starting bulk import...</p>
-        </div>
-
-        {% if error %}
-            <div class="error">Error: {{ error }}</div>
-            <div class="form-group">
-                <a href="{{ url_for('erate.import_interactive') }}" class="btn btn-primary">Try Again</a>
-            </div>
-        {% elif progress.index > progress.total %}
-            <div class="success">IMPORT COMPLETE!</div>
-            <div class="form-group">
-                <a href="{{ url_for('erate.dashboard') }}" class="btn btn-primary">Back to Dashboard</a>
-                <a href="{{ url_for('erate.view_log') }}" class="btn btn-warning">View Import Log</a>
-            </div>
-        {% else %}
-            <div class="record">
-                <h3>Record {{ progress.index|default(0) }}</h3>
-                <p><strong>App #:</strong> {{ row['Application Number']|default('N/A') }}</p>
-                <p><strong>Entity:</strong> {{ row['Billed Entity Name']|default('N/A') }}</p>
-                <p><strong>State:</strong> {{ row['Billed Entity State']|default('N/A') }}</p>
-                <p><strong>Modified:</strong> {{ row['Last Modified Date/Time']|default('N/A') }}</p>
-            </div>
-
-            {% if success %}
-                <div class="success">Imported successfully!</div>
-            {% endif %}
-
-            <div class="form-group">
-                <form method="post" onsubmit="return confirm('Import this record?');">
-                    <input type="hidden" name="action" value="import_one">
-                    <button type="submit" class="btn btn-primary">Import This Record</button>
-                </form>
-            </div>
-
-            <div class="form-group">
-                <button type="button" onclick="startBulkImport()" class="btn btn-success" id="bulkBtn">
-                    Import All Remaining ({{ (progress.total|default(0)) - (progress.index|default(0)) + 1 }})
-                </button>
-            </div>
-
-            <div class="form-group">
-                <form method="post" onsubmit="return confirm('Start over from record 1?');">
-                    <input type="hidden" name="action" value="reset">
-                    <button type="submit" class="btn btn-danger">Start Over</button>
-                </form>
-            </div>
+        {% if success %}
+            <div class="success">Imported successfully!</div>
         {% endif %}
 
-        <div class="back-link">
-            <a href="{{ url_for('erate.dashboard') }}">Back to Dashboard</a>
+        <!-- IMPORT THIS RECORD -->
+        <div class="form-group">
+            <form method="post" onsubmit="return confirm('Import this record?');">
+                <input type="hidden" name="action" value="import_one">
+                <button type="submit" class="btn btn-primary">Import This Record</button>
+            </form>
         </div>
+
+        <!-- BULK IMPORT BUTTON -->
+        <div class="form-group">
+            <button type="button" onclick="startBulkImport()" class="btn btn-success" id="bulkBtn">
+                Import All Remaining ({{ (progress.total|default(0)) - (progress.index|default(0)) + 1 }})
+            </button>
+        </div>
+
+        <!-- START OVER -->
+        <div class="form-group">
+            <form method="post" onsubmit="return confirm('Start over from record 1?');">
+                <input type="hidden" name="action" value="reset">
+                <button type="submit" class="btn btn-danger">Start Over</button>
+            </form>
+        </div>
+    {% endif %}
+
+    <div class="back-link">
+        <a href="{{ url_for('erate.dashboard') }}">Back to Dashboard</a>
     </div>
+</div>
 
-    <script>
-        const overlay = document.getElementById('loading');
-        const bulkProgress = document.getElementById('bulkProgress');
-        const bulkBar = document.getElementById('bulkBar');
-        const bulkText = document.getElementById('bulkText');
-        const bulkStatus = document.getElementById('bulkStatus');
-        const bulkBtn = document.getElementById('bulkBtn');
+<script>
+function startBulkImport() {
+    const btn = document.getElementById('bulkBtn');
+    btn.disabled = true;
+    btn.textContent = 'Starting...';
 
-        function startBulkImport() {
-            overlay.classList.add('show');
-            bulkProgress.style.display = 'block';
-            bulkBtn.disabled = true;
-            bulkStatus.textContent = 'Starting bulk import...';
-            bulkBar.style.width = '0%';
-            bulkText.textContent = '0%';
-
-            fetch('{{ url_for("erate.import_interactive") }}', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'action=import_all'
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.status === 'started') {
-                    bulkBtn.textContent = 'Running...';
-                    pollProgress();
-                } else {
-                    bulkStatus.innerHTML = `<strong style="color:red">Error:</strong> ${data.error || 'Unknown'}`;
-                    overlay.classList.remove('show');
-                    bulkBtn.disabled = false;
-                }
-            })
-            .catch(err => {
-                bulkStatus.innerHTML = `<strong style="color:red">Network Error:</strong> ${err.message}`;
-                overlay.classList.remove('show');
-                bulkBtn.disabled = false;
-            });
-        }
-
-        function pollProgress() {
-            fetch('{{ url_for("erate.get_progress") }}')
-                .then(r => r.json())
-                .then(data => {
-                    const total = data.total;
-                    const imported = data.success;
-                    const errors = data.error;
-                    const percent = total > 0 ? Math.min(Math.round((imported / total) * 100), 100) : 0;
-
-                    document.getElementById('progress-index').textContent = data.index;
-                    document.getElementById('progress-success').textContent = imported;
-                    document.getElementById('progress-error').textContent = errors;
-
-                    bulkBar.style.width = percent + '%';
-                    bulkText.textContent = percent + '%';
-                    bulkStatus.innerHTML = `Imported <strong>${imported}</strong> | Skipped <strong>${errors}</strong>`;
-
-                    if (data.index > total) {
-                        bulkStatus.innerHTML = `<strong style="color:green">COMPLETE!</strong> ${imported} imported, ${errors} skipped.`;
-                        setTimeout(() => location.reload(), 2000);
-                    } else {
-                        setTimeout(pollProgress, 1000);
-                    }
-                })
-                .catch(() => setTimeout(pollProgress, 2000));
-        }
-
-        window.addEventListener('load', () => {
-            overlay.classList.remove('show');
-        });
-    </script>
+    fetch('{{ url_for("erate.import_interactive") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=import_all'
+    })
+    .then(() => {
+        btn.textContent = 'Running in background...';
+        location.reload();
+    })
+    .catch(() => {
+        btn.disabled = false;
+        btn.textContent = 'Import All Remaining';
+    });
+}
+</script>
 </body>
 </html>
