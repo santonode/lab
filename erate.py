@@ -351,7 +351,7 @@ def import_interactive():
 
     return render_template('erate_import.html', row=row, progress=progress, is_importing=is_importing)
 
-# === BULK IMPORT — SESSION UPDATED IN THREAD ===
+# === BULK IMPORT — RE-OPEN CSV IN THREAD, NO ITERATOR EXHAUSTION ===
 def _import_all_background(app, progress):
     time.sleep(1)
     batch_size = 1000
@@ -408,21 +408,16 @@ def _import_all_background(app, progress):
                         with conn.cursor() as cur:
                             for r in batch:
                                 cur.execute(INSERT_SQL, _row_to_tuple(r))
-                        conn.execute('COMMIT')
+                        conn.commit()
                         log("Committed batch of %s", batch_size)
                     except Exception as e:
                         log("Batch commit failed: %s", e)
-                        conn.execute('ROLLBACK')
+                        conn.rollback()
                     finally:
                         conn.close()
-
-                    # UPDATE SESSION IN APP CONTEXT
-                    with app.app_context():
-                        session['import_progress']['index'] += batch_size
-                        session['import_progress']['success'] += batch_size
-                        session.modified = True
-                        log("Updated session: Imported %s", session['import_progress']['index'] - 1)
-
+                    progress['index'] += batch_size
+                    progress['success'] += batch_size
+                    log("Imported: %s", progress['index'] - 1)
                     batch = []
 
             if batch:
@@ -431,18 +426,15 @@ def _import_all_background(app, progress):
                     with conn.cursor() as cur:
                         for r in batch:
                             cur.execute(INSERT_SQL, _row_to_tuple(r))
-                    conn.execute('COMMIT')
+                    conn.commit()
                 except Exception as e:
                     log("Final batch failed: %s", e)
                 finally:
                     conn.close()
+                progress['index'] = progress['total'] + 1
+                progress['success'] += len(batch)
 
-                with app.app_context():
-                    session['import_progress']['index'] = progress['total'] + 1
-                    session['import_progress']['success'] += len(batch)
-                    session.modified = True
-
-            log("Bulk import complete: %s imported", session['import_progress']['success'])
+            log("Bulk import complete: %s imported", progress['success'])
 
     except Exception as e:
         log("IMPORT THREAD CRASHED: %s", e)
@@ -453,7 +445,6 @@ def _import_all_background(app, progress):
                 'BULK_IMPORT_IN_PROGRESS': False,
                 'IMPORT_THREAD': None
             })
-            session.modified = True
         log("Import thread finished")
 
 # === VIEW LOG ===
