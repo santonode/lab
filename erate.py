@@ -10,6 +10,7 @@ import requests
 import threading
 import time
 import psycopg
+import traceback
 from datetime import datetime
 
 # === LOGGING (ONE LINE TO RENDER + import.log) ===
@@ -285,7 +286,7 @@ def _download_csv_background(app):
         with app.app_context():
             app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
 
-# === IMPORT INTERACTIVE — CORRECT ROW COUNT (~300K) ===
+# === IMPORT INTERACTIVE — CORRECT ROW COUNT + RESET PROGRESS ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     log("Import interactive page accessed")
@@ -295,12 +296,20 @@ def import_interactive():
 
     # CORRECT: Count actual rows using csv.reader
     with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
-        total = sum(1 for _ in csv.reader(f)) - 1  # -1 for header
+        total = sum(1 for _ in csv.reader(f)) - 1
         f.seek(0)
-        next(csv.reader(f))  # Skip header
-        progress = session.get('import_progress', {'index': 1, 'total': total, 'success': 0, 'error': 0})
+        next(csv.reader(f))
 
     log("CSV has %s rows (excluding header)", total)
+
+    # CRITICAL: Reset progress if CSV changed
+    current_progress = session.get('import_progress', {})
+    if current_progress.get('total') != total:
+        log("CSV changed (new total: %s), resetting progress", total)
+        progress = {'index': 1, 'total': total, 'success': 0, 'error': 0}
+        session['import_progress'] = progress
+    else:
+        progress = current_progress
 
     if current_app.config.get('BULK_IMPORT_IN_PROGRESS') or progress['index'] > progress['total']:
         log("Import complete page shown")
@@ -324,7 +333,7 @@ def import_interactive():
         flash("Bulk import started. Check /erate/view-log", "success")
         return redirect(url_for('erate.import_interactive'))
 
-    # Load current row for preview
+    # Load current row
     try:
         with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
@@ -339,12 +348,19 @@ def import_interactive():
 
     return render_template('erate_import.html', row=row, progress=progress)
 
-# === BULK IMPORT ===
+# === BULK IMPORT — FULL DEBUG + ERROR LOGGING ===
 def _import_all_background(app, progress):
     time.sleep(1)
     batch_size = 1000
     try:
         log("Bulk import started from record %s", progress['index'])
+        log("Using DATABASE_URL: %s", DATABASE_URL[:50] + '...')
+        
+        # TEST CONNECTION FIRST
+        test_conn = psycopg.connect(DATABASE_URL, autocommit=True)
+        test_conn.close()
+        log("DB connection test in thread: SUCCESS")
+
         with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
             reader.fieldnames = [n.strip().lstrip('\ufeff') for n in reader.fieldnames]
@@ -357,7 +373,13 @@ def _import_all_background(app, progress):
                 app_number = row.get('Application Number', '').strip()
                 if not app_number: continue
 
-                conn = psycopg.connect(DATABASE_URL)
+                # CONNECT WITH ERROR CATCH
+                try:
+                    conn = psycopg.connect(DATABASE_URL, autocommit=False)
+                except Exception as e:
+                    log("FATAL: psycopg.connect() failed: %s", e)
+                    raise
+
                 try:
                     with conn.cursor() as cur:
                         cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
@@ -374,12 +396,13 @@ def _import_all_background(app, progress):
                 conn.close()
 
                 if len(batch) >= batch_size:
-                    conn = psycopg.connect(DATABASE_URL)
+                    conn = psycopg.connect(DATABASE_URL, autocommit=False)
                     try:
                         with conn.cursor() as cur:
                             for r in batch:
                                 cur.execute(INSERT_SQL, _row_to_tuple(r))
                         conn.commit()
+                        log("Committed batch of %s", batch_size)
                     except Exception as e:
                         log("Batch commit failed: %s", e)
                         conn.rollback()
@@ -391,7 +414,7 @@ def _import_all_background(app, progress):
                     batch = []
 
             if batch:
-                conn = psycopg.connect(DATABASE_URL)
+                conn = psycopg.connect(DATABASE_URL, autocommit=False)
                 try:
                     with conn.cursor() as cur:
                         for r in batch:
@@ -407,13 +430,15 @@ def _import_all_background(app, progress):
             log("Bulk import complete: %s imported", progress['success'])
 
     except Exception as e:
-        log("Import failed: %s", e)
+        log("IMPORT THREAD CRASHED: %s", e)
+        log("Traceback: %s", traceback.format_exc())
     finally:
         with app.app_context():
             app.config.update({
                 'BULK_IMPORT_IN_PROGRESS': False,
                 'IMPORT_THREAD': None
             })
+        log("Import thread finished")
 
 # === VIEW LOG ===
 @erate_bp.route('/view-log')
