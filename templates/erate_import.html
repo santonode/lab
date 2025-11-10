@@ -3,7 +3,6 @@
 <head>
     <title>E-Rate Import</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!-- FAVICON -->
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
     <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
     <style>
@@ -117,7 +116,37 @@
             text-decoration: none;
             font-size: 0.95rem;
         }
-        .back-link a:hover { text-decoration: underline; }
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+        /* BULK PROGRESS BAR */
+        .bulk-progress {
+            margin: 30px 0;
+            text-align: center;
+        }
+        .progress-container {
+            background: #eee;
+            border-radius: 8px;
+            height: 40px;
+            overflow: hidden;
+            position: relative;
+            margin: 20px 0;
+        }
+        #bulkBar {
+            background: var(--success);
+            width: 0%;
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+        .progress-text {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            line-height: 40px;
+            color: white;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        #bulkStatus { margin: 15px 0; font-size: 1rem; }
         @media (max-width: 768px) {
             .container { margin: 20px; padding: 20px; }
             .btn { width: 100%; margin: 8px 0; }
@@ -133,6 +162,15 @@
         Progress: <strong>{{ progress.index|default(0) }}</strong> / <strong>{{ progress.total|default(0) }}</strong>
         | Success: <strong class="success-count">{{ progress.success|default(0) }}</strong>
         | Errors: <strong class="error-count">{{ progress.error|default(0) }}</strong>
+    </div>
+
+    <!-- BULK PROGRESS BAR -->
+    <div class="bulk-progress" id="bulkProgress" style="display:none;">
+        <div class="progress-container">
+            <div id="bulkBar"></div>
+            <div class="progress-text" id="bulkText">0%</div>
+        </div>
+        <p id="bulkStatus">Starting bulk import...</p>
     </div>
 
     {% if error %}
@@ -166,14 +204,11 @@
             </form>
         </div>
 
-        <!-- IMPORT ALL REMAINING -->
+        <!-- BULK IMPORT BUTTON -->
         <div class="form-group">
-            <form method="post" onsubmit="return confirm('Import ALL {{ (progress.total|default(0)) - (progress.index|default(0)) + 1 }} remaining records?');">
-                <input type="hidden" name="action" value="import_all">
-                <button type="submit" class="btn btn-success">
-                    Import All Remaining ({{ (progress.total|default(0)) - (progress.index|default(0)) + 1 }})
-                </button>
-            </form>
+            <button type="button" onclick="startBulkImport()" class="btn btn-success" id="bulkBtn">
+                Import All Remaining ({{ (progress.total|default(0)) - (progress.index|default(0)) + 1 }})
+            </button>
         </div>
 
         <!-- START OVER -->
@@ -189,5 +224,46 @@
         <a href="{{ url_for('erate.dashboard') }}">Back to Dashboard</a>
     </div>
 </div>
+
+<script>
+function startBulkImport() {
+    const btn = document.getElementById('bulkBtn');
+    const progressDiv = document.getElementById('bulkProgress');
+    const bar = document.getElementById('bulkBar');
+    const text = document.getElementById('bulkText');
+    const status = document.getElementById('bulkStatus');
+
+    btn.disabled = true;
+    progressDiv.style.display = 'block';
+    status.textContent = 'Starting bulk import...';
+    bar.style.width = '0%';
+    text.textContent = '0%';
+
+    fetch('{{ url_for("erate.import_interactive") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=import_all'
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.complete) {
+            const total = {{ progress.total|default(0) }};
+            const imported = {{ progress.success|default(0) }} + data.progress.success;
+            const percent = Math.min(Math.round((imported / total) * 100), 100);
+            bar.style.width = percent + '%';
+            text.textContent = percent + '%';
+            status.innerHTML = `<strong style="color:green">Complete!</strong> ${imported} imported, ${data.progress.error} skipped.`;
+            setTimeout(() => location.reload(), 2000);
+        } else if (data.error) {
+            status.innerHTML = `<strong style="color:red">Error:</strong> ${data.error}`;
+            btn.disabled = false;
+        }
+    })
+    .catch(err => {
+        status.innerHTML = `<strong style="color:red">Network Error:</strong> ${err.message}`;
+        btn.disabled = false;
+    });
+}
+</script>
 </body>
 </html>
