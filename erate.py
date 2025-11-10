@@ -13,7 +13,7 @@ import sys
 from db import get_conn
 from datetime import datetime
 
-# === SETUP LOGGING (RENDER + FILE) ===
+# === LOGGING SETUP (RENDER + FILE) ===
 LOG_FILE = os.path.join(os.path.dirname(__file__), "import.log")
 
 # Ensure file exists
@@ -22,34 +22,32 @@ try:
 except Exception as e:
     print(f"WARNING: Cannot access {LOG_FILE}: {e}")
 
-# Log to BOTH stdout (Render) AND file
+# Log to stdout (Render) + file
 handler_file = logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8')
 handler_stdout = logging.StreamHandler(sys.stdout)
-
 formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
 handler_file.setFormatter(formatter)
 handler_stdout.setFormatter(formatter)
 
 logger = logging.getLogger('erate')
 logger.setLevel(logging.INFO)
+for h in logger.handlers[:]: logger.removeHandler(h)
 logger.addHandler(handler_file)
 logger.addHandler(handler_stdout)
 
-# Force log to both Render and file
-def log(msg, *args, **kwargs):
+# Force log to Render + file + flush
+def log(msg, *args):
     formatted = msg % args if args else msg
-    logger.info(formatted, **kwargs)
+    logger.info(formatted)
     for h in logger.handlers:
         h.flush()
-    print(formatted)  # Force Render log
+    print(formatted, flush=True)  # Force Render
 
 # === BLUEPRINT ===
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate', template_folder='templates')
-
-# === CONFIG ===
 CSV_FILE = os.path.join(os.path.dirname(__file__), "470schema.csv")
 
-# === SQL STATEMENTS ===
+# === SQL INSERT ===
 INSERT_SQL = '''
     INSERT INTO erate (
         app_number, form_nickname, form_pdf, funding_year, fcc_status,
@@ -166,7 +164,7 @@ def _row_to_tuple(row):
         row.get('Form Version', '')
     )
 
-# === DASHBOARD — NO QUERY TIMEOUT ===
+# === DASHBOARD ===
 @erate_bp.route('/')
 def dashboard():
     state_filter = request.args.get('state', '').strip().upper()
@@ -231,38 +229,29 @@ def dashboard():
         log("Dashboard error: %s", e)
         return f"<pre>ERROR: {e}</pre>", 500
 
-# === EXTRACT CSV FROM USAC ===
+# === EXTRACT CSV ===
 @erate_bp.route('/extract-csv')
 def extract_csv():
     if current_app.config.get('CSV_DOWNLOAD_IN_PROGRESS'):
         flash("CSV download already in progress.", "info")
-    elif os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 500_000_000:
+        return redirect(url_for('erate.dashboard'))
+    if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 500_000_000:
         flash("Large CSV exists. Delete to re-download.", "warning")
-    else:
-        if 'import_progress' in session:
-            session.pop('import_progress', None)
-            flash("Import progress reset for new CSV.", "info")
+        return redirect(url_for('erate.dashboard'))
 
-        current_app.config['CSV_DOWNLOAD_IN_PROGRESS'] = True
-        thread = threading.Thread(
-            target=_download_csv_background,
-            args=(current_app._get_current_object(),)
-        )
-        thread.daemon = True
-        thread.start()
-        flash("CSV download started. Check in 2-5 min.", "info")
+    current_app.config['CSV_DOWNLOAD_IN_PROGRESS'] = True
+    thread = threading.Thread(target=_download_csv_background, args=(current_app._get_current_object(),))
+    thread.daemon = True
+    thread.start()
+    flash("CSV download started. Check in 2-5 min.", "info")
     return redirect(url_for('erate.dashboard'))
 
 def _download_csv_background(app):
     time.sleep(1)
     try:
-        url = "https://opendata.usac.org/api/views/jp7a-89nd/rows.csv?accessType=DOWNLOAD"
         log("Starting CSV download...")
-        response = requests.get(url, stream=True, timeout=600)
-        if response.status_code != 200:
-            log("Download failed: HTTP %s", response.status_code)
-            return
-        expected = int(response.headers.get('Content-Length', 0))
+        response = requests.get("https://opendata.usac.org/api/views/jp7a-89nd/rows.csv?accessType=DOWNLOAD", stream=True, timeout=600)
+        response.raise_for_status()
         downloaded = 0
         with open(CSV_FILE, 'wb') as f:
             for chunk in response.iter_content(8192):
@@ -271,27 +260,18 @@ def _download_csv_background(app):
                     downloaded += len(chunk)
                     if downloaded % (10*1024*1024) == 0:
                         log("Downloaded %.1f MB", downloaded/(1024*1024))
-        actual = os.path.getsize(CSV_FILE)
-        if expected and abs(actual - expected) > 1024*1024:
-            log("Size mismatch! Expected %s, got %s", expected, actual)
-            os.remove(CSV_FILE)
-        else:
-            log("CSV downloaded: %.1f MB", actual/(1024*1024))
+        log("CSV downloaded: %.1f MB", os.path.getsize(CSV_FILE)/(1024*1024))
     except Exception as e:
         log("Download failed: %s", e)
-        if os.path.exists(CSV_FILE):
-            os.remove(CSV_FILE)
+        if os.path.exists(CSV_FILE): os.remove(CSV_FILE)
     finally:
         with app.app_context():
             app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
 
-# === PROGRESS & STATUS ENDPOINTS ===
+# === PROGRESS & STATUS ===
 @erate_bp.route('/progress')
 def get_progress():
-    progress = current_app.config.get('IMPORT_PROGRESS', {
-        'index': 1, 'total': 1, 'success': 0, 'error': 0
-    })
-    return jsonify(progress)
+    return jsonify(current_app.config.get('IMPORT_PROGRESS', {'index':1,'total':1,'success':0,'error':0}))
 
 @erate_bp.route('/status')
 def get_status():
@@ -307,36 +287,24 @@ def import_interactive():
     if not os.path.exists(CSV_FILE):
         return "<h2>CSV not found: 470schema.csv</h2>", 404
 
-    with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
-        total = sum(1 for _ in f) - 1 or 1
+    total = sum(1 for _ in open(CSV_FILE, 'r', encoding='utf-8-sig')) - 1
+    progress = session.get('import_progress', {'index': 1, 'total': total, 'success': 0, 'error': 0})
 
-    if 'import_progress' not in session:
-        session['import_progress'] = {'index': 1, 'total': total, 'success': 0, 'error': 0}
+    if request.method == 'POST' and request.form.get('action') == 'import_all':
+        if current_app.config.get('BULK_IMPORT_IN_PROGRESS'):
+            return jsonify({'error': 'Running'}), 429
 
-    progress = session['import_progress']
+        current_app.config.update({
+            'BULK_IMPORT_IN_PROGRESS': True,
+            'IMPORT_PROGRESS': progress.copy(),
+            'IMPORT_THREAD': None
+        })
 
-    if request.method == 'POST':
-        action = request.form.get('action')
-        if action == 'reset':
-            session.pop('import_progress', None)
-            return redirect(url_for('erate.import_interactive'))
-        if action == 'import_all':
-            if current_app.config.get('BULK_IMPORT_IN_PROGRESS'):
-                return jsonify({'error': 'Import already running'}), 429
-
-            progress_copy = progress.copy()
-            current_app.config['BULK_IMPORT_IN_PROGRESS'] = True
-            current_app.config['IMPORT_PROGRESS'] = progress_copy
-            current_app.config['IMPORT_THREAD'] = None
-
-            thread = threading.Thread(
-                target=_import_all_background,
-                args=(current_app._get_current_object(), progress_copy)
-            )
-            thread.daemon = True
-            current_app.config['IMPORT_THREAD'] = thread
-            thread.start()
-            return jsonify({'status': 'started'})
+        thread = threading.Thread(target=_import_all_background, args=(current_app._get_current_object(), progress.copy()))
+        thread.daemon = True
+        current_app.config['IMPORT_THREAD'] = thread
+        thread.start()
+        return jsonify({'status': 'started'})
 
     if progress['index'] > progress['total']:
         return render_template('erate_import_complete.html', progress=progress)
@@ -345,8 +313,7 @@ def import_interactive():
         with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
             reader.fieldnames = [n.strip().lstrip('\ufeff') for n in reader.fieldnames]
-            for _ in range(progress['index'] - 1):
-                next(reader)
+            for _ in range(progress['index'] - 1): next(reader)
             row = next(reader)
     except StopIteration:
         progress['index'] = progress['total'] + 1
@@ -355,48 +322,38 @@ def import_interactive():
 
     return render_template('erate_import.html', row=row, progress=progress)
 
-# === BULK IMPORT — BULLETPROOF, THREAD-SAFE, BATCHED ===
+# === BULK IMPORT ===
 def _import_all_background(app, progress):
     time.sleep(1)
-    start_index = progress['index']
     batch_size = 1000
-
     try:
+        log("Bulk import started from record %s", progress['index'])
         with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
             reader.fieldnames = [n.strip().lstrip('\ufeff') for n in reader.fieldnames]
-            for _ in range(start_index - 1):
-                next(reader)
+            for _ in range(progress['index'] - 1): next(reader)
 
-            imported = skipped = 0
             batch = []
-
             for row in reader:
                 app_number = row.get('Application Number', '').strip()
-                if not app_number:
-                    skipped += 1
-                    continue
+                if not app_number: continue
 
                 with app.app_context():
                     with get_conn() as conn:
                         with conn.cursor() as cur:
                             cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
-                            if cur.fetchone():
-                                skipped += 1
-                                continue
+                            if cur.fetchone(): continue
 
                 batch.append(row)
-                imported += 1
-
                 if len(batch) >= batch_size:
                     with app.app_context():
                         _commit_batch(app, batch)
-                    batch = []
                     progress['index'] += batch_size
                     progress['success'] += batch_size
                     with app.app_context():
-                        _save_progress(app, progress)
+                        current_app.config['IMPORT_PROGRESS'] = progress.copy()
                     log("Imported: %s", progress['index'] - 1)
+                    batch = []
 
             if batch:
                 with app.app_context():
@@ -404,19 +361,17 @@ def _import_all_background(app, progress):
                 progress['index'] = progress['total'] + 1
                 progress['success'] += len(batch)
                 with app.app_context():
-                    _save_progress(app, progress)
+                    current_app.config['IMPORT_PROGRESS'] = progress.copy()
 
-            log("Bulk import complete: %s imported, %s skipped", imported, skipped)
-
+        log("Bulk import complete: %s imported", progress['success'])
     except Exception as e:
         log("Import failed: %s", e)
-        progress['error'] += 1
-        with app.app_context():
-            _save_progress(app, progress)
     finally:
         with app.app_context():
-            app.config['BULK_IMPORT_IN_PROGRESS'] = False
-            app.config['IMPORT_THREAD'] = None
+            app.config.update({
+                'BULK_IMPORT_IN_PROGRESS': False,
+                'IMPORT_THREAD': None
+            })
 
 def _commit_batch(app, batch):
     with app.app_context():
@@ -429,11 +384,7 @@ def _commit_batch(app, batch):
                         log("Row failed: %s", e)
                 conn.commit()
 
-def _save_progress(app, progress):
-    with app.app_context():
-        current_app.config['IMPORT_PROGRESS'] = progress.copy()
-
-# === CANCEL IMPORT ===
+# === CANCEL / VIEW / RESET ===
 @erate_bp.route('/cancel-import', methods=['POST'])
 def cancel_import():
     thread = current_app.config.get('IMPORT_THREAD')
@@ -442,15 +393,12 @@ def cancel_import():
         flash("Import cancelled.", "warning")
     return redirect(url_for('erate.import_interactive'))
 
-# === VIEW LOG ===
 @erate_bp.route('/view-log')
 def view_log():
-    log_path = os.path.join(os.path.dirname(__file__), "import.log")
-    if os.path.exists(log_path):
-        return send_file(log_path, mimetype='text/plain')
+    if os.path.exists(LOG_FILE):
+        return send_file(LOG_FILE, mimetype='text/plain')
     return "No log file.", 404
 
-# === RESET IMPORT ===
 @erate_bp.route('/reset-import', methods=['POST'])
 def reset_import():
     session.pop('import_progress', None)
