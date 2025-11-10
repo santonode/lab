@@ -26,9 +26,13 @@ def init_db_pool(app):
         # Get connection string
         conninfo = app.config.get('DATABASE_URL', DATABASE_URL)
         
-        # Force SSL with sslmode=require
-        if 'sslmode' not in conninfo.lower():
-            conninfo += ' sslmode=require'
+        # Insert sslmode=require as query param BEFORE database name
+        if 'sslmode=' not in conninfo.lower():
+            if '/' in conninfo:
+                base, dbname = conninfo.rsplit('/', 1)
+                conninfo = f"{base}/{dbname}?sslmode=require"
+            else:
+                conninfo += '?sslmode=require'
 
         pool = ConnectionPool(
             conninfo=conninfo,
