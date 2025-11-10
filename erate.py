@@ -9,10 +9,11 @@ import logging
 import requests
 import threading
 import time
+import sys
 from db import get_conn
 from datetime import datetime
 
-# === SETUP LOGGING (FORCE FILE + THREAD-SAFE + FLUSH) ===
+# === SETUP LOGGING (RENDER + FILE) ===
 LOG_FILE = os.path.join(os.path.dirname(__file__), "import.log")
 
 # Ensure file exists
@@ -21,20 +22,26 @@ try:
 except Exception as e:
     print(f"WARNING: Cannot access {LOG_FILE}: {e}")
 
-# Configure root logger
-handler = logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8')
-handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
+# Log to BOTH stdout (Render) AND file
+handler_file = logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8')
+handler_stdout = logging.StreamHandler(sys.stdout)
+
+formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
+handler_file.setFormatter(formatter)
+handler_stdout.setFormatter(formatter)
 
 logger = logging.getLogger('erate')
 logger.setLevel(logging.INFO)
-logger.addHandler(handler)
-logger.addHandler(logging.StreamHandler())
+logger.addHandler(handler_file)
+logger.addHandler(handler_stdout)
 
-# Force flush after every log
-def log_and_flush(msg, *args, **kwargs):
-    logger.info(msg, *args, **kwargs)
+# Force log to both Render and file
+def log(msg, *args, **kwargs):
+    formatted = msg % args if args else msg
+    logger.info(formatted, **kwargs)
     for h in logger.handlers:
         h.flush()
+    print(formatted)  # Force Render log
 
 # === BLUEPRINT ===
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate', template_folder='templates')
@@ -221,7 +228,7 @@ def dashboard():
         )
 
     except Exception as e:
-        logger.error(f"Dashboard error: {e}")
+        log("Dashboard error: %s", e)
         return f"<pre>ERROR: {e}</pre>", 500
 
 # === EXTRACT CSV FROM USAC ===
@@ -250,10 +257,10 @@ def _download_csv_background(app):
     time.sleep(1)
     try:
         url = "https://opendata.usac.org/api/views/jp7a-89nd/rows.csv?accessType=DOWNLOAD"
-        log_and_flush("Starting CSV download...")
+        log("Starting CSV download...")
         response = requests.get(url, stream=True, timeout=600)
         if response.status_code != 200:
-            log_and_flush(f"Download failed: HTTP {response.status_code}")
+            log("Download failed: HTTP %s", response.status_code)
             return
         expected = int(response.headers.get('Content-Length', 0))
         downloaded = 0
@@ -263,15 +270,15 @@ def _download_csv_background(app):
                     f.write(chunk)
                     downloaded += len(chunk)
                     if downloaded % (10*1024*1024) == 0:
-                        log_and_flush(f"Downloaded {downloaded/(1024*1024):.1f} MB")
+                        log("Downloaded %.1f MB", downloaded/(1024*1024))
         actual = os.path.getsize(CSV_FILE)
         if expected and abs(actual - expected) > 1024*1024:
-            log_and_flush(f"Size mismatch! Expected {expected}, got {actual}")
+            log("Size mismatch! Expected %s, got %s", expected, actual)
             os.remove(CSV_FILE)
         else:
-            log_and_flush(f"CSV downloaded: {actual/(1024*1024):.1f} MB")
+            log("CSV downloaded: %.1f MB", actual/(1024*1024))
     except Exception as e:
-        log_and_flush(f"Download failed: {e}")
+        log("Download failed: %s", e)
         if os.path.exists(CSV_FILE):
             os.remove(CSV_FILE)
     finally:
@@ -389,7 +396,7 @@ def _import_all_background(app, progress):
                     progress['success'] += batch_size
                     with app.app_context():
                         _save_progress(app, progress)
-                    log_and_flush(f"Imported: {progress['index'] - 1}")
+                    log("Imported: %s", progress['index'] - 1)
 
             if batch:
                 with app.app_context():
@@ -399,10 +406,10 @@ def _import_all_background(app, progress):
                 with app.app_context():
                     _save_progress(app, progress)
 
-            log_and_flush(f"Bulk import complete: {imported} imported, {skipped} skipped")
+            log("Bulk import complete: %s imported, %s skipped", imported, skipped)
 
     except Exception as e:
-        log_and_flush(f"Import failed: {e}")
+        log("Import failed: %s", e)
         progress['error'] += 1
         with app.app_context():
             _save_progress(app, progress)
@@ -419,7 +426,7 @@ def _commit_batch(app, batch):
                     try:
                         cur.execute(INSERT_SQL, _row_to_tuple(row))
                     except Exception as e:
-                        logger.error(f"Row failed: {e}")
+                        log("Row failed: %s", e)
                 conn.commit()
 
 def _save_progress(app, progress):
