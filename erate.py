@@ -12,7 +12,7 @@ import time
 import psycopg
 from datetime import datetime
 
-# === LOGGING (MAX DEBUG) ===
+# === LOGGING (ONE LINE TO RENDER + import.log) ===
 LOG_FILE = os.path.join(os.path.dirname(__file__), "import.log")
 open(LOG_FILE, 'a').close()
 
@@ -36,6 +36,7 @@ log("Python version: %s", __import__('sys').version.split()[0])
 log("Flask version: %s", __import__('flask').__version__)
 log("psycopg version: %s", psycopg.__version__)
 log("DATABASE_URL: %s", os.getenv('DATABASE_URL', 'NOT SET')[:50] + '...')
+CSV_FILE = os.path.join(os.path.dirname(__file__), "470schema.csv")
 log("CSV_FILE: %s", CSV_FILE)
 log("CSV exists: %s, size: %s", os.path.exists(CSV_FILE), os.path.getsize(CSV_FILE) if os.path.exists(CSV_FILE) else 0)
 
@@ -284,7 +285,7 @@ def _download_csv_background(app):
         with app.app_context():
             app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
 
-# === IMPORT INTERACTIVE ===
+# === IMPORT INTERACTIVE — CORRECT ROW COUNT (~300K) ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     log("Import interactive page accessed")
@@ -292,8 +293,14 @@ def import_interactive():
         log("CSV not found")
         return "<h2>CSV not found: 470schema.csv</h2>", 404
 
-    total = sum(1 for _ in open(CSV_FILE, 'r', encoding='utf-8-sig')) - 1
-    progress = session.get('import_progress', {'index': 1, 'total': total, 'success': 0, 'error': 0})
+    # CORRECT: Count actual rows using csv.reader
+    with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
+        total = sum(1 for _ in csv.reader(f)) - 1  # -1 for header
+        f.seek(0)
+        next(csv.reader(f))  # Skip header
+        progress = session.get('import_progress', {'index': 1, 'total': total, 'success': 0, 'error': 0})
+
+    log("CSV has %s rows (excluding header)", total)
 
     if current_app.config.get('BULK_IMPORT_IN_PROGRESS') or progress['index'] > progress['total']:
         log("Import complete page shown")
@@ -317,11 +324,13 @@ def import_interactive():
         flash("Bulk import started. Check /erate/view-log", "success")
         return redirect(url_for('erate.import_interactive'))
 
+    # Load current row for preview
     try:
         with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
             reader.fieldnames = [n.strip().lstrip('\ufeff') for n in reader.fieldnames]
-            for _ in range(progress['index'] - 1): next(reader)
+            for _ in range(progress['index'] - 1):
+                next(reader)
             row = next(reader)
     except StopIteration:
         progress['index'] = progress['total'] + 1
