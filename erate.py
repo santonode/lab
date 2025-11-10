@@ -258,7 +258,7 @@ def _download_csv_background(app):
         with app.app_context():
             app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
 
-# === IMPORT INTERACTIVE (NO PROGRESS POLLING) ===
+# === IMPORT INTERACTIVE (NO PROGRESS POLLING, SHOW COMPLETE PAGE WHEN RUNNING) ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     if not os.path.exists(CSV_FILE):
@@ -266,6 +266,10 @@ def import_interactive():
 
     total = sum(1 for _ in open(CSV_FILE, 'r', encoding='utf-8-sig')) - 1
     progress = session.get('import_progress', {'index': 1, 'total': total, 'success': 0, 'error': 0})
+
+    # Show complete page if import is running or finished
+    if current_app.config.get('BULK_IMPORT_IN_PROGRESS') or progress['index'] > progress['total']:
+        return render_template('erate_import_complete.html', progress=progress)
 
     if request.method == 'POST' and request.form.get('action') == 'import_all':
         if current_app.config.get('BULK_IMPORT_IN_PROGRESS'):
@@ -283,12 +287,6 @@ def import_interactive():
         thread.start()
         flash("Bulk import started in background. Check /erate/view-log", "success")
         return redirect(url_for('erate.import_interactive'))
-
-    if current_app.config.get('BULK_IMPORT_IN_PROGRESS'):
-        return render_template('erate_import_running.html')
-
-    if progress['index'] > progress['total']:
-        return render_template('erate_import_complete.html', progress=progress)
 
     try:
         with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
