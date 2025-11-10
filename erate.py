@@ -286,7 +286,7 @@ def _download_csv_background(app):
         with app.app_context():
             app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
 
-# === IMPORT INTERACTIVE — CORRECT ROW COUNT + RESET PROGRESS + NO READER ===
+# === IMPORT INTERACTIVE — SAFE row + NO READER EXHAUSTION ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     log("Import interactive page accessed")
@@ -333,8 +333,21 @@ def import_interactive():
         flash("Bulk import started. Check /erate/view-log", "success")
         return redirect(url_for('erate.import_interactive'))
 
-    # DO NOT LOAD ROW HERE — causes iterator exhaustion
-    return render_template('erate_import.html', progress=progress)
+    # Load current row — only if not importing
+    row = None
+    if progress['index'] <= progress['total']:
+        try:
+            with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
+                reader = csv.DictReader(f)
+                reader.fieldnames = [n.strip().lstrip('\ufeff') for n in reader.fieldnames]
+                for _ in range(progress['index'] - 1):
+                    next(reader)
+                row = next(reader)
+        except StopIteration:
+            progress['index'] = progress['total'] + 1
+            session['import_progress'] = progress
+
+    return render_template('erate_import.html', row=row, progress=progress)
 
 # === BULK IMPORT — RE-OPEN CSV IN THREAD, NO ITERATOR EXHAUSTION ===
 def _import_all_background(app, progress):
