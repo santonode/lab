@@ -4,6 +4,8 @@
     <title>E-Rate Import</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -11,6 +13,7 @@
             --accent: #007bff;
             --success: #27ae60;
             --danger: #dc3545;
+            --warning: #ffc107;
             --bg: #f4f7f9;
             --card: white;
             --border: #ddd;
@@ -91,13 +94,19 @@
         .btn-primary { background: var(--accent); color: white; }
         .btn-success { background: var(--success); color: white; }
         .btn-danger { background: var(--danger); color: white; }
+        .btn-warning { background: var(--warning); color: #212529; }
         .btn:hover { opacity: 0.9; transform: translateY(-1px); }
         .btn:active { transform: translateY(0); }
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
         .form-group {
             text-align: center;
             margin: 20px 0;
         }
-        .success, .error {
+        .success, .error, .info {
             text-align: center;
             font-weight: bold;
             font-size: 1.1rem;
@@ -107,6 +116,7 @@
         }
         .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
         .back-link {
             text-align: center;
             margin-top: 30px;
@@ -123,6 +133,7 @@
         .bulk-progress {
             margin: 30px 0;
             text-align: center;
+            display: none;
         }
         .progress-container {
             background: #eee;
@@ -158,6 +169,15 @@
 <div class="container">
     <h1>E-Rate Interactive Import</h1>
 
+    <!-- FLASH MESSAGES -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="{{ 'success' if category == 'success' else 'error' if category == 'error' else 'info' }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
     <div class="progress">
         Progress: <strong>{{ progress.index|default(0) }}</strong> / <strong>{{ progress.total|default(0) }}</strong>
         | Success: <strong class="success-count">{{ progress.success|default(0) }}</strong>
@@ -165,7 +185,7 @@
     </div>
 
     <!-- BULK PROGRESS BAR -->
-    <div class="bulk-progress" id="bulkProgress" style="display:none;">
+    <div class="bulk-progress" id="bulkProgress">
         <div class="progress-container">
             <div id="bulkBar"></div>
             <div class="progress-text" id="bulkText">0%</div>
@@ -182,6 +202,7 @@
         <div class="success">IMPORT COMPLETE!</div>
         <div class="form-group">
             <a href="{{ url_for('erate.dashboard') }}" class="btn btn-primary">Back to Dashboard</a>
+            <a href="{{ url_for('erate.view_log') }}" class="btn btn-warning">View Import Log</a>
         </div>
     {% else %}
         <div class="record">
@@ -246,14 +267,9 @@ function startBulkImport() {
     })
     .then(r => r.json())
     .then(data => {
-        if (data.complete) {
-            const total = {{ progress.total|default(0) }};
-            const imported = {{ progress.success|default(0) }} + data.progress.success;
-            const percent = Math.min(Math.round((imported / total) * 100), 100);
-            bar.style.width = percent + '%';
-            text.textContent = percent + '%';
-            status.innerHTML = `<strong style="color:green">Complete!</strong> ${imported} imported, ${data.progress.error} skipped.`;
-            setTimeout(() => location.reload(), 2000);
+        if (data.status === 'started') {
+            btn.textContent = 'Running in background...';
+            pollProgress();
         } else if (data.error) {
             status.innerHTML = `<strong style="color:red">Error:</strong> ${data.error}`;
             btn.disabled = false;
@@ -263,6 +279,36 @@ function startBulkImport() {
         status.innerHTML = `<strong style="color:red">Network Error:</strong> ${err.message}`;
         btn.disabled = false;
     });
+}
+
+function pollProgress() {
+    setTimeout(() => {
+        fetch('{{ url_for("erate.import_interactive") }}')
+        .then(r => r.text())
+        .then(html => {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const newProgress = doc.querySelector('.progress').innerHTML;
+            const newSuccess = doc.querySelector('.success-count').textContent;
+            const newError = doc.querySelector('.error-count').textContent;
+            const total = {{ progress.total|default(0) }};
+            const imported = parseInt(newSuccess) || 0;
+            const percent = Math.min(Math.round((imported / total) * 100), 100);
+
+            document.querySelector('.progress').innerHTML = newProgress;
+            document.getElementById('bulkBar').style.width = percent + '%';
+            document.getElementById('bulkText').textContent = percent + '%';
+
+            if (percent >= 100) {
+                document.getElementById('bulkStatus').innerHTML = 
+                    `<strong style="color:green">Complete!</strong> ${imported} imported, ${parseInt(newError)} skipped.`;
+                setTimeout(() => location.reload(), 2000);
+            } else {
+                pollProgress();
+            }
+        })
+        .catch(() => pollProgress());
+    }, 3000);
 }
 </script>
 </body>
