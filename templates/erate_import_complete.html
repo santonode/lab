@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>E-Rate Import Complete</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #1a5d57;
+            --success: #27ae60;
+            --bg: #f4f7f9;
+            --card: white;
+            --shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            background: var(--bg);
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 60px auto;
+            background: var(--card);
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
+        h1 {
+            color: var(--primary);
+            margin: 0 0 10px;
+            font-size: 2.2rem;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 1.3rem;
+            margin: 20px 0;
+            font-weight: 600;
+        }
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+        .stat {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            min-width: 140px;
+            flex: 1;
+        }
+        .stat strong {
+            display: block;
+            font-size: 2rem;
+            color: var(--success);
+        }
+        .btn {
+            display: inline-block;
+            padding: 14px 28px;
+            margin: 12px;
+            background: var(--primary);
+            color: white;
+            border-radius: 6px;
+            font-weight: 600;
+            text-decoration: none;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            background: #14504a;
+            transform: translateY(-2px);
+        }
+        .btn-secondary {
+            background: #6c757d;
+        }
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        .back {
+            margin-top: 40px;
+            font-size: 0.95rem;
+        }
+        .back a {
+            color: #666;
+            text-decoration: none;
+        }
+        .back a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Import Complete!</h1>
+    <div class="success">
+        All records have been processed.
+    </div>
+
+    <div class="stats">
+        <div class="stat">
+            <strong>{{ progress.success|default(0) }}</strong>
+            Successfully Imported
+        </div>
+        <div class="stat">
+            <strong>{{ progress.error|default(0) }}</strong>
+            Skipped / Errors
+        </div>
+        <div class="stat">
+            <strong>{{ progress.total|default(0) }}</strong>
+            Total Records
+        </div>
+    </div>
+
+    <div>
+        <a href="{{ url_for('erate.dashboard') }}" class="btn">Back to Dashboard</a>
+        <a href="{{ url_for('erate.view_log') }}" class="btn btn-secondary">View Import Log</a>
+    </div>
+
+    <div class="back">
+        <a href="/memes">Back to Memes</a>
+    </div>
+</div>
+</body>
+</html>
