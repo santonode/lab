@@ -10,10 +10,11 @@ import requests
 import threading
 import time
 import sys
+import traceback
 from db import get_conn
 from datetime import datetime
 
-# === LOGGING SETUP (RENDER + FILE) ===
+# === LOGGING SETUP (RENDER + FILE + FULL DEBUG) ===
 LOG_FILE = os.path.join(os.path.dirname(__file__), "import.log")
 
 # Ensure file exists
@@ -35,7 +36,7 @@ for h in logger.handlers[:]: logger.removeHandler(h)
 logger.addHandler(handler_file)
 logger.addHandler(handler_stdout)
 
-# Force log to Render + file + flush
+# Force log to Render + file + flush + print
 def log(msg, *args):
     formatted = msg % args if args else msg
     logger.info(formatted)
@@ -322,41 +323,60 @@ def import_interactive():
 
     return render_template('erate_import.html', row=row, progress=progress)
 
-# === BULK IMPORT ===
+# === BULK IMPORT — FULL DEBUG ===
 def _import_all_background(app, progress):
     time.sleep(1)
     batch_size = 1000
     try:
         log("Bulk import started from record %s", progress['index'])
+        log("Opening CSV file: %s", CSV_FILE)
         with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
+            log("CSV opened successfully")
             reader = csv.DictReader(f)
-            reader.fieldnames = [n.strip().lstrip('\ufeff') for n in reader.fieldnames]
-            for _ in range(progress['index'] - 1): next(reader)
+            log("CSV reader created, fieldnames: %s", reader.fieldnames[:5])
+
+            # Skip to start index
+            skipped_rows = 0
+            for _ in range(progress['index'] - 1):
+                next(reader)
+                skipped_rows += 1
+                if skipped_rows % 10000 == 0:
+                    log("Skipped %s rows to reach start index", skipped_rows)
+
+            log("Starting import loop at record %s", progress['index'])
 
             batch = []
             imported = 0
+            row_count = 0
 
             for row in reader:
+                row_count += 1
+                if row_count % 10000 == 0:
+                    log("Processing row %s", progress['index'] + row_count - 1)
+
                 app_number = row.get('Application Number', '').strip()
                 if not app_number:
+                    log("Skipping row %s: missing app_number", row_count)
                     continue
 
-                # CRITICAL: app context for EVERY DB call
-                with app.app_context():
-                    try:
+                # DB CHECK WITH FULL DEBUG
+                try:
+                    with app.app_context():
                         with get_conn() as conn:
                             with conn.cursor() as cur:
                                 cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
                                 if cur.fetchone():
+                                    log("Duplicate: %s", app_number)
                                     continue
-                    except Exception as e:
-                        log("DB check failed: %s", e)
-                        continue
+                except Exception as e:
+                    log("DB ERROR on app_number %s: %s", app_number, e)
+                    continue
 
                 batch.append(row)
                 imported += 1
 
                 if len(batch) >= batch_size:
+                    log("Committing batch of %s records (total imported: %s)", batch_size, imported)
                     with app.app_context():
                         _commit_batch(app, batch)
                     progress['index'] += batch_size
@@ -366,7 +386,9 @@ def _import_all_background(app, progress):
                     log("Imported: %s", progress['index'] - 1)
                     batch = []
 
+            # Final batch
             if batch:
+                log("Committing final batch of %s records", len(batch))
                 with app.app_context():
                     _commit_batch(app, batch)
                 progress['index'] = progress['total'] + 1
@@ -374,16 +396,18 @@ def _import_all_background(app, progress):
                 with app.app_context():
                     current_app.config['IMPORT_PROGRESS'] = progress.copy()
 
-            log("Bulk import complete: %s imported", progress['success'])
+            log("Bulk import complete: %s imported, %s processed", imported, row_count)
 
     except Exception as e:
-        log("Import failed: %s", e)
+        log("FATAL ERROR in import: %s", e)
+        log("Traceback: %s", traceback.format_exc())
     finally:
         with app.app_context():
             app.config.update({
                 'BULK_IMPORT_IN_PROGRESS': False,
                 'IMPORT_THREAD': None
             })
+        log("Import thread finished")
 
 def _commit_batch(app, batch):
     with app.app_context():
