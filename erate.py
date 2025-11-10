@@ -348,7 +348,7 @@ def import_interactive():
 
     return render_template('erate_import.html', row=row, progress=progress)
 
-# === BULK IMPORT — FULL DEBUG + ERROR LOGGING ===
+# === BULK IMPORT — STREAMING, 512 MB SAFE ===
 def _import_all_background(app, progress):
     time.sleep(1)
     batch_size = 1000
@@ -361,73 +361,73 @@ def _import_all_background(app, progress):
         test_conn.close()
         log("DB connection test in thread: SUCCESS")
 
-        # READ ENTIRE CSV INTO MEMORY
-        log("Reading CSV into memory: %s", CSV_FILE)
-        with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
-            all_rows = list(csv.DictReader(f))
-        log("CSV loaded: %s rows", len(all_rows))
+        # STREAM CSV — NO MEMORY LOAD
+        log("Streaming CSV: %s", CSV_FILE)
+        with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='', buffering=8192) as f:
+            reader = csv.DictReader(f)
+            log("CSV reader created, fieldnames: %s", reader.fieldnames[:3])
 
-        # Skip to start
-        start_idx = progress['index'] - 1
-        rows_to_process = all_rows[start_idx:]
-        log("Starting import from row %s (%s remaining)", progress['index'], len(rows_to_process))
+            # Skip to start
+            for _ in range(progress['index'] - 1):
+                next(reader)
+            log("Skipped to record %s", progress['index'])
 
-        batch = []
-        imported = 0
+            batch = []
+            imported = 0
 
-        for row in rows_to_process:
-            app_number = row.get('Application Number', '').strip()
-            if not app_number: continue
+            for row in reader:
+                app_number = row.get('Application Number', '').strip()
+                if not app_number: continue
 
-            conn = psycopg.connect(DATABASE_URL, autocommit=False)
-            try:
-                with conn.cursor() as cur:
-                    cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
-                    if cur.fetchone():
-                        conn.close()
-                        continue
-            except Exception as e:
-                log("DB check failed: %s", e)
+                conn = psycopg.connect(DATABASE_URL, autocommit=False)
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
+                        if cur.fetchone():
+                            conn.close()
+                            continue
+                except Exception as e:
+                    log("DB check failed: %s", e)
+                    conn.close()
+                    continue
+
+                batch.append(row)
+                imported += 1
                 conn.close()
-                continue
 
-            batch.append(row)
-            imported += 1
-            conn.close()
+                if len(batch) >= batch_size:
+                    conn = psycopg.connect(DATABASE_URL, autocommit=False)
+                    try:
+                        with conn.cursor() as cur:
+                            for r in batch:
+                                cur.execute(INSERT_SQL, _row_to_tuple(r))
+                        conn.commit()
+                        log("Committed batch of %s", batch_size)
+                    except Exception as e:
+                        log("Batch commit failed: %s", e)
+                        conn.rollback()
+                    finally:
+                        conn.close()
+                    progress['index'] += batch_size
+                    progress['success'] += batch_size
+                    log("Imported: %s", progress['index'] - 1)
+                    batch = []
 
-            if len(batch) >= batch_size:
+            if batch:
                 conn = psycopg.connect(DATABASE_URL, autocommit=False)
                 try:
                     with conn.cursor() as cur:
                         for r in batch:
                             cur.execute(INSERT_SQL, _row_to_tuple(r))
                     conn.commit()
-                    log("Committed batch of %s", batch_size)
                 except Exception as e:
-                    log("Batch commit failed: %s", e)
-                    conn.rollback()
+                    log("Final batch failed: %s", e)
                 finally:
                     conn.close()
-                progress['index'] += batch_size
-                progress['success'] += batch_size
-                log("Imported: %s", progress['index'] - 1)
-                batch = []
+                progress['index'] = progress['total'] + 1
+                progress['success'] += len(batch)
 
-        if batch:
-            conn = psycopg.connect(DATABASE_URL, autocommit=False)
-            try:
-                with conn.cursor() as cur:
-                    for r in batch:
-                        cur.execute(INSERT_SQL, _row_to_tuple(r))
-                conn.commit()
-            except Exception as e:
-                log("Final batch failed: %s", e)
-            finally:
-                conn.close()
-            progress['index'] = progress['total'] + 1
-            progress['success'] += len(batch)
-
-        log("Bulk import complete: %s imported", progress['success'])
+            log("Bulk import complete: %s imported", progress['success'])
 
     except Exception as e:
         log("IMPORT THREAD CRASHED: %s", e)
