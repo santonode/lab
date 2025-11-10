@@ -28,7 +28,33 @@
             background: var(--bg);
             color: var(--text);
             line-height: 1.6;
+            position: relative;
         }
+        /* LOADING OVERLAY */
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(4px);
+        }
+        .overlay.show { display: flex; }
+        .spinner {
+            width: 70px;
+            height: 70px;
+            border: 7px solid #f3f3f3;
+            border-top: 7px solid var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         .container {
             max-width: 800px;
             margin: 40px auto;
@@ -36,6 +62,8 @@
             padding: 30px;
             border-radius: 12px;
             box-shadow: var(--shadow);
+            position: relative;
+            z-index: 1;
         }
         h1 {
             text-align: center;
@@ -129,6 +157,7 @@
         .back-link a:hover {
             text-decoration: underline;
         }
+
         /* BULK PROGRESS BAR */
         .bulk-progress {
             margin: 30px 0;
@@ -156,8 +185,10 @@
             color: white;
             font-weight: bold;
             font-size: 1.1rem;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
         }
         #bulkStatus { margin: 15px 0; font-size: 1rem; }
+
         @media (max-width: 768px) {
             .container { margin: 20px; padding: 20px; }
             .btn { width: 100%; margin: 8px 0; }
@@ -166,150 +197,163 @@
     </style>
 </head>
 <body>
-<div class="container">
-    <h1>E-Rate Interactive Import</h1>
+    <!-- LOADING OVERLAY -->
+    <div class="overlay" id="loading">
+        <div class="spinner"></div>
+    </div>
 
-    <!-- FLASH MESSAGES -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="{{ 'success' if category == 'success' else 'error' if category == 'error' else 'info' }}">{{ message }}</div>
-            {% endfor %}
+    <div class="container">
+        <h1>E-Rate Interactive Import</h1>
+
+        <!-- FLASH MESSAGES -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="{{ 'success' if category == 'success' else 'error' if category == 'error' else 'info' }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="progress">
+            Progress: <strong id="progress-index">{{ progress.index|default(0) }}</strong> / <strong id="progress-total">{{ progress.total|default(0) }}</strong>
+            | Success: <strong class="success-count" id="progress-success">{{ progress.success|default(0) }}</strong>
+            | Errors: <strong class="error-count" id="progress-error">{{ progress.error|default(0) }}</strong>
+        </div>
+
+        <!-- BULK PROGRESS BAR -->
+        <div class="bulk-progress" id="bulkProgress">
+            <div class="progress-container">
+                <div id="bulkBar"></div>
+                <div class="progress-text" id="bulkText">0%</div>
+            </div>
+            <p id="bulkStatus">Starting bulk import...</p>
+        </div>
+
+        {% if error %}
+            <div class="error">Error: {{ error }}</div>
+            <div class="form-group">
+                <a href="{{ url_for('erate.import_interactive') }}" class="btn btn-primary">Try Again</a>
+            </div>
+        {% elif progress.index > progress.total %}
+            <div class="success">IMPORT COMPLETE!</div>
+            <div class="form-group">
+                <a href="{{ url_for('erate.dashboard') }}" class="btn btn-primary">Back to Dashboard</a>
+                <a href="{{ url_for('erate.view_log') }}" class="btn btn-warning">View Import Log</a>
+            </div>
+        {% else %}
+            <div class="record">
+                <h3>Record {{ progress.index|default(0) }}</h3>
+                <p><strong>App #:</strong> {{ row['Application Number']|default('N/A') }}</p>
+                <p><strong>Entity:</strong> {{ row['Billed Entity Name']|default('N/A') }}</p>
+                <p><strong>State:</strong> {{ row['Billed Entity State']|default('N/A') }}</p>
+                <p><strong>Modified:</strong> {{ row['Last Modified Date/Time']|default('N/A') }}</p>
+            </div>
+
+            {% if success %}
+                <div class="success">Imported successfully!</div>
+            {% endif %}
+
+            <!-- IMPORT THIS RECORD -->
+            <div class="form-group">
+                <form method="post" onsubmit="return confirm('Import this record?');">
+                    <input type="hidden" name="action" value="import_one">
+                    <button type="submit" class="btn btn-primary">Import This Record</button>
+                </form>
+            </div>
+
+            <!-- BULK IMPORT BUTTON -->
+            <div class="form-group">
+                <button type="button" onclick="startBulkImport()" class="btn btn-success" id="bulkBtn">
+                    Import All Remaining ({{ (progress.total|default(0)) - (progress.index|default(0)) + 1 }})
+                </button>
+            </div>
+
+            <!-- START OVER -->
+            <div class="form-group">
+                <form method="post" onsubmit="return confirm('Start over from record 1?');">
+                    <input type="hidden" name="action" value="reset">
+                    <button type="submit" class="btn btn-danger">Start Over</button>
+                </form>
+            </div>
         {% endif %}
-    {% endwith %}
 
-    <div class="progress">
-        Progress: <strong>{{ progress.index|default(0) }}</strong> / <strong>{{ progress.total|default(0) }}</strong>
-        | Success: <strong class="success-count">{{ progress.success|default(0) }}</strong>
-        | Errors: <strong class="error-count">{{ progress.error|default(0) }}</strong>
+        <div class="back-link">
+            <a href="{{ url_for('erate.dashboard') }}">Back to Dashboard</a>
+        </div>
     </div>
 
-    <!-- BULK PROGRESS BAR -->
-    <div class="bulk-progress" id="bulkProgress">
-        <div class="progress-container">
-            <div id="bulkBar"></div>
-            <div class="progress-text" id="bulkText">0%</div>
-        </div>
-        <p id="bulkStatus">Starting bulk import...</p>
-    </div>
+    <script>
+        const overlay = document.getElementById('loading');
+        const bulkProgress = document.getElementById('bulkProgress');
+        const bulkBar = document.getElementById('bulkBar');
+        const bulkText = document.getElementById('bulkText');
+        const bulkStatus = document.getElementById('bulkStatus');
+        const bulkBtn = document.getElementById('bulkBtn');
 
-    {% if error %}
-        <div class="error">Error: {{ error }}</div>
-        <div class="form-group">
-            <a href="{{ url_for('erate.import_interactive') }}" class="btn btn-primary">Try Again</a>
-        </div>
-    {% elif progress.index > progress.total %}
-        <div class="success">IMPORT COMPLETE!</div>
-        <div class="form-group">
-            <a href="{{ url_for('erate.dashboard') }}" class="btn btn-primary">Back to Dashboard</a>
-            <a href="{{ url_for('erate.view_log') }}" class="btn btn-warning">View Import Log</a>
-        </div>
-    {% else %}
-        <div class="record">
-            <h3>Record {{ progress.index|default(0) }}</h3>
-            <p><strong>App #:</strong> {{ row['Application Number']|default('N/A') }}</p>
-            <p><strong>Entity:</strong> {{ row['Billed Entity Name']|default('N/A') }}</p>
-            <p><strong>State:</strong> {{ row['Billed Entity State']|default('N/A') }}</p>
-            <p><strong>Modified:</strong> {{ row['Last Modified Date/Time']|default('N/A') }}</p>
-        </div>
+        function startBulkImport() {
+            overlay.classList.add('show');
+            bulkProgress.style.display = 'block';
+            bulkBtn.disabled = true;
+            bulkStatus.textContent = 'Starting bulk import...';
+            bulkBar.style.width = '0%';
+            bulkText.textContent = '0%';
 
-        {% if success %}
-            <div class="success">Imported successfully!</div>
-        {% endif %}
-
-        <!-- IMPORT THIS RECORD -->
-        <div class="form-group">
-            <form method="post" onsubmit="return confirm('Import this record?');">
-                <input type="hidden" name="action" value="import_one">
-                <button type="submit" class="btn btn-primary">Import This Record</button>
-            </form>
-        </div>
-
-        <!-- BULK IMPORT BUTTON -->
-        <div class="form-group">
-            <button type="button" onclick="startBulkImport()" class="btn btn-success" id="bulkBtn">
-                Import All Remaining ({{ (progress.total|default(0)) - (progress.index|default(0)) + 1 }})
-            </button>
-        </div>
-
-        <!-- START OVER -->
-        <div class="form-group">
-            <form method="post" onsubmit="return confirm('Start over from record 1?');">
-                <input type="hidden" name="action" value="reset">
-                <button type="submit" class="btn btn-danger">Start Over</button>
-            </form>
-        </div>
-    {% endif %}
-
-    <div class="back-link">
-        <a href="{{ url_for('erate.dashboard') }}">Back to Dashboard</a>
-    </div>
-</div>
-
-<script>
-function startBulkImport() {
-    const btn = document.getElementById('bulkBtn');
-    const progressDiv = document.getElementById('bulkProgress');
-    const bar = document.getElementById('bulkBar');
-    const text = document.getElementById('bulkText');
-    const status = document.getElementById('bulkStatus');
-
-    btn.disabled = true;
-    progressDiv.style.display = 'block';
-    status.textContent = 'Starting bulk import...';
-    bar.style.width = '0%';
-    text.textContent = '0%';
-
-    fetch('{{ url_for("erate.import_interactive") }}', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'action=import_all'
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.status === 'started') {
-            btn.textContent = 'Running in background...';
-            pollProgress();
-        } else if (data.error) {
-            status.innerHTML = `<strong style="color:red">Error:</strong> ${data.error}`;
-            btn.disabled = false;
+            fetch('{{ url_for("erate.import_interactive") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'action=import_all'
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'started') {
+                    bulkBtn.textContent = 'Running...';
+                    pollProgress();
+                } else {
+                    bulkStatus.innerHTML = `<strong style="color:red">Error:</strong> ${data.error || 'Unknown'}`;
+                    overlay.classList.remove('show');
+                    bulkBtn.disabled = false;
+                }
+            })
+            .catch(err => {
+                bulkStatus.innerHTML = `<strong style="color:red">Network Error:</strong> ${err.message}`;
+                overlay.classList.remove('show');
+                bulkBtn.disabled = false;
+            });
         }
-    })
-    .catch(err => {
-        status.innerHTML = `<strong style="color:red">Network Error:</strong> ${err.message}`;
-        btn.disabled = false;
-    });
-}
 
-function pollProgress() {
-    setTimeout(() => {
-        fetch('{{ url_for("erate.import_interactive") }}')
-        .then(r => r.text())
-        .then(html => {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            const newProgress = doc.querySelector('.progress').innerHTML;
-            const newSuccess = doc.querySelector('.success-count').textContent;
-            const newError = doc.querySelector('.error-count').textContent;
-            const total = {{ progress.total|default(0) }};
-            const imported = parseInt(newSuccess) || 0;
-            const percent = Math.min(Math.round((imported / total) * 100), 100);
+        function pollProgress() {
+            fetch('{{ url_for("erate.get_progress") }}')
+                .then(r => r.json())
+                .then(data => {
+                    const total = data.total;
+                    const imported = data.success;
+                    const errors = data.error;
+                    const percent = total > 0 ? Math.min(Math.round((imported / total) * 100), 100) : 0;
 
-            document.querySelector('.progress').innerHTML = newProgress;
-            document.getElementById('bulkBar').style.width = percent + '%';
-            document.getElementById('bulkText').textContent = percent + '%';
+                    // Update progress text
+                    document.getElementById('progress-index').textContent = data.index;
+                    document.getElementById('progress-success').textContent = imported;
+                    document.getElementById('progress-error').textContent = errors;
 
-            if (percent >= 100) {
-                document.getElementById('bulkStatus').innerHTML = 
-                    `<strong style="color:green">Complete!</strong> ${imported} imported, ${parseInt(newError)} skipped.`;
-                setTimeout(() => location.reload(), 2000);
-            } else {
-                pollProgress();
-            }
-        })
-        .catch(() => pollProgress());
-    }, 3000);
-}
-</script>
+                    // Update bulk bar
+                    bulkBar.style.width = percent + '%';
+                    bulkText.textContent = percent + '%';
+                    bulkStatus.innerHTML = `Imported <strong>${imported}</strong> | Skipped <strong>${errors}</strong>`;
+
+                    if (data.index > total) {
+                        bulkStatus.innerHTML = `<strong style="color:green">COMPLETE!</strong> ${imported} imported, ${errors} skipped.`;
+                        setTimeout(() => location.reload(), 2000);
+                    } else {
+                        setTimeout(pollProgress, 1000);
+                    }
+                })
+                .catch(() => setTimeout(pollProgress, 2000));
+        }
+
+        // Hide overlay on load
+        window.addEventListener('load', () => {
+            overlay.classList.remove('show');
+        });
+    </script>
 </body>
 </html>
