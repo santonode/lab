@@ -2,13 +2,19 @@
 from flask import Flask, send_from_directory
 import os
 from datetime import datetime
-from db import init_db
+from db import init_db, init_db_pool  # Updated db.py
 from erate import erate_bp
 from memes import memes_bp
 
 # === CREATE APP ===
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))
+
+# === DATABASE URL ===
+app.config['DATABASE_URL'] = os.getenv(
+    'DATABASE_URL',
+    'postgresql://wurdle_db_user:your_password@dpg-d2qcuan5r7bs73aid7p0-a/wurdle_db'
+)
 
 # === JINJA FILTERS ===
 def strftime_filter(value, format="%m/%d/%Y %H:%M"):
@@ -43,9 +49,10 @@ def static2_files(filename):
     response.headers['Cache-Control'] = 'no-cache'
     return response
 
-# === INIT DB ON START ===
+# === INIT DB + CONNECTION POOL ON START ===
 with app.app_context():
     init_db()
+    init_db_pool(app)  # Initialize psycopg ConnectionPool
 
 # === RUN ===
 if __name__ == '__main__':
