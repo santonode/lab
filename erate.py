@@ -414,7 +414,7 @@ def _commit_batch(app, batch):
 
 def _save_progress(app, progress):
     with app.app_context():
-        current_app.config['IMPORT_PROGRESS'] = progress.copy()  # FIXED
+        current_app.config['IMPORT_PROGRESS'] = progress.copy()
 
 # === CANCEL IMPORT ===
 @erate_bp.route('/cancel-import', methods=['POST'])
