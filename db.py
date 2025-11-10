@@ -4,6 +4,7 @@ import psycopg
 from psycopg_pool import ConnectionPool
 import os
 import logging
+import ssl
 
 # === LOGGING ===
 logging.basicConfig(level=logging.INFO)
@@ -17,19 +18,35 @@ if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
 # === GLOBAL CONNECTION POOL ===
 pool = None
 
-# === INITIALIZE CONNECTION POOL ===
+# === INITIALIZE CONNECTION POOL WITH TLS 1.2 ===
 def init_db_pool(app):
     global pool
     if pool is None:
         logger.info("Initializing database connection pool...")
+        
+        # Get connection string
+        conninfo = app.config.get('DATABASE_URL', DATABASE_URL)
+        
+        # Ensure SSL is enforced
+        if 'sslmode' not in conninfo.lower():
+            conninfo += ' sslmode=require'
+        if 'sslrootcert' not in conninfo.lower():
+            conninfo += ' sslrootcert=auto'
+
+        # Create TLS 1.2 context
+        ssl_context = ssl.create_default_context()
+        ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
+        ssl_context.maximum_version = ssl.TLSVersion.TLSv1_2
+
         pool = ConnectionPool(
-            conninfo=app.config.get('DATABASE_URL', DATABASE_URL),
+            conninfo=conninfo,
             min_size=1,
             max_size=10,
             timeout=30.0,
-            open=True
+            open=True,
+            context=ssl_context  # Force TLS 1.2
         )
-        logger.info("Connection pool initialized (max_size=10)")
+        logger.info("Connection pool initialized with TLS 1.2 (max_size=10)")
 
 # === GET CONNECTION FROM POOL ===
 def get_conn():
@@ -38,7 +55,10 @@ def get_conn():
         if pool is None:
             raise RuntimeError("Connection pool not initialized. Call init_db_pool(app) first.")
         try:
-            g.db = pool.getconn(timeout=10.0)  # ← getconn()
+            g.db = pool.getconn(timeout=10.0)
+            # Re-apply SSL context per connection
+            g.db.sslcontext = ssl.create_default_context()
+            g.db.sslcontext.minimum_version = ssl.TLSVersion.TLSv1_2
         except Exception as e:
             logger.error(f"Failed to get connection from pool: {e}")
             raise
@@ -50,7 +70,7 @@ def close_conn(e=None):
     db = g.pop('db', None)
     if db is not None:
         try:
-            pool.putconn(db)  # ← putconn()
+            pool.putconn(db)
         except Exception as e:
             logger.warning(f"Error returning connection to pool: {e}")
 
