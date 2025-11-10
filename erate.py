@@ -1,5 +1,5 @@
 # erate.py
-from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify, send_file, flash
+from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify, send_file, flash, current_app
 import csv
 import os
 import logging
@@ -121,13 +121,13 @@ def dashboard():
         logger.error(f"Dashboard error: {e}")
         return f"<pre>ERROR: {e}</pre>", 500
 
-# === EXTRACT CSV FROM USAC — BACKGROUND + NO TIMEOUT ===
+# === EXTRACT CSV FROM USAC — BACKGROUND + NO SESSION IN THREAD ===
 @erate_bp.route('/extract-csv')
 def extract_csv():
-    if 'csv_download' in session and time.time() - session['csv_download'] < 300:
+    if current_app.config.get('CSV_DOWNLOAD_IN_PROGRESS'):
         flash("CSV download already in progress. Please wait.", "info")
     else:
-        session['csv_download'] = time.time()
+        current_app.config['CSV_DOWNLOAD_IN_PROGRESS'] = True
         thread = threading.Thread(target=_download_csv_background)
         thread.daemon = True
         thread.start()
@@ -145,18 +145,19 @@ def _download_csv_background():
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
 
-        # Reset import session
-        if 'import_progress' in session:
-            session.pop('import_progress', None)
+        # Reset import progress (no session)
+        _reset_import_progress()
 
         size = response.headers.get('Content-Length', 'Unknown')
         logger.info(f"CSV downloaded: {size} bytes")
     except Exception as e:
         logger.error(f"Background CSV download failed: {e}")
     finally:
-        session.pop('csv_download', None)
+        # Clear flag using app context
+        with current_app.app_context():
+            current_app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
 
-# === IMPORT INTERACTIVE ===
+# === BULK IMPORT — BACKGROUND + NO SESSION IN THREAD ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     if not os.path.exists(CSV_FILE):
@@ -185,9 +186,9 @@ def import_interactive():
         if action == 'import_one':
             return _import_one_record()
         if action == 'import_all':
-            if 'bulk_import' in session and time.time() - session['bulk_import'] < 600:
+            if current_app.config.get('BULK_IMPORT_IN_PROGRESS'):
                 return jsonify({'error': 'Bulk import already running'}), 429
-            session['bulk_import'] = time.time()
+            current_app.config['BULK_IMPORT_IN_PROGRESS'] = True
             thread = threading.Thread(target=_import_all_background)
             thread.daemon = True
             thread.start()
@@ -272,7 +273,7 @@ def _import_one_record():
                     parse_datetime(row.get('Allowable Contract Date')),
                     parse_datetime(row.get('Created Date/Time')),
                     row.get('Created By',''),
-                    parse_datetime(row.get('Certified Date/Time')),
+                    parse_datetime(row.get('Certified Date/Time ')),
                     row.get('Certified By',''),
                     parse_datetime(row.get('Last Modified Date/Time')),
                     row.get('Last Modified By',''),
@@ -351,10 +352,10 @@ def _import_one_record():
     session['import_progress'] = progress
     return render_template('erate_import.html', row=row, progress=progress, success=True)
 
-# === BULK IMPORT — BACKGROUND + JSON RESPONSE ===
+# === BULK IMPORT — BACKGROUND + NO SESSION IN THREAD ===
 def _import_all_background():
     time.sleep(1)  # Let response return
-    progress = session['import_progress']
+    progress = session.get('import_progress', {'index': 1, 'total': 1, 'success': 0, 'error': 0})
     start_index = progress['index']
 
     try:
@@ -394,7 +395,7 @@ def _import_all_background():
                                     auth_city, auth_state, auth_zip, auth_zip_ext, auth_phone,
                                     auth_phone_ext, auth_email, auth_title, auth_employer,
                                     cat1_desc, cat2_desc, installment_type, installment_min,
-                                    installment_max, rfp_id, state_restrictions, restriction_desc,
+                                    installment_max  rfp_id, state_restrictions, restriction_desc,
                                     statewide, all_public, all_nonpublic, all_libraries, form_version
                                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                                           %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
@@ -493,7 +494,15 @@ def _import_all_background():
         session['import_progress'] = progress
         logger.critical(f"Bulk import crashed: {e}")
     finally:
-        session.pop('bulk_import', None)
+        with current_app.app_context():
+            current_app.config['BULK_IMPORT_IN_PROGRESS'] = False
+
+# === HELPER: Reset import progress (no session) ===
+def _reset_import_progress():
+    # Create app context to access session
+    with current_app.app_context():
+        if 'import_progress' in session:
+            session.pop('import_progress', None)
 
 # === VIEW LOG ===
 @erate_bp.route('/view-log')
