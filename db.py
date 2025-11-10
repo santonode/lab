@@ -82,13 +82,13 @@ def init_db():
             logger.info("Database initialization complete")
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")
-        if conn:
+        if 'conn' in locals():
             conn.rollback()
         raise
 
 # === INIT FLASK APP (CALL FROM app.py) ===
 def init_app(app):
-    """Register teardown and pool init"""
+    """Register teardown and initialize pool + schema"""
     app.teardown_appcontext(close_conn)
     with app.app_context():
         init_db_pool(app)
