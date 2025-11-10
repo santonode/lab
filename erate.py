@@ -307,14 +307,16 @@ def _import_one_record():
     session['import_progress'] = progress
     return render_template('erate_import.html', row=row, progress=progress, success=True)
 
-# === BULK IMPORT ===
+# === BULK IMPORT WITH JSON PROGRESS ===
 def _import_all_records():
     progress = session['import_progress']
+    start_index = progress['index']
+
     try:
         with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
             reader.fieldnames = [n.strip().lstrip('\ufeff') for n in reader.fieldnames]
-            for _ in range(progress['index'] - 1):
+            for _ in range(start_index - 1):
                 next(reader)
 
             imported = skipped = 0
@@ -400,7 +402,7 @@ def _import_all_records():
                                 row.get('Technical Contact Phone',''),
                                 row.get('Technical Contact Phone Ext',''),
                                 row.get('Technical Contact Email',''),
-                                row.get('Authorized Person Camera',''),
+                                row.get('Authorized Person Name',''),
                                 row.get('Authorized Person Address',''),
                                 row.get('Authorized Person City',''),
                                 row.get('Authorized Person State',''),
@@ -440,19 +442,24 @@ def _import_all_records():
             progress['index'] = progress['total'] + 1
             session['import_progress'] = progress
             logger.info(f"Bulk import completed: {imported} imported, {skipped} skipped")
-            return redirect(url_for('erate.import_interactive'))
+
+            return jsonify({
+                'complete': True,
+                'progress': progress
+            })
 
     except Exception as e:
         progress['error'] += 1
         session['import_progress'] = progress
         logger.critical(f"Bulk import crashed: {e}")
-        return render_template('erate_import.html', progress=progress, error="Bulk import failed. Check logs.")
+        return jsonify({'error': str(e)}), 500
 
 # === VIEW LOG ===
 @erate_bp.route('/view-log')
 def view_log():
-    if os.path.exists("import.log"):
-        return send_file("import.log", mimetype='text/plain')
+    log_path = os.path.join(os.path.dirname(__file__), "import.log")
+    if os.path.exists(log_path):
+        return send_file(log_path, mimetype='text/plain', as_attachment=False)
     return "No log file found.", 404
 
 # === RESET IMPORT ===
