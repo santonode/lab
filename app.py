@@ -2,7 +2,7 @@
 from flask import Flask, send_from_directory
 import os
 from datetime import datetime
-from db import init_db, init_db_pool  # Updated db.py
+from db import init_db, init_db_pool, init_app as init_db_app  # Updated db.py
 from erate import erate_bp
 from memes import memes_bp
 
@@ -50,9 +50,7 @@ def static2_files(filename):
     return response
 
 # === INIT DB + CONNECTION POOL ON START ===
-with app.app_context():
-    init_db()
-    init_db_pool(app)  # Initialize psycopg ConnectionPool
+init_db_app(app)  # This calls: init_db_pool(app) + init_db() + teardown
 
 # === RUN ===
 if __name__ == '__main__':
