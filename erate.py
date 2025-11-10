@@ -9,15 +9,13 @@ import logging
 import requests
 import threading
 import time
-import traceback
-from db import get_conn
+import psycopg
 from datetime import datetime
 
-# === LOGGING SETUP (ONE LINE TO RENDER + import.log) ===
+# === LOGGING (ONE LINE TO RENDER + import.log) ===
 LOG_FILE = os.path.join(os.path.dirname(__file__), "import.log")
 open(LOG_FILE, 'a').close()
 
-# Single handler: write to file + stdout (Render)
 handler = logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8')
 handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
 
@@ -26,16 +24,23 @@ logger.setLevel(logging.INFO)
 for h in logger.handlers[:]: logger.removeHandler(h)
 logger.addHandler(handler)
 
-# Log once → appears in both Render logs AND import.log
 def log(msg, *args):
     formatted = msg % args if args else msg
     logger.info(formatted)
     handler.flush()
-    print(formatted, flush=True)  # Only one line in Render
+    print(formatted, flush=True)
 
 # === BLUEPRINT ===
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate', template_folder='templates')
 CSV_FILE = os.path.join(os.path.dirname(__file__), "470schema.csv")
+
+# === GET DATABASE_URL FROM ENV ===
+DATABASE_URL = os.getenv('DATABASE_URL')
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+if 'sslmode' not in DATABASE_URL.lower():
+    base, dbname = DATABASE_URL.rsplit('/', 1)
+    DATABASE_URL = f"{base}/{dbname}?sslmode=require"
 
 # === SQL INSERT ===
 INSERT_SQL = '''
@@ -98,7 +103,7 @@ def _row_to_tuple(row):
         row.get('Billed Entity Name', ''),
         row.get('Organization Status', ''),
         row.get('Organization Type', ''),
-        row.get('Applicant Type', ''),
+        row(the 'Applicant Type', ''),
         row.get('Website URL', ''),
         float(row.get('Latitude') or 0),
         float(row.get('Longitude') or 0),
@@ -154,251 +159,79 @@ def _row_to_tuple(row):
         row.get('Form Version', '')
     )
 
-# === DASHBOARD ===
-@erate_bp.route('/')
-def dashboard():
-    state_filter = request.args.get('state', '').strip().upper()
-    modified_after_str = request.args.get('modified_after', '').strip()
-    offset = max(int(request.args.get('offset', 0)), 0)
-    limit = 10
-
-    filters = {'state': state_filter, 'modified_after': modified_after_str}
-
-    try:
-        conn = get_conn()
-        with conn.cursor() as cur:
-            count_sql = 'SELECT COUNT(*) FROM erate'
-            count_params = []
-            where_clauses = []
-            if state_filter:
-                where_clauses.append('state = %s')
-                count_params.append(state_filter)
-            if modified_after_str:
-                where_clauses.append('last_modified_datetime >= %s')
-                count_params.append(modified_after_str)
-            if where_clauses:
-                count_sql += ' WHERE ' + ' AND '.join(where_clauses)
-            cur.execute(count_sql, count_params)
-            total_count = cur.fetchone()[0]
-
-            sql = '''
-                SELECT app_number, entity_name, state, funding_year,
-                       fcc_status, last_modified_datetime
-                FROM erate
-            '''
-            params = []
-            if where_clauses:
-                sql += ' WHERE ' + ' AND '.join(where_clauses)
-                params.extend(count_params)
-            sql += ' ORDER BY app_number LIMIT %s OFFSET %s'
-            params.extend([limit + 1, offset])
-            cur.execute(sql, params)
-            rows = cur.fetchall()
-
-            table_data = [
-                {
-                    'app_number': r[0], 'entity_name': r[1], 'state': r[2],
-                    'funding_year': r[3], 'fcc_status': r[4],
-                    'last_modified_datetime': r[5]
-                }
-                for r in rows
-            ]
-
-        has_more = len(table_data) > limit
-        table_data = table_data[:limit]
-        next_offset = offset + limit
-
-        return render_template(
-            'erate.html',
-            table_data=table_data, filters=filters, total_count=total_count,
-            total_filtered=offset + len(table_data), has_more=has_more,
-            next_offset=next_offset
-        )
-
-    except Exception as e:
-        log("Dashboard error: %s", e)
-        return f"<pre>ERROR: {e}</pre>", 500
-
-# === EXTRACT CSV ===
-@erate_bp.route('/extract-csv')
-def extract_csv():
-    if current_app.config.get('CSV_DOWNLOAD_IN_PROGRESS'):
-        flash("CSV download already in progress.", "info")
-        return redirect(url_for('erate.dashboard'))
-    if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 500_000_000:
-        flash("Large CSV exists. Delete to re-download.", "warning")
-        return redirect(url_for('erate.dashboard'))
-
-    current_app.config['CSV_DOWNLOAD_IN_PROGRESS'] = True
-    thread = threading.Thread(target=_download_csv_background, args=(current_app._get_current_object(),))
-    thread.daemon = True
-    thread.start()
-    flash("CSV download started. Check in 2-5 min.", "info")
-    return redirect(url_for('erate.dashboard'))
-
-def _download_csv_background(app):
-    time.sleep(1)
-    try:
-        log("Starting CSV download...")
-        response = requests.get("https://opendata.usac.org/api/views/jp7a-89nd/rows.csv?accessType=DOWNLOAD", stream=True, timeout=600)
-        response.raise_for_status()
-        downloaded = 0
-        with open(CSV_FILE, 'wb') as f:
-            for chunk in response.iter_content(8192):
-                if chunk:
-                    f.write(chunk)
-                    downloaded += len(chunk)
-                    if downloaded % (10*1024*1024) == 0:
-                        log("Downloaded %.1f MB", downloaded/(1024*1024))
-        log("CSV downloaded: %.1f MB", os.path.getsize(CSV_FILE)/(1024*1024))
-    except Exception as e:
-        log("Download failed: %s", e)
-        if os.path.exists(CSV_FILE): os.remove(CSV_FILE)
-    finally:
-        with app.app_context():
-            app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
-
-# === IMPORT INTERACTIVE (NO PROGRESS POLLING) ===
-@erate_bp.route('/import-interactive', methods=['GET', 'POST'])
-def import_interactive():
-    if not os.path.exists(CSV_FILE):
-        return "<h2>CSV not found: 470schema.csv</h2>", 404
-
-    total = sum(1 for _ in open(CSV_FILE, 'r', encoding='utf-8-sig')) - 1
-    progress = session.get('import_progress', {'index': 1, 'total': total, 'success': 0, 'error': 0})
-
-    if current_app.config.get('BULK_IMPORT_IN_PROGRESS') or progress['index'] > progress['total']:
-        return render_template('erate_import_complete.html', progress=progress)
-
-    if request.method == 'POST' and request.form.get('action') == 'import_all':
-        if current_app.config.get('BULK_IMPORT_IN_PROGRESS'):
-            flash("Import already running.", "info")
-            return redirect(url_for('erate.import_interactive'))
-
-        current_app.config.update({
-            'BULK_IMPORT_IN_PROGRESS': True,
-            'IMPORT_THREAD': None
-        })
-
-        thread = threading.Thread(target=_import_all_background, args=(current_app._get_current_object(), progress.copy()))
-        thread.daemon = True
-        current_app.config['IMPORT_THREAD'] = thread
-        thread.start()
-        flash("Bulk import started. Check /erate/view-log", "success")
-        return redirect(url_for('erate.import_interactive'))
-
-    try:
-        with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
-            reader = csv.DictReader(f)
-            reader.fieldnames = [n.strip().lstrip('\ufeff') for n in reader.fieldnames]
-            for _ in range(progress['index'] - 1): next(reader)
-            row = next(reader)
-    except StopIteration:
-        progress['index'] = progress['total'] + 1
-        session['import_progress'] = progress
-        return render_template('erate_import_complete.html', progress=progress)
-
-    return render_template('erate_import.html', row=row, progress=progress)
-
-# === BULK IMPORT — FINAL, FULL DEBUG ===
+# === BULK IMPORT — USE psycopg.connect() DIRECTLY ===
 def _import_all_background(app, progress):
     time.sleep(1)
     batch_size = 1000
     try:
         log("Bulk import started from record %s", progress['index'])
-        log("Opening CSV: %s", CSV_FILE)
         with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
-            log("CSV opened, size: %s bytes", os.path.getsize(CSV_FILE))
             reader = csv.DictReader(f)
-            log("CSV reader created, fieldnames: %s", reader.fieldnames[:3])
-
-            # Skip to start
-            for _ in range(progress['index'] - 1):
-                next(reader)
-
-            log("Starting import loop")
+            reader.fieldnames = [n.strip().lstrip('\ufeff') for n in reader.fieldnames]
+            for _ in range(progress['index'] - 1): next(reader)
 
             batch = []
             imported = 0
-            row_count = 0
 
             for row in reader:
-                row_count += 1
-                if row_count % 1000 == 0:
-                    log("Processing row %s", row_count)
-
                 app_number = row.get('Application Number', '').strip()
-                if not app_number:
-                    continue
+                if not app_number: continue
 
-                # CRITICAL: FULL DB CHECK WITH DEBUG
+                # CONNECT DIRECTLY — NO g
+                conn = psycopg.connect(DATABASE_URL)
                 try:
-                    with app.app_context():
-                        conn = get_conn()
-                        if conn is None:
-                            log("FATAL: get_conn() returned None")
-                            raise Exception("get_conn() failed")
-                        with conn.cursor() as cur:
-                            cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
-                            if cur.fetchone():
-                                continue
+                    with conn.cursor() as cur:
+                        cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
+                        if cur.fetchone():
+                            conn.close()
+                            continue
                 except Exception as e:
-                    log("DB ERROR on row %s (app_number=%s): %s", row_count, app_number, e)
+                    log("DB check failed: %s", e)
+                    conn.close()
                     continue
 
                 batch.append(row)
                 imported += 1
+                conn.close()
 
                 if len(batch) >= batch_size:
-                    log("Committing batch of %s (total imported: %s)", batch_size, imported)
-                    with app.app_context():
-                        _commit_batch(app, batch)
+                    conn = psycopg.connect(DATABASE_URL)
+                    try:
+                        with conn.cursor() as cur:
+                            for r in batch:
+                                cur.execute(INSERT_SQL, _row_to_tuple(r))
+                        conn.commit()
+                    except Exception as e:
+                        log("Batch commit failed: %s", e)
+                        conn.rollback()
+                    finally:
+                        conn.close()
                     progress['index'] += batch_size
                     progress['success'] += batch_size
                     log("Imported: %s", progress['index'] - 1)
                     batch = []
 
             if batch:
-                log("Committing final batch of %s", len(batch))
-                with app.app_context():
-                    _commit_batch(app, batch)
+                conn = psycopg.connect(DATABASE_URL)
+                try:
+                    with conn.cursor() as cur:
+                        for r in batch:
+                            cur.execute(INSERT_SQL, _row_to_tuple(r))
+                    conn.commit()
+                except Exception as e:
+                    log("Final batch failed: %s", e)
+                finally:
+                    conn.close()
                 progress['index'] = progress['total'] + 1
                 progress['success'] += len(batch)
 
             log("Bulk import complete: %s imported", progress['success'])
 
     except Exception as e:
-        log("FATAL IMPORT ERROR: %s", e)
-        log("Traceback: %s", traceback.format_exc())
+        log("Import failed: %s", e)
     finally:
         with app.app_context():
             app.config.update({
                 'BULK_IMPORT_IN_PROGRESS': False,
                 'IMPORT_THREAD': None
             })
-        log("Import thread finished")
-
-def _commit_batch(app, batch):
-    with app.app_context():
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                for row in batch:
-                    try:
-                        cur.execute(INSERT_SQL, _row_to_tuple(row))
-                    except Exception as e:
-                        log("Row failed: %s", e)
-                conn.commit()
-
-# === VIEW LOG ===
-@erate_bp.route('/view-log')
-def view_log():
-    if os.path.exists(LOG_FILE):
-        return send_file(LOG_FILE, mimetype='text/plain')
-    return "No log file.", 404
-
-# === RESET IMPORT ===
-@erate_bp.route('/reset-import', methods=['POST'])
-def reset_import():
-    session.pop('import_progress', None)
-    flash("Import reset.", "success")
-    return redirect(url_for('erate.import_interactive'))
