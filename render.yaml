@@ -3,7 +3,7 @@ services:
     name: lab
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --worker-class gevent --workers 2 --timeout 600 --keep-alive 5
+    startCommand: gunicorn app:app --workers 2 --timeout 600 --keep-alive 5
     envVars:
       - key: PYTHONUNBUFFERED
         value: "1"
