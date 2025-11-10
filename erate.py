@@ -12,7 +12,7 @@ import time
 import psycopg
 from datetime import datetime
 
-# === LOGGING (ONE LINE TO RENDER + import.log) ===
+# === LOGGING (MAX DEBUG) ===
 LOG_FILE = os.path.join(os.path.dirname(__file__), "import.log")
 open(LOG_FILE, 'a').close()
 
@@ -30,9 +30,17 @@ def log(msg, *args):
     handler.flush()
     print(formatted, flush=True)
 
+# === STARTUP DEBUG ===
+log("=== ERATE MODULE LOADED ===")
+log("Python version: %s", __import__('sys').version.split()[0])
+log("Flask version: %s", __import__('flask').__version__)
+log("psycopg version: %s", psycopg.__version__)
+log("DATABASE_URL: %s", os.getenv('DATABASE_URL', 'NOT SET')[:50] + '...')
+log("CSV_FILE: %s", CSV_FILE)
+log("CSV exists: %s, size: %s", os.path.exists(CSV_FILE), os.path.getsize(CSV_FILE) if os.path.exists(CSV_FILE) else 0)
+
 # === BLUEPRINT ===
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate', template_folder='templates')
-CSV_FILE = os.path.join(os.path.dirname(__file__), "470schema.csv")
 
 # === DATABASE_URL ===
 DATABASE_URL = os.getenv('DATABASE_URL')
@@ -41,6 +49,17 @@ if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
 if 'sslmode' not in DATABASE_URL.lower():
     base, dbname = DATABASE_URL.rsplit('/', 1)
     DATABASE_URL = f"{base}/{dbname}?sslmode=require"
+log("Final DATABASE_URL: %s", DATABASE_URL[:50] + '...')
+
+# === TEST DB CONNECTION ON STARTUP ===
+try:
+    test_conn = psycopg.connect(DATABASE_URL, connect_timeout=5)
+    with test_conn.cursor() as cur:
+        cur.execute('SELECT 1')
+        log("DB connection test: SUCCESS")
+    test_conn.close()
+except Exception as e:
+    log("DB connection test: FAILED → %s", e)
 
 # === SQL INSERT ===
 INSERT_SQL = '''
@@ -162,12 +181,11 @@ def _row_to_tuple(row):
 # === DASHBOARD ===
 @erate_bp.route('/')
 def dashboard():
+    log("Dashboard accessed")
     state_filter = request.args.get('state', '').strip().upper()
     modified_after_str = request.args.get('modified_after', '').strip()
     offset = max(int(request.args.get('offset', 0)), 0)
     limit = 10
-
-    filters = {'state': state_filter, 'modified_after': modified_after_str}
 
     try:
         conn = psycopg.connect(DATABASE_URL)
@@ -214,11 +232,12 @@ def dashboard():
         next_offset = offset + limit
 
         conn.close()
+        log("Dashboard rendered: %s records", len(table_data))
         return render_template(
             'erate.html',
-            table_data=table_data, filters=filters, total_count=total_count,
-            total_filtered=offset + len(table_data), has_more=has_more,
-            next_offset=next_offset
+            table_data=table_data, filters={'state': state_filter, 'modified_after': modified_after_str},
+            total_count=total_count, total_filtered=offset + len(table_data),
+            has_more=has_more, next_offset=next_offset
         )
 
     except Exception as e:
@@ -228,6 +247,7 @@ def dashboard():
 # === EXTRACT CSV ===
 @erate_bp.route('/extract-csv')
 def extract_csv():
+    log("Extract CSV requested")
     if current_app.config.get('CSV_DOWNLOAD_IN_PROGRESS'):
         flash("CSV download already in progress.", "info")
         return redirect(url_for('erate.dashboard'))
@@ -264,19 +284,23 @@ def _download_csv_background(app):
         with app.app_context():
             app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
 
-# === IMPORT INTERACTIVE (NO PROGRESS POLLING) ===
+# === IMPORT INTERACTIVE ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
+    log("Import interactive page accessed")
     if not os.path.exists(CSV_FILE):
+        log("CSV not found")
         return "<h2>CSV not found: 470schema.csv</h2>", 404
 
     total = sum(1 for _ in open(CSV_FILE, 'r', encoding='utf-8-sig')) - 1
     progress = session.get('import_progress', {'index': 1, 'total': total, 'success': 0, 'error': 0})
 
     if current_app.config.get('BULK_IMPORT_IN_PROGRESS') or progress['index'] > progress['total']:
+        log("Import complete page shown")
         return render_template('erate_import_complete.html', progress=progress)
 
     if request.method == 'POST' and request.form.get('action') == 'import_all':
+        log("Bulk import requested")
         if current_app.config.get('BULK_IMPORT_IN_PROGRESS'):
             flash("Import already running.", "info")
             return redirect(url_for('erate.import_interactive'))
@@ -306,7 +330,7 @@ def import_interactive():
 
     return render_template('erate_import.html', row=row, progress=progress)
 
-# === BULK IMPORT — USE psycopg.connect() DIRECTLY ===
+# === BULK IMPORT ===
 def _import_all_background(app, progress):
     time.sleep(1)
     batch_size = 1000
@@ -385,6 +409,7 @@ def _import_all_background(app, progress):
 # === VIEW LOG ===
 @erate_bp.route('/view-log')
 def view_log():
+    log("View log requested")
     if os.path.exists(LOG_FILE):
         return send_file(LOG_FILE, mimetype='text/plain')
     return "No log file.", 404
@@ -392,6 +417,7 @@ def view_log():
 # === RESET IMPORT ===
 @erate_bp.route('/reset-import', methods=['POST'])
 def reset_import():
+    log("Import reset requested")
     session.pop('import_progress', None)
     flash("Import reset.", "success")
     return redirect(url_for('erate.import_interactive'))
