@@ -38,7 +38,7 @@ def get_conn():
         if pool is None:
             raise RuntimeError("Connection pool not initialized. Call init_db_pool(app) first.")
         try:
-            g.db = pool.get_conn(timeout=10.0)
+            g.db = pool.getconn(timeout=10.0)  # ← getconn()
         except Exception as e:
             logger.error(f"Failed to get connection from pool: {e}")
             raise
@@ -50,7 +50,7 @@ def close_conn(e=None):
     db = g.pop('db', None)
     if db is not None:
         try:
-            pool.put_conn(db)
+            pool.putconn(db)  # ← putconn()
         except Exception as e:
             logger.warning(f"Error returning connection to pool: {e}")
 
