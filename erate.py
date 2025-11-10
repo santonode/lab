@@ -1,7 +1,7 @@
 # erate.py
 from flask import (
     Blueprint, render_template, request, session, redirect, url_for,
-    jsonify, send_file, flash, current_app
+    send_file, flash, current_app
 )
 import csv
 import os
@@ -9,40 +9,29 @@ import logging
 import requests
 import threading
 import time
-import sys
-import traceback
 from db import get_conn
 from datetime import datetime
 
-# === LOGGING SETUP (RENDER + FILE + FULL DEBUG) ===
+# === LOGGING TO import.log ONLY (NO RENDER/stdout) ===
 LOG_FILE = os.path.join(os.path.dirname(__file__), "import.log")
 
 # Ensure file exists
-try:
-    open(LOG_FILE, 'a').close()
-except Exception as e:
-    print(f"WARNING: Cannot access {LOG_FILE}: {e}")
+open(LOG_FILE, 'a').close()
 
-# Log to stdout (Render) + file
-handler_file = logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8')
-handler_stdout = logging.StreamHandler(sys.stdout)
-formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
-handler_file.setFormatter(formatter)
-handler_stdout.setFormatter(formatter)
+# Log ONLY to file
+handler = logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8')
+handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
 
 logger = logging.getLogger('erate')
 logger.setLevel(logging.INFO)
 for h in logger.handlers[:]: logger.removeHandler(h)
-logger.addHandler(handler_file)
-logger.addHandler(handler_stdout)
+logger.addHandler(handler)
 
-# Force log to Render + file + flush + print
+# Log only to file (no print, no stdout)
 def log(msg, *args):
     formatted = msg % args if args else msg
     logger.info(formatted)
-    for h in logger.handlers:
-        h.flush()
-    print(formatted, flush=True)  # Force Render
+    handler.flush()
 
 # === BLUEPRINT ===
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate', template_folder='templates')
@@ -269,20 +258,7 @@ def _download_csv_background(app):
         with app.app_context():
             app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
 
-# === PROGRESS & STATUS ===
-@erate_bp.route('/progress')
-def get_progress():
-    return jsonify(current_app.config.get('IMPORT_PROGRESS', {'index':1,'total':1,'success':0,'error':0}))
-
-@erate_bp.route('/status')
-def get_status():
-    thread = current_app.config.get('IMPORT_THREAD')
-    return jsonify({
-        'running': current_app.config.get('BULK_IMPORT_IN_PROGRESS', False),
-        'thread_alive': thread.is_alive() if thread else False
-    })
-
-# === IMPORT INTERACTIVE ===
+# === IMPORT INTERACTIVE (NO PROGRESS POLLING) ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     if not os.path.exists(CSV_FILE):
@@ -293,11 +269,11 @@ def import_interactive():
 
     if request.method == 'POST' and request.form.get('action') == 'import_all':
         if current_app.config.get('BULK_IMPORT_IN_PROGRESS'):
-            return jsonify({'error': 'Running'}), 429
+            flash("Import already running.", "info")
+            return redirect(url_for('erate.import_interactive'))
 
         current_app.config.update({
             'BULK_IMPORT_IN_PROGRESS': True,
-            'IMPORT_PROGRESS': progress.copy(),
             'IMPORT_THREAD': None
         })
 
@@ -305,7 +281,11 @@ def import_interactive():
         thread.daemon = True
         current_app.config['IMPORT_THREAD'] = thread
         thread.start()
-        return jsonify({'status': 'started'})
+        flash("Bulk import started in background. Check /erate/view-log", "success")
+        return redirect(url_for('erate.import_interactive'))
+
+    if current_app.config.get('BULK_IMPORT_IN_PROGRESS'):
+        return render_template('erate_import_running.html')
 
     if progress['index'] > progress['total']:
         return render_template('erate_import_complete.html', progress=progress)
@@ -323,91 +303,57 @@ def import_interactive():
 
     return render_template('erate_import.html', row=row, progress=progress)
 
-# === BULK IMPORT — FULL DEBUG ===
+# === BULK IMPORT (LOG TO FILE ONLY) ===
 def _import_all_background(app, progress):
     time.sleep(1)
     batch_size = 1000
     try:
         log("Bulk import started from record %s", progress['index'])
-        log("Opening CSV file: %s", CSV_FILE)
         with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
-            log("CSV opened successfully")
             reader = csv.DictReader(f)
-            log("CSV reader created, fieldnames: %s", reader.fieldnames[:5])
-
-            # Skip to start index
-            skipped_rows = 0
-            for _ in range(progress['index'] - 1):
-                next(reader)
-                skipped_rows += 1
-                if skipped_rows % 10000 == 0:
-                    log("Skipped %s rows to reach start index", skipped_rows)
-
-            log("Starting import loop at record %s", progress['index'])
+            reader.fieldnames = [n.strip().lstrip('\ufeff') for n in reader.fieldnames]
+            for _ in range(progress['index'] - 1): next(reader)
 
             batch = []
             imported = 0
-            row_count = 0
 
             for row in reader:
-                row_count += 1
-                if row_count % 10000 == 0:
-                    log("Processing row %s", progress['index'] + row_count - 1)
-
                 app_number = row.get('Application Number', '').strip()
-                if not app_number:
-                    log("Skipping row %s: missing app_number", row_count)
-                    continue
+                if not app_number: continue
 
-                # DB CHECK WITH FULL DEBUG
-                try:
-                    with app.app_context():
-                        with get_conn() as conn:
-                            with conn.cursor() as cur:
-                                cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
-                                if cur.fetchone():
-                                    log("Duplicate: %s", app_number)
-                                    continue
-                except Exception as e:
-                    log("DB ERROR on app_number %s: %s", app_number, e)
-                    continue
+                with app.app_context():
+                    with get_conn() as conn:
+                        with conn.cursor() as cur:
+                            cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
+                            if cur.fetchone(): continue
 
                 batch.append(row)
                 imported += 1
 
                 if len(batch) >= batch_size:
-                    log("Committing batch of %s records (total imported: %s)", batch_size, imported)
                     with app.app_context():
                         _commit_batch(app, batch)
                     progress['index'] += batch_size
                     progress['success'] += batch_size
-                    with app.app_context():
-                        current_app.config['IMPORT_PROGRESS'] = progress.copy()
                     log("Imported: %s", progress['index'] - 1)
                     batch = []
 
-            # Final batch
             if batch:
-                log("Committing final batch of %s records", len(batch))
                 with app.app_context():
                     _commit_batch(app, batch)
                 progress['index'] = progress['total'] + 1
                 progress['success'] += len(batch)
-                with app.app_context():
-                    current_app.config['IMPORT_PROGRESS'] = progress.copy()
 
-            log("Bulk import complete: %s imported, %s processed", imported, row_count)
+            log("Bulk import complete: %s imported", progress['success'])
 
     except Exception as e:
-        log("FATAL ERROR in import: %s", e)
-        log("Traceback: %s", traceback.format_exc())
+        log("Import failed: %s", e)
     finally:
         with app.app_context():
             app.config.update({
                 'BULK_IMPORT_IN_PROGRESS': False,
                 'IMPORT_THREAD': None
             })
-        log("Import thread finished")
 
 def _commit_batch(app, batch):
     with app.app_context():
@@ -420,21 +366,14 @@ def _commit_batch(app, batch):
                         log("Row failed: %s", e)
                 conn.commit()
 
-# === CANCEL / VIEW / RESET ===
-@erate_bp.route('/cancel-import', methods=['POST'])
-def cancel_import():
-    thread = current_app.config.get('IMPORT_THREAD')
-    if thread and thread.is_alive():
-        current_app.config['BULK_IMPORT_IN_PROGRESS'] = False
-        flash("Import cancelled.", "warning")
-    return redirect(url_for('erate.import_interactive'))
-
+# === VIEW LOG ===
 @erate_bp.route('/view-log')
 def view_log():
     if os.path.exists(LOG_FILE):
         return send_file(LOG_FILE, mimetype='text/plain')
     return "No log file.", 404
 
+# === RESET IMPORT ===
 @erate_bp.route('/reset-import', methods=['POST'])
 def reset_import():
     session.pop('import_progress', None)
