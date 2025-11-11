@@ -1,6 +1,6 @@
 # erate.py
 from flask import (
-    Blueprint, render_template, request, session, redirect, url_for,
+    Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app
 )
 import csv
@@ -286,7 +286,7 @@ def _download_csv_background(app):
         with app.app_context():
             app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
 
-# === IMPORT INTERACTIVE — SAFE row + is_importing + NO READER EXHAUSTION ===
+# === IMPORT INTERACTIVE — USE app.config FOR PROGRESS ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     log("Import interactive page accessed")
@@ -294,7 +294,7 @@ def import_interactive():
         log("CSV not found")
         return "<h2>CSV not found: 470schema.csv</h2>", 404
 
-    # CORRECT: Count actual rows using csv.reader
+    # COUNT ROWS
     with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
         total = sum(1 for _ in csv.reader(f)) - 1
         f.seek(0)
@@ -302,14 +302,27 @@ def import_interactive():
 
     log("CSV has %s rows (excluding header)", total)
 
-    # CRITICAL: Reset progress if CSV changed
-    current_progress = session.get('import_progress', {})
-    if current_progress.get('total') != total:
-        log("CSV changed (new total: %s), resetting progress", total)
-        progress = {'index': 1, 'total': total, 'success': 0, 'error': 0}
-        session['import_progress'] = progress
-    else:
-        progress = current_progress
+    # INIT PROGRESS IN app.config
+    if 'import_total' not in current_app.config:
+        current_app.config['import_total'] = total
+        current_app.config['import_index'] = 1
+        current_app.config['import_success'] = 0
+        current_app.config['import_error'] = 0
+    elif current_app.config['import_total'] != total:
+        log("CSV changed, resetting progress")
+        current_app.config.update({
+            'import_total': total,
+            'import_index': 1,
+            'import_success': 0,
+            'import_error': 0
+        })
+
+    progress = {
+        'index': current_app.config['import_index'],
+        'total': current_app.config['import_total'],
+        'success': current_app.config['import_success'],
+        'error': current_app.config['import_error']
+    }
 
     is_importing = current_app.config.get('BULK_IMPORT_IN_PROGRESS', False)
 
@@ -318,24 +331,25 @@ def import_interactive():
         return render_template('erate_import_complete.html', progress=progress)
 
     if request.method == 'POST' and request.form.get('action') == 'import_all':
-        log("Bulk import requested")
         if is_importing:
             flash("Import already running.", "info")
             return redirect(url_for('erate.import_interactive'))
 
         current_app.config.update({
             'BULK_IMPORT_IN_PROGRESS': True,
-            'IMPORT_THREAD': None
+            'import_index': 1,
+            'import_success': 0,
+            'import_error': 0
         })
 
-        thread = threading.Thread(target=_import_all_background, args=(current_app._get_current_object(), progress.copy()))
+        thread = threading.Thread(target=_import_all_background, args=(current_app._get_current_object(),))
         thread.daemon = True
         current_app.config['IMPORT_THREAD'] = thread
         thread.start()
         flash("Bulk import started. Check /erate/view-log", "success")
         return redirect(url_for('erate.import_interactive'))
 
-    # Load current row — only if not importing
+    # Load current row
     row = None
     if progress['index'] <= progress['total']:
         try:
@@ -346,43 +360,40 @@ def import_interactive():
                     next(reader)
                 row = next(reader)
         except StopIteration:
-            progress['index'] = progress['total'] + 1
-            session['import_progress'] = progress
+            current_app.config['import_index'] = progress['total'] + 1
 
     return render_template('erate_import.html', row=row, progress=progress, is_importing=is_importing)
 
-# === BULK IMPORT — RE-OPEN CSV IN THREAD, NO ITERATOR EXHAUSTION ===
-def _import_all_background(app, progress):
+# === BULK IMPORT — USE app.config + HEARTBEAT ===
+def _import_all_background(app):
     time.sleep(1)
     batch_size = 1000
     try:
-        log("Bulk import started from record %s", progress['index'])
-        log("Using DATABASE_URL: %s", DATABASE_URL[:50] + '...')
-        
-        # TEST CONNECTION FIRST
-        try:
-            test_conn = psycopg.connect(DATABASE_URL, autocommit=True, connect_timeout=10)
-            test_conn.close()
-            log("DB connection test in thread: SUCCESS")
-        except Exception as e:
-            log("DB connection test in thread: FAILED → %s", e)
-            raise
+        log("Bulk import started")
+        with app.app_context():
+            total = app.config['import_total']
+            app.config['import_index'] = 1
+            app.config['import_success'] = 0
 
-        # RE-OPEN CSV IN THREAD
-        log("Re-opening CSV in thread: %s", CSV_FILE)
+        # TEST CONNECTION
+        test_conn = psycopg.connect(DATABASE_URL, autocommit=True, connect_timeout=10)
+        test_conn.close()
+        log("DB connection test: SUCCESS")
+
+        # RE-OPEN CSV
         with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='', buffering=8192) as f:
             reader = csv.DictReader(f)
-            log("CSV reader created, fieldnames: %s", reader.fieldnames[:3])
-
-            # Skip to start
-            for _ in range(progress['index'] - 1):
-                next(reader)
-            log("Skipped to record %s", progress['index'])
+            log("CSV reader created")
 
             batch = []
             imported = 0
+            last_heartbeat = time.time()
 
             for row in reader:
+                if time.time() - last_heartbeat > 5:
+                    log("HEARTBEAT: %s rows processed", imported)
+                    last_heartbeat = time.time()
+
                 app_number = row.get('Application Number', '').strip()
                 if not app_number: continue
 
@@ -415,9 +426,12 @@ def _import_all_background(app, progress):
                         conn.rollback()
                     finally:
                         conn.close()
-                    progress['index'] += batch_size
-                    progress['success'] += batch_size
-                    log("Imported: %s", progress['index'] - 1)
+
+                    with app.app_context():
+                        app.config['import_index'] += batch_size
+                        app.config['import_success'] += batch_size
+                        log("Progress: %s / %s", app.config['import_index'], total)
+
                     batch = []
 
             if batch:
@@ -431,20 +445,19 @@ def _import_all_background(app, progress):
                     log("Final batch failed: %s", e)
                 finally:
                     conn.close()
-                progress['index'] = progress['total'] + 1
-                progress['success'] += len(batch)
 
-            log("Bulk import complete: %s imported", progress['success'])
+                with app.app_context():
+                    app.config['import_index'] = total + 1
+                    app.config['import_success'] += len(batch)
+
+            log("Bulk import complete: %s imported", app.config['import_success'])
 
     except Exception as e:
         log("IMPORT THREAD CRASHED: %s", e)
         log("Traceback: %s", traceback.format_exc())
     finally:
         with app.app_context():
-            app.config.update({
-                'BULK_IMPORT_IN_PROGRESS': False,
-                'IMPORT_THREAD': None
-            })
+            app.config['BULK_IMPORT_IN_PROGRESS'] = False
         log("Import thread finished")
 
 # === VIEW LOG ===
@@ -459,6 +472,10 @@ def view_log():
 @erate_bp.route('/reset-import', methods=['POST'])
 def reset_import():
     log("Import reset requested")
-    session.pop('import_progress', None)
+    current_app.config.update({
+        'import_index': 1,
+        'import_success': 0,
+        'import_error': 0
+    })
     flash("Import reset.", "success")
     return redirect(url_for('erate.import_interactive'))
