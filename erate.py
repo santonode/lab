@@ -1,4 +1,4 @@
-# erate.py — FINAL VERSION (NO SQLAlchemy, PURE psycopg)
+# erate.py — FINAL VERSION (BULLETPROOF INSERT + VERIFICATION)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app
@@ -192,8 +192,9 @@ def dashboard():
     offset = max(int(request.args.get('offset', 0)), 0)
     limit = 10
 
+    # FORCE NEW CONNECTION
+    conn = psycopg.connect(DATABASE_URL, connect_timeout=10, autocommit=True)
     try:
-        conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
         with conn.cursor() as cur:
             count_sql = 'SELECT COUNT(*) FROM erate'
             count_params = []
@@ -236,18 +237,23 @@ def dashboard():
         table_data = table_data[:limit]
         next_offset = offset + limit
 
-        conn.close()
         log("Dashboard rendered: %s records", len(table_data))
         return render_template(
             'erate.html',
-            table_data=table_data, filters={'state': state_filter, 'modified_after': modified_after_str},
-            total_count=total_count, total_filtered=offset + len(table_data),
-            has_more=has_more, next_offset=next_offset
+            table_data=table_data,
+            filters={'state': state_filter, 'modified_after': modified_after_str},
+            total_count=total_count,
+            total_filtered=offset + len(table_data),
+            has_more=has_more,
+            next_offset=next_offset,
+            cache_bust=int(time.time())
         )
 
     except Exception as e:
         log("Dashboard error: %s", e)
         return f"<pre>ERROR: {e}</pre>", 500
+    finally:
+        conn.close()
 
 # === EXTRACT CSV ===
 @erate_bp.route('/extract-csv')
@@ -352,7 +358,7 @@ def import_interactive():
 
     return render_template('erate_import.html', progress=progress, is_importing=is_importing)
 
-# === BULK IMPORT — BATCH DUPLICATE CHECK + BATCH INSERT + TRUNCATE TO 100 CHARS ===
+# === BULK IMPORT — BULLETPROOF INSERT + VERIFICATION ===
 def _import_all_background(app):
     time.sleep(1)
     batch_size = 1000
@@ -380,43 +386,49 @@ def _import_all_background(app):
             imported = 0
             last_heartbeat = time.time()
 
-            # BATCH DUPLICATE CHECK
-            app_numbers = []
             for row in reader:
+                if time.time() - last_heartbeat > 5:
+                    log("HEARTBEAT: %s rows processed", imported)
+                    last_heartbeat = time.time()
+
                 app_number = row.get('Application Number', '').strip()
                 if not app_number: continue
-                app_numbers.append((app_number,))
+
                 batch.append(row)
                 imported += 1
 
                 if len(batch) >= batch_size:
-                    # BATCH CHECK DUPLICATES
+                    # DUPLICATE CHECK
                     cur.execute(
                         "SELECT app_number FROM erate WHERE app_number = ANY(%s)",
                         ([r['Application Number'] for r in batch],)
                     )
                     existing = {row[0] for row in cur.fetchall()}
-
-                    # FILTER OUT DUPLICATES
                     filtered_batch = [r for r in batch if r['Application Number'] not in existing]
 
-                    # BATCH INSERT
+                    # INSERT + VERIFY
                     if filtered_batch:
-                        cur.executemany(INSERT_SQL, [_row_to_tuple(r) for r in filtered_batch])
-                        conn.commit()
-                        log("Committed batch of %s", len(filtered_batch))
+                        try:
+                            cur.executemany(INSERT_SQL, [_row_to_tuple(r) for r in filtered_batch])
+                            conn.commit()
+                            log("COMMITTED BATCH OF %s", len(filtered_batch))
+                            # VERIFY
+                            cur.execute("SELECT COUNT(*) FROM erate WHERE app_number = ANY(%s)",
+                                        ([r['Application Number'] for r in filtered_batch],))
+                            actual = cur.fetchone()[0]
+                            if actual != len(filtered_batch):
+                                log("INSERT VERIFICATION FAILED: expected %s, got %s", len(filtered_batch), actual)
+                        except Exception as e:
+                            log("COMMIT FAILED: %s", e)
+                            conn.rollback()
+                            raise
 
                     with app.app_context():
                         app.config['import_index'] += len(batch)
                         app.config['import_success'] += len(filtered_batch)
                         log("Progress: %s / %s", app.config['import_index'], total)
 
-                    if time.time() - last_heartbeat > 5:
-                        log("HEARTBEAT: %s rows processed", imported)
-                        last_heartbeat = time.time()
-
                     batch = []
-                    app_numbers = []
 
             # FINAL BATCH
             if batch:
@@ -428,8 +440,19 @@ def _import_all_background(app):
                 filtered_batch = [r for r in batch if r['Application Number'] not in existing]
 
                 if filtered_batch:
-                    cur.executemany(INSERT_SQL, [_row_to_tuple(r) for r in filtered_batch])
-                    conn.commit()
+                    try:
+                        cur.executemany(INSERT_SQL, [_row_to_tuple(r) for r in filtered_batch])
+                        conn.commit()
+                        log("FINAL BATCH COMMITTED: %s", len(filtered_batch))
+                        # VERIFY
+                        cur.execute("SELECT COUNT(*) FROM erate WHERE app_number = ANY(%s)",
+                                    ([r['Application Number'] for r in filtered_batch],))
+                        actual = cur.fetchone()[0]
+                        log("FINAL VERIFIED: %s rows", actual)
+                    except Exception as e:
+                        log("FINAL COMMIT FAILED: %s", e)
+                        conn.rollback()
+                        raise
 
                 with app.app_context():
                     app.config['import_index'] = total + 1
