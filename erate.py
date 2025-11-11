@@ -286,7 +286,7 @@ def _download_csv_background(app):
         with app.app_context():
             app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
 
-# === IMPORT INTERACTIVE — USE app.config FOR PROGRESS ===
+# === IMPORT INTERACTIVE — NO ROW PREVIEW, USE app.config ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     log("Import interactive page accessed")
@@ -294,11 +294,9 @@ def import_interactive():
         log("CSV not found")
         return "<h2>CSV not found: 470schema.csv</h2>", 404
 
-    # COUNT ROWS
+    # COUNT ROWS ONLY
     with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
         total = sum(1 for _ in csv.reader(f)) - 1
-        f.seek(0)
-        next(csv.reader(f))
 
     log("CSV has %s rows (excluding header)", total)
 
@@ -349,22 +347,10 @@ def import_interactive():
         flash("Bulk import started. Check /erate/view-log", "success")
         return redirect(url_for('erate.import_interactive'))
 
-    # Load current row
-    row = None
-    if progress['index'] <= progress['total']:
-        try:
-            with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
-                reader = csv.DictReader(f)
-                reader.fieldnames = [n.strip().lstrip('\ufeff') for n in reader.fieldnames]
-                for _ in range(progress['index'] - 1):
-                    next(reader)
-                row = next(reader)
-        except StopIteration:
-            current_app.config['import_index'] = progress['total'] + 1
+    # NO ROW PREVIEW — prevents iterator exhaustion
+    return render_template('erate_import.html', progress=progress, is_importing=is_importing)
 
-    return render_template('erate_import.html', row=row, progress=progress, is_importing=is_importing)
-
-# === BULK IMPORT — USE app.config + HEARTBEAT ===
+# === BULK IMPORT — SKIP IN THREAD, HEARTBEAT, app.config PROGRESS ===
 def _import_all_background(app):
     time.sleep(1)
     batch_size = 1000
@@ -372,8 +358,7 @@ def _import_all_background(app):
         log("Bulk import started")
         with app.app_context():
             total = app.config['import_total']
-            app.config['import_index'] = 1
-            app.config['import_success'] = 0
+            start_index = app.config['import_index']
 
         # TEST CONNECTION
         test_conn = psycopg.connect(DATABASE_URL, autocommit=True, connect_timeout=10)
@@ -385,6 +370,14 @@ def _import_all_background(app):
             reader = csv.DictReader(f)
             log("CSV reader created")
 
+            # SKIP TO START INDEX
+            for _ in range(start_index - 1):
+                try:
+                    next(reader)
+                except StopIteration:
+                    break
+            log("Skipped to record %s", start_index)
+
             batch = []
             imported = 0
             last_heartbeat = time.time()
@@ -395,7 +388,9 @@ def _import_all_background(app):
                     last_heartbeat = time.time()
 
                 app_number = row.get('Application Number', '').strip()
-                if not app_number: continue
+                if not app_number: 
+                    log("Skipping empty app_number")
+                    continue
 
                 conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
                 try:
