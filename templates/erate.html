@@ -148,9 +148,9 @@
         tr:nth-child(even) { background-color: #f9f9f9; }
         tr:hover { background-color: var(--hover); }
         td { word-wrap: break-word; }
-        .app-number { 
-            font-family: monospace; 
-            font-weight: 600; 
+        .app-number {
+            font-family: monospace;
+            font-weight: 600;
             color: var(--accent);
             text-decoration: underline;
             cursor: pointer;
@@ -282,6 +282,8 @@
 
     <div class="container">
         <h1>E-Rate Dashboard</h1>
+
+        <!-- FLASH MESSAGES -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -289,6 +291,7 @@
                 {% endfor %}
             {% endif %}
         {% endwith %}
+
         <div class="filters">
             <form method="get" style="display: contents;" id="filter-form">
                 <label>State: <input type="text" name="state" value="{{ filters.state|default('') }}" maxlength="2" placeholder="KS"></label>
@@ -299,7 +302,9 @@
             <a href="{{ url_for('erate.extract_csv') }}" class="btn btn-warning">Extract CSV</a>
             <a href="{{ url_for('erate.import_interactive') }}" class="btn btn-success">Resume Import</a>
         </div>
+
         <p class="summary"><strong>Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</strong></p>
+
         <table>
             <thead>
                 <tr>
@@ -324,10 +329,15 @@
                     </tr>
                     {% endfor %}
                 {% else %}
-                <tr><td colspan="6" style="text-align:center; color:#999; padding:30px;">No records found. Try adjusting filters or <a href="{{ url_for('erate.import_interactive') }}">import data</a>.</td></tr>
+                <tr>
+                    <td colspan="6" style="text-align:center; color:#999; padding:30px;">
+                        No records found. Try adjusting filters or <a href="{{ url_for('erate.import_interactive') }}">import data</a>.
+                    </td>
+                </tr>
                 {% endif %}
             </tbody>
         </table>
+
         {% if has_more|default(false) %}
         <div class="pagination">
             <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&offset={{ next_offset|default(0) }}" class="load-more">Load More (+)</a>
@@ -344,8 +354,19 @@
         const detailBody = document.getElementById('detail-body');
         const bbmapBody = document.getElementById('bbmap-body');
 
-        form.addEventListener('submit', () => { body.classList.add('loading'); overlay.classList.add('show'); });
-        window.addEventListener('load', () => { body.classList.remove('loading'); overlay.classList.remove('show'); });
+        // Show loading on form submit
+        form.addEventListener('submit', () => {
+            body.classList.add('loading');
+            overlay.classList.add('show');
+        });
+
+        // Hide loading on page load
+        window.addEventListener('load', () => {
+            body.classList.remove('loading');
+            overlay.classList.remove('show');
+        });
+
+        // Show loading on Load More / pagination
         document.querySelectorAll('a').forEach(link => {
             link.addEventListener('click', (e) => {
                 const href = link.getAttribute('href');
@@ -356,14 +377,17 @@
             });
         });
 
+        // === APPLICANT DETAILS MODAL ===
         async function showDetails(appNumber) {
             body.classList.add('loading');
             overlay.classList.add('show');
             detailBody.innerHTML = 'Loading...';
             detailModal.classList.add('show');
+
             try {
                 const resp = await fetch(`/erate/details/${appNumber}`);
                 const data = await resp.json();
+
                 detailBody.innerHTML = `
                     <strong>Form Nickname:</strong> ${data.form_nickname}<br>
                     <strong>Form PDF:</strong> ${data.form_pdf}<br>
@@ -374,7 +398,7 @@
                     <strong>Certified:</strong> ${data.certified_datetime} by ${data.certified_by}<br>
                     <strong>Last Modified:</strong> ${data.last_modified_datetime} by ${data.last_modified_by}
                 `;
-            } catch {
+            } catch (err) {
                 detailBody.innerHTML = '<strong>Error:</strong> Could not load details.';
             } finally {
                 body.classList.remove('loading');
@@ -382,14 +406,17 @@
             }
         }
 
+        // === BLUEBIRD FIBER MODAL ===
         async function checkBluebird(appNumber) {
             body.classList.add('loading');
             overlay.classList.add('show');
             bbmapBody.innerHTML = 'Searching Bluebird Fiber...';
             bbmapModal.classList.add('show');
+
             try {
                 const resp = await fetch(`/erate/bbmap/${appNumber}`);
                 const data = await resp.json();
+
                 bbmapBody.innerHTML = `
                     <strong>Applicant:</strong> ${data.entity_name || 'N/A'}<br>
                     <strong>Address:</strong> ${data.address || 'N/A'}<br>
@@ -397,7 +424,7 @@
                     <strong>Distance:</strong> ${data.distance || 'N/A'}<br>
                     <strong>Coverage:</strong> ${data.coverage || 'Unknown'}
                 `;
-            } catch {
+            } catch (err) {
                 bbmapBody.innerHTML = '<strong>Error:</strong> Could not fetch data.';
             } finally {
                 body.classList.remove('loading');
@@ -405,13 +432,17 @@
             }
         }
 
+        // Close modal
         function closeModal(type) {
             if (type === 'detail') detailModal.classList.remove('show');
             if (type === 'bbmap') bbmapModal.classList.remove('show');
         }
 
-        [detailModal, bbmapModal].forEach(m => {
-            m.addEventListener('click', (e) => { if (e.target === m) m.classList.remove('show'); });
+        // Close on outside click
+        [detailModal, bbmapModal].forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.classList.remove('show');
+            });
         });
     </script>
 </body>
