@@ -208,9 +208,9 @@
             background: white;
             padding: 25px;
             border-radius: 12px;
-            max-width: 500px;
+            max-width: 600px;
             width: 90%;
-            max-height: 80vh;
+            max-height: 85vh;
             overflow-y: auto;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
         }
@@ -238,9 +238,37 @@
         .modal-body {
             font-size: 0.95rem;
             line-height: 1.6;
+            margin-bottom: 15px;
         }
         .modal-body strong { color: var(--primary); }
         .modal-body a { color: var(--accent); text-decoration: underline; }
+
+        /* MINI FOOTER */
+        .modal-footer {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            border-top: 1px solid #eee;
+            padding-top: 12px;
+            font-size: 0.9rem;
+            flex-wrap: wrap;
+        }
+        .modal-footer a {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 500;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .modal-footer a:hover {
+            background: var(--hover);
+            color: #0056b3;
+        }
+        .modal-footer a.active {
+            background: var(--accent);
+            color: white;
+        }
 
         @media (max-width: 768px) {
             .container { margin: 20px; padding: 20px; }
@@ -249,6 +277,8 @@
             table { font-size: 0.85rem; }
             th, td { padding: 8px 6px; }
             .btn { width: 100%; margin: 5px 0; }
+            .modal-content { max-width: 95%; }
+            .modal-footer { gap: 6px; }
         }
     </style>
 </head>
@@ -263,9 +293,17 @@
         <div class="modal-content">
             <div class="modal-header">
                 <div class="modal-title">470 Form Details</div>
-                <button class="modal-close" onclick="closeModal('detail')">×</button>
+                <button class="modal-close" onclick="closeModal('detail')">x</button>
             </div>
             <div class="modal-body" id="detail-body">Loading...</div>
+            <div class="modal-footer">
+                <a href="#" class="tab-link active" data-section="basic">basic info</a>
+                <a href="#" class="tab-link" data-section="billed">billed entity</a>
+                <a href="#" class="tab-link" data-section="contact">contact</a>
+                <a href="#" class="tab-link" data-section="tech">technical contact</a>
+                <a href="#" class="tab-link" data-section="auth">authorized persons</a>
+                <a href="#" class="tab-link" data-section="services">services</a>
+            </div>
         </div>
     </div>
 
@@ -274,7 +312,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <div class="modal-title">Bluebird Fiber Distance</div>
-                <button class="modal-close" onclick="closeModal('bbmap')">×</button>
+                <button class="modal-close" onclick="closeModal('bbmap')">x</button>
             </div>
             <div class="modal-body" id="bbmap-body">Loading...</div>
         </div>
@@ -353,20 +391,11 @@
         const bbmapModal = document.getElementById('bbmap-modal');
         const detailBody = document.getElementById('detail-body');
         const bbmapBody = document.getElementById('bbmap-body');
+        let currentAppNumber = null;
 
-        // Show loading on form submit
-        form.addEventListener('submit', () => {
-            body.classList.add('loading');
-            overlay.classList.add('show');
-        });
-
-        // Hide loading on page load
-        window.addEventListener('load', () => {
-            body.classList.remove('loading');
-            overlay.classList.remove('show');
-        });
-
-        // Show loading on Load More / pagination
+        // Loading
+        form.addEventListener('submit', () => { body.classList.add('loading'); overlay.classList.add('show'); });
+        window.addEventListener('load', () => { body.classList.remove('loading'); overlay.classList.remove('show'); });
         document.querySelectorAll('a').forEach(link => {
             link.addEventListener('click', (e) => {
                 const href = link.getAttribute('href');
@@ -379,6 +408,7 @@
 
         // === APPLICANT DETAILS MODAL ===
         async function showDetails(appNumber) {
+            currentAppNumber = appNumber;
             body.classList.add('loading');
             overlay.classList.add('show');
             detailBody.innerHTML = 'Loading...';
@@ -388,7 +418,22 @@
                 const resp = await fetch(`/erate/details/${appNumber}`);
                 const data = await resp.json();
 
-                detailBody.innerHTML = `
+                // Default to basic info
+                renderSection('basic', data);
+                activateTab('basic');
+            } catch (err) {
+                detailBody.innerHTML = '<strong>Error:</strong> Could not load details.';
+            } finally {
+                body.classList.remove('loading');
+                overlay.classList.remove('show');
+            }
+        }
+
+        function renderSection(section, data) {
+            let html = '';
+
+            if (section === 'basic') {
+                html = `
                     <strong>Form Nickname:</strong> ${data.form_nickname}<br>
                     <strong>Form PDF:</strong> ${data.form_pdf}<br>
                     <strong>Funding Year:</strong> ${data.funding_year}<br>
@@ -398,25 +443,104 @@
                     <strong>Certified:</strong> ${data.certified_datetime} by ${data.certified_by}<br>
                     <strong>Last Modified:</strong> ${data.last_modified_datetime} by ${data.last_modified_by}
                 `;
-            } catch (err) {
-                detailBody.innerHTML = '<strong>Error:</strong> Could not load details.';
-            } finally {
-                body.classList.remove('loading');
-                overlay.classList.remove('show');
+            } else if (section === 'billed') {
+                html = `
+                    <strong>Billed Entity #:</strong> ${data.ben || '—'}<br>
+                    <strong>Entity Name:</strong> ${data.entity_name || '—'}<br>
+                    <strong># of Eligible Entities:</strong> ${data.num_eligible || '—'}<br>
+                    <strong>Org Status:</strong> ${data.org_status || '—'}<br>
+                    <strong>Org Type:</strong> ${data.org_type || '—'}<br>
+                    <strong>Applicant Type:</strong> ${data.applicant_type || '—'}<br>
+                    <strong>Website:</strong> ${data.website ? `<a href="${data.website}" target="_blank">${data.website}</a>` : '—'}<br>
+                    <strong>FCC Reg #:</strong> ${data.fcc_reg_num || '—'}<br>
+                    <strong>Address:</strong> ${data.address1 || ''} ${data.address2 || ''}<br>
+                    <strong>City/State/ZIP:</strong> ${data.city || ''}, ${data.state || ''} ${data.zip_code || ''}${data.zip_ext ? '-' + data.zip_ext : ''}<br>
+                    <strong>Email:</strong> ${data.email || '—'}<br>
+                    <strong>Phone:</strong> ${data.phone || ''}${data.phone_ext ? ' x' + data.phone_ext : ''}
+                `;
+            } else if (section === 'contact') {
+                html = `
+                    <strong>Contact Name:</strong> ${data.contact_name || '—'}<br>
+                    <strong>Address:</strong> ${data.contact_address1 || ''} ${data.contact_address2 || ''}<br>
+                    <strong>City/State/ZIP:</strong> ${data.contact_city || ''}, ${data.contact_state || ''} ${data.contact_zip || ''}${data.contact_zip_ext ? '-' + data.contact_zip_ext : ''}<br>
+                    <strong>Phone:</strong> ${data.contact_phone || ''}${data.contact_phone_ext ? ' x' + data.contact_phone_ext : ''}<br>
+                    <strong>Email:</strong> ${data.contact_email || '—'}
+                `;
+            } else if (section === 'tech') {
+                html = `
+                    <strong>Name:</strong> ${data.tech_name || '—'}<br>
+                    <strong>Title:</strong> ${data.tech_title || '—'}<br>
+                    <strong>Phone:</strong> ${data.tech_phone || ''}${data.tech_phone_ext ? ' x' + data.tech_phone_ext : ''}<br>
+                    <strong>Email:</strong> ${data.tech_email || '—'}
+                `;
+            } else if (section === 'auth') {
+                html = `
+                    <strong>Name:</strong> ${data.auth_name || '—'}<br>
+                    <strong>Title:</strong> ${data.auth_title || '—'}<br>
+                    <strong>Employer:</strong> ${data.auth_employer || '—'}<br>
+                    <strong>Address:</strong> ${data.auth_address || '—'}<br>
+                    <strong>City/State/ZIP:</strong> ${data.auth_city || ''}, ${data.auth_state || ''} ${data.auth_zip || ''}${data.auth_zip_ext ? '-' + data.auth_zip_ext : ''}<br>
+                    <strong>Phone:</strong> ${data.auth_phone || ''}${data.auth_phone_ext ? ' x' + data.auth_phone_ext : ''}<br>
+                    <strong>Email:</strong> ${data.auth_email || '—'}
+                `;
+            } else if (section === 'services') {
+                html = `
+                    <strong>Category 1:</strong> ${data.cat1_desc || '—'}<br>
+                    <strong>Category 2:</strong> ${data.cat2_desc || '—'}<br>
+                    <strong>Installment Type:</strong> ${data.installment_type || '—'}<br>
+                    <strong>Min/Max Years:</strong> ${data.installment_min || '—'} / ${data.installment_max || '—'}<br>
+                    <strong>RFP ID:</strong> ${data.rfp_id || '—'}<br>
+                    <strong>State Restrictions:</strong> ${data.state_restrictions || '—'}<br>
+                    <strong>Restriction Desc:</strong> ${data.restriction_desc || '—'}<br>
+                    <strong>Statewide:</strong> ${data.statewide || '—'}<br>
+                    <strong>All Public:</strong> ${data.all_public || '—'}<br>
+                    <strong>All Non-Public:</strong> ${data.all_nonpublic || '—'}<br>
+                    <strong>All Libraries:</strong> ${data.all_libraries || '—'}<br>
+                    <strong>Form Version:</strong> ${data.form_version || '—'}
+                `;
             }
+
+            detailBody.innerHTML = html;
         }
 
-        // === BLUEBIRD FIBER MODAL ===
+        function activateTab(section) {
+            document.querySelectorAll('.tab-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.dataset.section === section) {
+                    link.classList.add('active');
+                }
+            });
+        }
+
+        // Tab click
+        document.querySelectorAll('.tab-link').forEach(link => {
+            link.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const section = link.dataset.section;
+                activateTab(section);
+                if (currentAppNumber) {
+                    body.classList.add('loading');
+                    overlay.classList.add('show');
+                    try {
+                        const resp = await fetch(`/erate/details/${currentAppNumber}`);
+                        const data = await resp.json();
+                        renderSection(section, data);
+                    } catch {}
+                    body.classList.remove('loading');
+                    overlay.classList.remove('show');
+                }
+            });
+        });
+
+        // === BLUEBIRD MODAL ===
         async function checkBluebird(appNumber) {
             body.classList.add('loading');
             overlay.classList.add('show');
             bbmapBody.innerHTML = 'Searching Bluebird Fiber...';
             bbmapModal.classList.add('show');
-
             try {
                 const resp = await fetch(`/erate/bbmap/${appNumber}`);
                 const data = await resp.json();
-
                 bbmapBody.innerHTML = `
                     <strong>Applicant:</strong> ${data.entity_name || 'N/A'}<br>
                     <strong>Address:</strong> ${data.address || 'N/A'}<br>
@@ -424,7 +548,7 @@
                     <strong>Distance:</strong> ${data.distance || 'N/A'}<br>
                     <strong>Coverage:</strong> ${data.coverage || 'Unknown'}
                 `;
-            } catch (err) {
+            } catch {
                 bbmapBody.innerHTML = '<strong>Error:</strong> Could not fetch data.';
             } finally {
                 body.classList.remove('loading');
