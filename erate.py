@@ -1,4 +1,4 @@
-# erate.py — FINAL VERSION (FULL BLUEBIRD POP LIST + NO SORT + NO SPINNING WHEEL)
+# erate.py — FINAL VERSION (APPLICANT # POPUP + BLUEBIRD MODAL + FULL POP LIST + NO SORT)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify
@@ -309,7 +309,7 @@ pop_data = {
     "Tulsa, OK": (36.1539, -95.9928)
 }
 
-# === GEOCODE + DISTANCE FUNCTION (FOR MODAL ONLY) ===
+# === GEOCODE + DISTANCE FUNCTION (FOR MODAL) ===
 def get_bluebird_distance(address):
     if not address:
         return {"distance": float('inf'), "pop_city": "N/A", "coverage": "Unknown"}
@@ -425,7 +425,7 @@ def dashboard():
     finally:
         conn.close()
 
-# === BLUEBIRD FIBER PoP DISTANCE API (FOR MODAL) ===
+# === BLUEBIRD FIBER DISTANCE API (FOR MODAL) ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -455,6 +455,54 @@ def bbmap(app_number):
 
     except Exception as e:
         log("Bluebird API error: %s", e)
+        return jsonify({"error": "Service unavailable"}), 500
+    finally:
+        conn.close()
+
+# === APPLICANT DETAILS API (FOR MODAL) ===
+@erate_bp.route('/details/<app_number>')
+def details(app_number):
+    conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT 
+                    form_nickname, form_pdf, funding_year, fcc_status,
+                    allowable_contract_date, created_datetime, created_by,
+                    certified_datetime, certified_by, last_modified_datetime, last_modified_by
+                FROM erate WHERE app_number = %s
+            """, (app_number,))
+            row = cur.fetchone()
+        
+        if not row:
+            return jsonify({"error": "Applicant not found"}), 404
+
+        (
+            form_nickname, form_pdf, funding_year, fcc_status,
+            allowable_contract_date, created_datetime, created_by,
+            certified_datetime, certified_by, last_modified_datetime, last_modified_by
+        ) = row
+
+        # Format dates
+        def fmt(dt):
+            return dt.strftime('%m/%d/%Y %I:%M %p') if dt else '—'
+
+        return jsonify({
+            "form_nickname": form_nickname or '—',
+            "form_pdf": f"<a href='{form_pdf}' target='_blank'>View PDF</a>" if form_pdf else '—',
+            "funding_year": funding_year or '—',
+            "fcc_status": fcc_status or '—',
+            "allowable_contract_date": fmt(allowable_contract_date),
+            "created_datetime": fmt(created_datetime),
+            "created_by": created_by or '—',
+            "certified_datetime": fmt(certified_datetime),
+            "certified_by": certified_by or '—',
+            "last_modified_datetime": fmt(last_modified_datetime),
+            "last_modified_by": last_modified_by or '—'
+        })
+
+    except Exception as e:
+        log("Details API error: %s", e)
         return jsonify({"error": "Service unavailable"}), 500
     finally:
         conn.close()
