@@ -61,7 +61,6 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-
         .container {
             max-width: 1200px;
             margin: 40px auto;
@@ -160,6 +159,14 @@
         td { word-wrap: break-word; }
         .app-number { font-family: monospace; font-weight: 600; }
         .modified { font-size: 0.9rem; color: #666; }
+        .bbmap-link {
+            color: var(--accent);
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        .bbmap-link:hover {
+            color: #0056b3;
+        }
         .pagination {
             text-align: center;
             margin: 30px 0;
@@ -188,6 +195,56 @@
         }
         .flash.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .flash.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+        /* MODAL */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+        }
+        .modal.show { display: flex; }
+        .modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .modal-title {
+            font-weight: 600;
+            color: var(--primary);
+            font-size: 1.3rem;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #999;
+        }
+        .modal-close:hover { color: #333; }
+        .modal-body {
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+        .modal-body strong { color: var(--primary); }
+
         @media (max-width: 768px) {
             .container { margin: 20px; padding: 20px; }
             .filters { flex-direction: column; align-items: stretch; }
@@ -204,9 +261,21 @@
         <div class="spinner"></div>
     </div>
 
+    <!-- MODAL -->
+    <div class="modal" id="bbmap-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Bluebird Fiber Distance</div>
+                <button class="modal-close" onclick="closeModal()">×</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                Loading...
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <h1>E-Rate Dashboard</h1>
-
         <!-- FLASH MESSAGES -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -215,7 +284,6 @@
                 {% endfor %}
             {% endif %}
         {% endwith %}
-
         <div class="filters">
             <form method="get" style="display: contents;" id="filter-form">
                 <label>
@@ -232,11 +300,9 @@
             <a href="{{ url_for('erate.extract_csv') }}" class="btn btn-warning">Extract CSV</a>
             <a href="{{ url_for('erate.import_interactive') }}" class="btn btn-success">Resume Import</a>
         </div>
-
         <p class="summary">
             <strong>Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</strong>
         </p>
-
         <table>
             <thead>
                 <tr>
@@ -253,7 +319,11 @@
                     {% for row in table_data %}
                     <tr>
                         <td class="app-number">{{ row.app_number|default('—') }}</td>
-                        <td>{{ row.entity_name|default('—') }}</td>
+                        <td>
+                            <span class="bbmap-link" onclick="checkBluebird('{{ row.app_number }}')">
+                                {{ row.entity_name|default('—') }}
+                            </span>
+                        </td>
                         <td>{{ row.state|default('—') }}</td>
                         <td>{{ row.funding_year|default('—') }}</td>
                         <td>{{ row.fcc_status|default('—') }}</td>
@@ -271,7 +341,6 @@
                 {% endif %}
             </tbody>
         </table>
-
         {% if has_more|default(false) %}
         <div class="pagination">
             <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&offset={{ next_offset|default(0) }}"
@@ -286,19 +355,19 @@
         const form = document.getElementById('filter-form');
         const overlay = document.getElementById('loading');
         const body = document.body;
+        const modal = document.getElementById('bbmap-modal');
+        const modalBody = document.getElementById('modal-body');
 
         form.addEventListener('submit', () => {
             body.classList.add('loading');
             overlay.classList.add('show');
         });
 
-        // Hide on load (in case of refresh)
         window.addEventListener('load', () => {
             body.classList.remove('loading');
             overlay.classList.remove('show');
         });
 
-        // Also hide on navigation (for pagination)
         document.querySelectorAll('a').forEach(link => {
             link.addEventListener('click', (e) => {
                 const href = link.getAttribute('href');
@@ -307,6 +376,43 @@
                     overlay.classList.add('show');
                 }
             });
+        });
+
+        // BLUEBIRD FIBER CHECK
+        async function checkBluebird(appNumber) {
+            body.classList.add('loading');
+            overlay.classList.add('show');
+            modalBody.innerHTML = 'Searching Bluebird Fiber...';
+
+            try {
+                const response = await fetch(`/erate/bbmap/${appNumber}`);
+                const data = await response.json();
+
+                let content = `
+                    <strong>Applicant:</strong> ${data.entity_name || 'N/A'}<br>
+                    <strong>Address:</strong> ${data.address || 'N/A'}<br>
+                    <strong>Nearest Bluebird PoP:</strong> ${data.pop_city || 'Unknown'}<br>
+                    <strong>Distance:</strong> ${data.distance || 'N/A'}<br>
+                    <strong>Coverage:</strong> ${data.coverage || 'Unknown'}
+                `;
+
+                modalBody.innerHTML = content;
+            } catch (err) {
+                modalBody.innerHTML = `<strong>Error:</strong> Could not fetch data.`;
+            } finally {
+                body.classList.remove('loading');
+                overlay.classList.remove('show');
+                modal.classList.add('show');
+            }
+        }
+
+        function closeModal() {
+            modal.classList.remove('show');
+        }
+
+        // Close modal on outside click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
         });
     </script>
 </body>
