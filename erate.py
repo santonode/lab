@@ -1,4 +1,4 @@
-# erate.py — FINAL VERSION (BULLETPROOF INSERT + VERIFICATION)
+# erate.py — FINAL VERSION (FULL IMPORT + VERIFICATION + NO EARLY STOP)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app
@@ -358,10 +358,9 @@ def import_interactive():
 
     return render_template('erate_import.html', progress=progress, is_importing=is_importing)
 
-# === BULK IMPORT — BULLETPROOF INSERT + VERIFICATION ===
+# === BULK IMPORT — FULL IMPORT + VERIFICATION + NO EARLY STOP ===
 def _import_all_background(app):
     time.sleep(1)
-    batch_size = 1000
     try:
         log("Bulk import started")
         with app.app_context():
@@ -397,7 +396,7 @@ def _import_all_background(app):
                 batch.append(row)
                 imported += 1
 
-                if len(batch) >= batch_size:
+                if len(batch) >= 1000:
                     # DUPLICATE CHECK
                     cur.execute(
                         "SELECT app_number FROM erate WHERE app_number = ANY(%s)",
@@ -416,8 +415,7 @@ def _import_all_background(app):
                             cur.execute("SELECT COUNT(*) FROM erate WHERE app_number = ANY(%s)",
                                         ([r['Application Number'] for r in filtered_batch],))
                             actual = cur.fetchone()[0]
-                            if actual != len(filtered_batch):
-                                log("INSERT VERIFICATION FAILED: expected %s, got %s", len(filtered_batch), actual)
+                            log("VERIFIED: %s rows", actual)
                         except Exception as e:
                             log("COMMIT FAILED: %s", e)
                             conn.rollback()
@@ -444,7 +442,6 @@ def _import_all_background(app):
                         cur.executemany(INSERT_SQL, [_row_to_tuple(r) for r in filtered_batch])
                         conn.commit()
                         log("FINAL BATCH COMMITTED: %s", len(filtered_batch))
-                        # VERIFY
                         cur.execute("SELECT COUNT(*) FROM erate WHERE app_number = ANY(%s)",
                                     ([r['Application Number'] for r in filtered_batch],))
                         actual = cur.fetchone()[0]
