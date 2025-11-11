@@ -349,7 +349,7 @@ def import_interactive():
 
     return render_template('erate_import.html', progress=progress, is_importing=is_importing)
 
-# === BULK IMPORT — 1 CONNECTION PER 1000 ROWS, 1000x FASTER ===
+# === BULK IMPORT — BATCH DUPLICATE CHECK + BATCH INSERT, 1000x FASTER ===
 def _import_all_background(app):
     time.sleep(1)
     batch_size = 1000
@@ -359,13 +359,8 @@ def _import_all_background(app):
             total = app.config['import_total']
             start_index = app.config['import_index']
 
-        # ONE CONNECTION FOR DUPLICATE CHECKS
-        conn_check = psycopg.connect(DATABASE_URL, autocommit=True, connect_timeout=10)
-        cur_check = conn_check.cursor()
-
-        # ONE CONNECTION FOR INSERTS
-        conn_insert = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
-        cur_insert = conn_insert.cursor()
+        conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
+        cur = conn.cursor()
 
         # RE-OPEN CSV
         with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='', buffering=8192) as f:
@@ -382,54 +377,60 @@ def _import_all_background(app):
             imported = 0
             last_heartbeat = time.time()
 
+            # BATCH DUPLICATE CHECK
+            app_numbers = []
             for row in reader:
-                if time.time() - last_heartbeat > 5:
-                    log("HEARTBEAT: %s rows processed", imported)
-                    last_heartbeat = time.time()
-
                 app_number = row.get('Application Number', '').strip()
                 if not app_number: continue
-
-                # FAST DUPLICATE CHECK
-                try:
-                    cur_check.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
-                    if cur_check.fetchone():
-                        continue
-                except Exception as e:
-                    log("DB check failed: %s", e)
-                    continue
-
+                app_numbers.append((app_number,))
                 batch.append(row)
                 imported += 1
 
                 if len(batch) >= batch_size:
-                    try:
-                        for r in batch:
-                            cur_insert.execute(INSERT_SQL, _row_to_tuple(r))
-                        conn_insert.commit()
-                        log("Committed batch of %s", batch_size)
-                    except Exception as e:
-                        log("Batch commit failed: %s", e)
-                        conn_insert.rollback()
-                    finally:
-                        with app.app_context():
-                            app.config['import_index'] += batch_size
-                            app.config['import_success'] += batch_size
-                            log("Progress: %s / %s", app.config['import_index'], total)
-                        batch = []
+                    # BATCH CHECK DUPLICATES
+                    cur.execute(
+                        "SELECT app_number FROM erate WHERE app_number = ANY(%s)",
+                        ([r['Application Number'] for r in batch],)
+                    )
+                    existing = {row[0] for row in cur.fetchall()}
+
+                    # FILTER OUT DUPLICATES
+                    filtered_batch = [r for r in batch if r['Application Number'] not in existing]
+
+                    # BATCH INSERT
+                    if filtered_batch:
+                        cur.executemany(INSERT_SQL, [_row_to_tuple(r) for r in filtered_batch])
+                        conn.commit()
+                        log("Committed batch of %s", len(filtered_batch))
+
+                    with app.app_context():
+                        app.config['import_index'] += len(batch)
+                        app.config['import_success'] += len(filtered_batch)
+                        log("Progress: %s / %s", app.config['import_index'], total)
+
+                    if time.time() - last_heartbeat > 5:
+                        log("HEARTBEAT: %s rows processed", imported)
+                        last_heartbeat = time.time()
+
+                    batch = []
+                    app_numbers = []
 
             # FINAL BATCH
             if batch:
-                try:
-                    for r in batch:
-                        cur_insert.execute(INSERT_SQL, _row_to_tuple(r))
-                    conn_insert.commit()
-                except Exception as e:
-                    log("Final batch failed: %s", e)
-                finally:
-                    with app.app_context():
-                        app.config['import_index'] = total + 1
-                        app.config['import_success'] += len(batch)
+                cur.execute(
+                    "SELECT app_number FROM erate WHERE app_number = ANY(%s)",
+                    ([r['Application Number'] for r in batch],)
+                )
+                existing = {row[0] for row in cur.fetchall()}
+                filtered_batch = [r for r in batch if r['Application Number'] not in existing]
+
+                if filtered_batch:
+                    cur.executemany(INSERT_SQL, [_row_to_tuple(r) for r in filtered_batch])
+                    conn.commit()
+
+                with app.app_context():
+                    app.config['import_index'] = total + 1
+                    app.config['import_success'] += len(filtered_batch)
 
         log("Bulk import complete: %s imported", app.config['import_success'])
 
@@ -437,9 +438,7 @@ def _import_all_background(app):
         log("IMPORT THREAD CRASHED: %s", e)
         log("Traceback: %s", traceback.format_exc())
     finally:
-        try: conn_check.close()
-        except: pass
-        try: conn_insert.close()
+        try: conn.close()
         except: pass
         with app.app_context():
             app.config['BULK_IMPORT_IN_PROGRESS'] = False
