@@ -1,4 +1,4 @@
-# erate.py — FINAL VERSION (BLUEBIRD FIBER PoP DISTANCE + FULL IMPORT + VERIFIED INSERTS)
+# erate.py — FINAL VERSION (REAL GEOCODING + BLUEBIRD FIBER DISTANCE + FULL IMPORT)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify
@@ -12,6 +12,7 @@ import time
 import psycopg
 import traceback
 from datetime import datetime
+from math import radians, cos, sin, sqrt, atan2
 
 # === LOGGING (ONE LINE TO RENDER + import.log) ===
 LOG_FILE = os.path.join(os.path.dirname(__file__), "import.log")
@@ -255,7 +256,7 @@ def dashboard():
     finally:
         conn.close()
 
-# === BLUEBIRD FIBER PoP DISTANCE API ===
+# === BLUEBIRD FIBER PoP DISTANCE API (REAL GEOCODING) ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -271,23 +272,46 @@ def bbmap(app_number):
             return jsonify({"error": "Applicant not found"}), 404
 
         entity_name, address1, city, state, zip_code = row
-        full_address = f"{address1}, {city}, {state} {zip_code}"
+        full_address = f"{address1}, {city}, {state} {zip_code}".strip()
 
-        # BLUEBIRD FIBER LOGIC (REAL DATA)
+        # GEOCODE ADDRESS (Nominatim API - free)
+        geocode_url = "https://nominatim.openstreetmap.org/search"
+        geocode_params = {
+            'q': full_address,
+            'format': 'json',
+            'limit': 1,
+            'addressdetails': 1
+        }
+        headers = {'User-Agent': 'E-Rate Dashboard/1.0'}
+        geocode_resp = requests.get(geocode_url, params=geocode_params, headers=headers, timeout=10)
+        geocode_data = geocode_resp.json()
+
+        if not geocode_data:
+            return jsonify({
+                "entity_name": entity_name,
+                "address": full_address,
+                "error": "Geocoding failed",
+                "pop_city": "Unknown",
+                "distance": "N/A",
+                "coverage": "Unknown"
+            })
+
+        applicant_lat = float(geocode_data[0]['lat'])
+        applicant_lon = float(geocode_data[0]['lon'])
+
+        # BLUEBIRD PoPs (lat/lon from network map)
         pop_data = {
-            "Chicago, IL": {"lat": 41.8781, "lon": -87.6298},
-            "St. Louis, MO": {"lat": 38.6270, "lon": -90.1994},
-            "Kansas City, MO": {"lat": 39.0997, "lon": -94.5786},
-            "Tulsa, OK": {"lat": 36.1539, "lon": -95.9928},
-            "Springfield, MO": {"lat": 37.2089, "lon": -93.2923},
-            "Peoria, IL": {"lat": 40.6936, "lon": -89.5890},
-            "Rockford, IL": {"lat": 42.2711, "lon": -89.0939},
-            "Shreveport, LA": {"lat": 32.5252, "lon": -93.7502}
+            "Chicago, IL": (41.8781, -87.6298),
+            "St. Louis, MO": (38.6270, -90.1994),
+            "Kansas City, MO": (39.0997, -94.5786),
+            "Tulsa, OK": (36.1539, -95.9928),
+            "Springfield, MO": (37.2089, -93.2923),
+            "Peoria, IL": (40.6936, -89.5890),
+            "Rockford, IL": (42.2711, -89.0939),
+            "Shreveport, LA": (32.5252, -93.7502)
         }
 
-        # Find closest PoP
-        from math import radians, cos, sin, sqrt, atan2
-
+        # Haversine distance
         def haversine(lat1, lon1, lat2, lon2):
             R = 3958.8  # Earth radius in miles
             dlat = radians(lat2 - lat1)
@@ -296,15 +320,10 @@ def bbmap(app_number):
             c = 2 * atan2(sqrt(a), sqrt(1-a))
             return R * c
 
-        # Mock lat/lon for applicant (use real geocoding in prod)
-        # For demo: assume Tulsa if OK, else Chicago
-        applicant_lat = 36.1539 if state == "OK" else 41.8781
-        applicant_lon = -95.9928 if state == "OK" else -87.6298
-
         min_dist = float('inf')
         nearest_pop = None
-        for city, coords in pop_data.items():
-            dist = haversine(applicant_lat, applicant_lon, coords["lat"], coords["lon"])
+        for city, (pop_lat, pop_lon) in pop_data.items():
+            dist = haversine(applicant_lat, applicant_lon, pop_lat, pop_lon)
             if dist < min_dist:
                 min_dist = dist
                 nearest_pop = city
