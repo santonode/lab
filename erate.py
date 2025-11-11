@@ -1,4 +1,4 @@
-# erate.py — FINAL VERSION (PDF LINKS + DUAL POPUPS + BLUEBIRD + NO SORT)
+# erate.py — FINAL (PDF + .pdf EXTENSION + DUAL POPUPS + BLUEBIRD)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -111,14 +111,14 @@ def parse_datetime(value):
     return None
 
 def _row_to_tuple(row):
-    # FULL PDF URL
+    # FULL PDF URL + .pdf EXTENSION
     form_pdf_raw = row.get('Form PDF', '').strip()
-    form_pdf = f"https://opendata.usac.org/{form_pdf_raw.lstrip('/')}" if form_pdf_raw else ''
+    form_pdf = f"https://opendata.usac.org/{form_pdf_raw.lstrip('/')}.pdf" if form_pdf_raw else ''
 
     return (
         truncate(row.get('Application Number', '')),
         truncate(row.get('Form Nickname', '')),
-        form_pdf,  # FULL URL
+        form_pdf,  # FULL URL + .pdf
         truncate(row.get('Funding Year', '')),
         truncate(row.get('FCC Form 470 Status', '')),
         parse_datetime(row.get('Allowable Contract Date')),
