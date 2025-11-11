@@ -1,7 +1,7 @@
-# erate.py — FINAL VERSION (FULL PDF URLS + DUAL POPUPS + BLUEBIRD + NO SORT)
+# erate.py — FINAL VERSION (PDF LINKS + DUAL POPUPS + BLUEBIRD + NO SORT)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
-    send_file, flash, current_app, jsonify
+    send_file, flash, current_app, jsonify, Markup
 )
 import csv
 import os
@@ -14,7 +14,7 @@ import traceback
 from datetime import datetime
 from math import radians, cos, sin, sqrt, atan2
 
-# === LOGGING (ONE LINE TO RENDER + import.log) ===
+# === LOGGING ===
 LOG_FILE = os.path.join(os.path.dirname(__file__), "import.log")
 open(LOG_FILE, 'a').close()
 
@@ -54,7 +54,7 @@ if 'sslmode' not in DATABASE_URL.lower():
     DATABASE_URL = f"{base}/{dbname}?sslmode=require"
 log("Final DATABASE_URL: %s", DATABASE_URL[:50] + '...')
 
-# === TEST DB CONNECTION ON STARTUP ===
+# === TEST DB CONNECTION ===
 try:
     test_conn = psycopg.connect(DATABASE_URL, connect_timeout=5)
     with test_conn.cursor() as cur:
@@ -111,7 +111,7 @@ def parse_datetime(value):
     return None
 
 def _row_to_tuple(row):
-    # FIX: FULL PDF URL
+    # FULL PDF URL
     form_pdf_raw = row.get('Form PDF', '').strip()
     form_pdf = f"https://opendata.usac.org/{form_pdf_raw.lstrip('/')}" if form_pdf_raw else ''
 
@@ -188,7 +188,7 @@ def _row_to_tuple(row):
         truncate(row.get('Form Version', ''))
     )
 
-# === FULL BLUEBIRD POP LIST (223 LOCATIONS) ===
+# === FULL BLUEBIRD POP LIST (223) ===
 pop_data = {
     "Albany, MO": (40.251695, -94.332911),
     "Alhambra, IL": (38.888443, -89.731215),
@@ -313,7 +313,7 @@ pop_data = {
     "Tulsa, OK": (36.1539, -95.9928)
 }
 
-# === GEOCODE + DISTANCE FUNCTION (FOR MODAL) ===
+# === GEOCODE + DISTANCE ===
 def get_bluebird_distance(address):
     if not address:
         return {"distance": float('inf'), "pop_city": "N/A", "coverage": "Unknown"}
@@ -355,7 +355,7 @@ def get_bluebird_distance(address):
     coverage = "Full fiber" if min_dist <= 5 else "Nearby" if min_dist <= 50 else "Extended reach"
     return {"distance": min_dist, "pop_city": nearest_pop, "coverage": coverage}
 
-# === DASHBOARD — NO SORT, FAST PAGINATION ===
+# === DASHBOARD ===
 @erate_bp.route('/')
 def dashboard():
     log("Dashboard accessed")
@@ -367,7 +367,6 @@ def dashboard():
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10, autocommit=True)
     try:
         with conn.cursor() as cur:
-            # GET TOTAL COUNT
             count_sql = 'SELECT COUNT(*) FROM erate'
             count_params = []
             where_clauses = []
@@ -382,7 +381,6 @@ def dashboard():
             cur.execute(count_sql, count_params)
             total_count = cur.fetchone()[0]
 
-            # NORMAL PAGINATION (NO SORT)
             sql = '''
                 SELECT app_number, entity_name, state, funding_year,
                        fcc_status, last_modified_datetime
@@ -429,7 +427,7 @@ def dashboard():
     finally:
         conn.close()
 
-# === BLUEBIRD FIBER DISTANCE API (FOR MODAL) ===
+# === BLUEBIRD API ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -463,7 +461,7 @@ def bbmap(app_number):
     finally:
         conn.close()
 
-# === APPLICANT DETAILS API (FOR MODAL) ===
+# === APPLICANT DETAILS API (WITH Markup) ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -487,13 +485,12 @@ def details(app_number):
             certified_datetime, certified_by, last_modified_datetime, last_modified_by
         ) = row
 
-        # Format dates
         def fmt(dt):
             return dt.strftime('%m/%d/%Y %I:%M %p') if dt else '—'
 
         return jsonify({
             "form_nickname": form_nickname or '—',
-            "form_pdf": f"<a href='{form_pdf}' target='_blank'>View PDF</a>" if form_pdf else '—',
+            "form_pdf": Markup(f'<a href="{form_pdf}" target="_blank">View PDF</a>') if form_pdf else '—',
             "funding_year": funding_year or '—',
             "fcc_status": fcc_status or '—',
             "allowable_contract_date": fmt(allowable_contract_date),
@@ -551,7 +548,7 @@ def _download_csv_background(app):
         with app.app_context():
             app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
 
-# === IMPORT INTERACTIVE — NO ROW PREVIEW, app.config PROGRESS ===
+# === IMPORT INTERACTIVE ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     log("Import interactive page accessed")
@@ -559,13 +556,11 @@ def import_interactive():
         log("CSV not found")
         return "<h2>CSV not found: 470schema.csv</h2>", 404
 
-    # COUNT ROWS ONLY
     with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
         total = sum(1 for _ in csv.reader(f)) - 1
 
     log("CSV has %s rows (excluding header)", total)
 
-    # INIT PROGRESS IN app.config
     if 'import_total' not in current_app.config:
         current_app.config['import_total'] = total
         current_app.config['import_index'] = 1
@@ -614,7 +609,7 @@ def import_interactive():
 
     return render_template('erate_import.html', progress=progress, is_importing=is_importing)
 
-# === BULK IMPORT — SKIPS CSV DUPLICATES + VERIFIED INSERTS ===
+# === BULK IMPORT ===
 def _import_all_background(app):
     time.sleep(1)
     try:
@@ -626,19 +621,17 @@ def _import_all_background(app):
         conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
         cur = conn.cursor()
 
-        # RE-OPEN CSV
         with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='', buffering=8192) as f:
             reader = csv.DictReader(f)
             log("CSV reader created")
 
-            # SKIP TO START
             for _ in range(start_index - 1):
                 try: next(reader)
                 except StopIteration: break
             log("Skipped to record %s", start_index)
 
             batch = []
-            seen_in_csv = set()  # TRACK DUPLICATES IN CSV
+            seen_in_csv = set()
             imported = 0
             last_heartbeat = time.time()
 
@@ -650,7 +643,6 @@ def _import_all_background(app):
                 app_number = row.get('Application Number', '').strip()
                 if not app_number: continue
 
-                # SKIP IF ALREADY IN THIS CSV BATCH
                 if app_number in seen_in_csv:
                     log("SKIPPED CSV DUPLICATE: %s", app_number)
                     continue
@@ -660,7 +652,6 @@ def _import_all_background(app):
                 imported += 1
 
                 if len(batch) >= 1000:
-                    # DUPLICATE CHECK IN DB
                     cur.execute(
                         "SELECT app_number FROM erate WHERE app_number = ANY(%s)",
                         ([r['Application Number'] for r in batch],)
@@ -668,7 +659,6 @@ def _import_all_background(app):
                     existing = {row[0] for row in cur.fetchall()}
                     filtered_batch = [r for r in batch if r['Application Number'] not in existing]
 
-                    # INSERT + VERIFY
                     if filtered_batch:
                         try:
                             cur.executemany(INSERT_SQL, [_row_to_tuple(r) for r in filtered_batch])
@@ -689,9 +679,8 @@ def _import_all_background(app):
                         log("Progress: %s / %s", app.config['import_index'], total)
 
                     batch = []
-                    seen_in_csv = set()  # RESET FOR NEXT BATCH
+                    seen_in_csv = set()
 
-            # FINAL BATCH
             if batch:
                 cur.execute(
                     "SELECT app_number FROM erate WHERE app_number = ANY(%s)",
