@@ -157,16 +157,21 @@
         tr:nth-child(even) { background-color: #f9f9f9; }
         tr:hover { background-color: var(--hover); }
         td { word-wrap: break-word; }
-        .app-number { font-family: monospace; font-weight: 600; }
-        .modified { font-size: 0.9rem; color: #666; }
+        .app-number { 
+            font-family: monospace; 
+            font-weight: 600; 
+            color: var(--accent);
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        .app-number:hover { color: #0056b3; }
         .bbmap-link {
             color: var(--accent);
             text-decoration: underline;
             cursor: pointer;
         }
-        .bbmap-link:hover {
-            color: #0056b3;
-        }
+        .bbmap-link:hover { color: #0056b3; }
+        .modified { font-size: 0.9rem; color: #666; }
         .pagination {
             text-align: center;
             margin: 30px 0;
@@ -244,6 +249,7 @@
             line-height: 1.6;
         }
         .modal-body strong { color: var(--primary); }
+        .modal-body a { color: var(--accent); text-decoration: underline; }
 
         @media (max-width: 768px) {
             .container { margin: 20px; padding: 20px; }
@@ -261,14 +267,27 @@
         <div class="spinner"></div>
     </div>
 
-    <!-- MODAL -->
+    <!-- APPLICANT DETAILS MODAL -->
+    <div class="modal" id="detail-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">470 Form Details</div>
+                <button class="modal-close" onclick="closeModal('detail')">×</button>
+            </div>
+            <div class="modal-body" id="detail-body">
+                Loading...
+            </div>
+        </div>
+    </div>
+
+    <!-- BLUEBIRD FIBER MODAL -->
     <div class="modal" id="bbmap-modal">
         <div class="modal-content">
             <div class="modal-header">
                 <div class="modal-title">Bluebird Fiber Distance</div>
-                <button class="modal-close" onclick="closeModal()">×</button>
+                <button class="modal-close" onclick="closeModal('bbmap')">×</button>
             </div>
-            <div class="modal-body" id="modal-body">
+            <div class="modal-body" id="bbmap-body">
                 Loading...
             </div>
         </div>
@@ -318,7 +337,11 @@
                 {% if table_data %}
                     {% for row in table_data %}
                     <tr>
-                        <td class="app-number">{{ row.app_number|default('—') }}</td>
+                        <td>
+                            <span class="app-number" onclick="showDetails('{{ row.app_number }}')">
+                                {{ row.app_number|default('—') }}
+                            </span>
+                        </td>
                         <td>
                             <span class="bbmap-link" onclick="checkBluebird('{{ row.app_number }}')">
                                 {{ row.entity_name|default('—') }}
@@ -355,8 +378,12 @@
         const form = document.getElementById('filter-form');
         const overlay = document.getElementById('loading');
         const body = document.body;
-        const modal = document.getElementById('bbmap-modal');
-        const modalBody = document.getElementById('modal-body');
+
+        // MODALS
+        const detailModal = document.getElementById('detail-modal');
+        const bbmapModal = document.getElementById('bbmap-modal');
+        const detailBody = document.getElementById('detail-body');
+        const bbmapBody = document.getElementById('bbmap-body');
 
         form.addEventListener('submit', () => {
             body.classList.add('loading');
@@ -378,41 +405,71 @@
             });
         });
 
+        // APPLICANT DETAILS
+        async function showDetails(appNumber) {
+            body.classList.add('loading');
+            overlay.classList.add('show');
+            detailBody.innerHTML = 'Loading...';
+            detailModal.classList.add('show');
+
+            try {
+                const response = await fetch(`/erate/details/${appNumber}`);
+                const data = await response.json();
+
+                detailBody.innerHTML = `
+                    <strong>Form Nickname:</strong> ${data.form_nickname}<br>
+                    <strong>Form PDF:</strong> ${data.form_pdf}<br>
+                    <strong>Funding Year:</strong> ${data.funding_year}<br>
+                    <strong>FCC Status:</strong> ${data.fcc_status}<br>
+                    <strong>Allowable Contract Date:</strong> ${data.allowable_contract_date}<br>
+                    <strong>Created:</strong> ${data.created_datetime} by ${data.created_by}<br>
+                    <strong>Certified:</strong> ${data.certified_datetime} by ${data.certified_by}<br>
+                    <strong>Last Modified:</strong> ${data.last_modified_datetime} by ${data.last_modified_by}
+                `;
+            } catch (err) {
+                detailBody.innerHTML = `<strong>Error:</strong> Could not fetch details.`;
+            } finally {
+                body.classList.remove('loading');
+                overlay.classList.remove('show');
+            }
+        }
+
         // BLUEBIRD FIBER CHECK
         async function checkBluebird(appNumber) {
             body.classList.add('loading');
             overlay.classList.add('show');
-            modalBody.innerHTML = 'Searching Bluebird Fiber...';
+            bbmapBody.innerHTML = 'Searching Bluebird Fiber...';
+            bbmapModal.classList.add('show');
 
             try {
                 const response = await fetch(`/erate/bbmap/${appNumber}`);
                 const data = await response.json();
 
-                let content = `
+                bbmapBody.innerHTML = `
                     <strong>Applicant:</strong> ${data.entity_name || 'N/A'}<br>
                     <strong>Address:</strong> ${data.address || 'N/A'}<br>
                     <strong>Nearest Bluebird PoP:</strong> ${data.pop_city || 'Unknown'}<br>
                     <strong>Distance:</strong> ${data.distance || 'N/A'}<br>
                     <strong>Coverage:</strong> ${data.coverage || 'Unknown'}
                 `;
-
-                modalBody.innerHTML = content;
             } catch (err) {
-                modalBody.innerHTML = `<strong>Error:</strong> Could not fetch data.`;
+                bbmapBody.innerHTML = `<strong>Error:</strong> Could not fetch data.`;
             } finally {
                 body.classList.remove('loading');
                 overlay.classList.remove('show');
-                modal.classList.add('show');
             }
         }
 
-        function closeModal() {
-            modal.classList.remove('show');
+        function closeModal(type) {
+            if (type === 'detail') detailModal.classList.remove('show');
+            if (type === 'bbmap') bbmapModal.classList.remove('show');
         }
 
-        // Close modal on outside click
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) closeModal();
+        // Close on outside click
+        [detailModal, bbmapModal].forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.classList.remove('show');
+            });
         });
     </script>
 </body>
