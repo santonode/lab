@@ -1,4 +1,4 @@
-# erate.py — FINAL VERSION (REAL GEOCODING + BLUEBIRD FIBER DISTANCE + FULL IMPORT)
+# erate.py — FINAL VERSION (SORT BY BLUEBIRD DISTANCE IF <101 RESULTS)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify
@@ -184,7 +184,60 @@ def _row_to_tuple(row):
         truncate(row.get('Form Version', ''))
     )
 
-# === DASHBOARD ===
+# === GEOCODE + DISTANCE FUNCTION ===
+def get_bluebird_distance(address):
+    if not address:
+        return {"distance": float('inf'), "pop_city": "N/A", "coverage": "Unknown"}
+
+    geocode_url = "https://nominatim.openstreetmap.org/search"
+    geocode_params = {
+        'q': address,
+        'format': 'json',
+        'limit': 1,
+        'addressdetails': 1
+    }
+    headers = {'User-Agent': 'E-Rate Dashboard/1.0'}
+    try:
+        geocode_resp = requests.get(geocode_url, params=geocode_params, headers=headers, timeout=10)
+        geocode_data = geocode_resp.json()
+        if not geocode_data:
+            return {"distance": float('inf'), "pop_city": "N/A", "coverage": "Unknown"}
+        lat = float(geocode_data[0]['lat'])
+        lon = float(geocode_data[0]['lon'])
+    except:
+        return {"distance": float('inf'), "pop_city": "N/A", "coverage": "Unknown"}
+
+    pop_data = {
+        "Chicago, IL": (41.8781, -87.6298),
+        "St. Louis, MO": (38.6270, -90.1994),
+        "Kansas City, MO": (39.0997, -94.5786),
+        "Tulsa, OK": (36.1539, -95.9928),
+        "Springfield, MO": (37.2089, -93.2923),
+        "Peoria, IL": (40.6936, -89.5890),
+        "Rockford, IL": (42.2711, -89.0939),
+        "Shreveport, LA": (32.5252, -93.7502)
+    }
+
+    def haversine(lat1, lon1, lat2, lon2):
+        R = 3958.8
+        dlat = radians(lat2 - lat1)
+        dlon = radians(lon2 - lon1)
+        a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+        c = 2 * atan2(sqrt(a), sqrt(1-a))
+        return R * c
+
+    min_dist = float('inf')
+    nearest_pop = None
+    for city, (pop_lat, pop_lon) in pop_data.items():
+        dist = haversine(lat, lon, pop_lat, pop_lon)
+        if dist < min_dist:
+            min_dist = dist
+            nearest_pop = city
+
+    coverage = "Full fiber" if min_dist <= 5 else "Nearby" if min_dist <= 50 else "Extended reach"
+    return {"distance": min_dist, "pop_city": nearest_pop, "coverage": coverage}
+
+# === DASHBOARD — SORT BY DISTANCE IF <101 RESULTS ===
 @erate_bp.route('/')
 def dashboard():
     log("Dashboard accessed")
@@ -193,10 +246,10 @@ def dashboard():
     offset = max(int(request.args.get('offset', 0)), 0)
     limit = 10
 
-    # FORCE NEW CONNECTION
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10, autocommit=True)
     try:
         with conn.cursor() as cur:
+            # GET TOTAL COUNT
             count_sql = 'SELECT COUNT(*) FROM erate'
             count_params = []
             where_clauses = []
@@ -211,32 +264,78 @@ def dashboard():
             cur.execute(count_sql, count_params)
             total_count = cur.fetchone()[0]
 
-            sql = '''
-                SELECT app_number, entity_name, state, funding_year,
-                       fcc_status, last_modified_datetime
-                FROM erate
-            '''
-            params = []
-            if where_clauses:
-                sql += ' WHERE ' + ' AND '.join(where_clauses)
-                params.extend(count_params)
-            sql += ' ORDER BY app_number LIMIT %s OFFSET %s'
-            params.extend([limit + 1, offset])
-            cur.execute(sql, params)
-            rows = cur.fetchall()
+            # GET FULL RESULTS FOR SMALL SETS (<101)
+            if total_count <= 100:
+                sql = '''
+                    SELECT app_number, entity_name, state, funding_year,
+                           fcc_status, last_modified_datetime,
+                           address1, city, state, zip_code
+                    FROM erate
+                '''
+                params = []
+                if where_clauses:
+                    sql += ' WHERE ' + ' AND '.join(where_clauses)
+                    params.extend(count_params)
+                sql += ' ORDER BY app_number'
+                cur.execute(sql, params)
+                rows = cur.fetchall()
 
-            table_data = [
-                {
-                    'app_number': r[0], 'entity_name': r[1], 'state': r[2],
-                    'funding_year': r[3], 'fcc_status': r[4],
-                    'last_modified_datetime': r[5]
-                }
-                for r in rows
-            ]
+                # ENRICH WITH DISTANCE
+                enriched = []
+                for r in rows:
+                    app_number, entity_name, state, funding_year, fcc_status, last_mod, address1, city, state_col, zip_code = r
+                    full_address = f"{address1}, {city}, {state_col} {zip_code}".strip()
+                    dist_info = get_bluebird_distance(full_address)
+                    enriched.append({
+                        'app_number': app_number,
+                        'entity_name': entity_name,
+                        'state': state,
+                        'funding_year': funding_year,
+                        'fcc_status': fcc_status,
+                        'last_modified_datetime': last_mod,
+                        'distance': dist_info['distance'],
+                        'pop_city': dist_info['pop_city'],
+                        'coverage': dist_info['coverage']
+                    })
 
-        has_more = len(table_data) > limit
-        table_data = table_data[:limit]
-        next_offset = offset + limit
+                # SORT BY DISTANCE
+                enriched.sort(key=lambda x: x['distance'])
+
+                # PAGINATE
+                table_data = enriched[offset:offset + limit]
+                has_more = offset + limit < len(enriched)
+                next_offset = offset + limit
+                total_filtered = len(enriched)
+
+            else:
+                # NORMAL PAGINATION
+                sql = '''
+                    SELECT app_number, entity_name, state, funding_year,
+                           fcc_status, last_modified_datetime
+                    FROM erate
+                '''
+                params = []
+                if where_clauses:
+                    sql += ' WHERE ' + ' AND '.join(where_clauses)
+                    params.extend(count_params)
+                sql += ' ORDER BY app_number LIMIT %s OFFSET %s'
+                params.extend([limit + 1, offset])
+                cur.execute(sql, params)
+                rows = cur.fetchall()
+
+                table_data = [
+                    {
+                        'app_number': r[0], 'entity_name': r[1], 'state': r[2],
+                        'funding_year': r[3], 'fcc_status': r[4],
+                        'last_modified_datetime': r[5]
+                    }
+                    for r in rows
+                ]
+
+                has_more = len(table_data) > limit
+                table_data = table_data[:limit]
+                next_offset = offset + limit
+                total_filtered = offset + len(table_data)
 
         log("Dashboard rendered: %s records", len(table_data))
         return render_template(
@@ -244,10 +343,11 @@ def dashboard():
             table_data=table_data,
             filters={'state': state_filter, 'modified_after': modified_after_str},
             total_count=total_count,
-            total_filtered=offset + len(table_data),
+            total_filtered=total_filtered,
             has_more=has_more,
             next_offset=next_offset,
-            cache_bust=int(time.time())
+            cache_bust=int(time.time()),
+            sort_by_distance=total_count <= 100
         )
 
     except Exception as e:
@@ -256,7 +356,7 @@ def dashboard():
     finally:
         conn.close()
 
-# === BLUEBIRD FIBER PoP DISTANCE API (REAL GEOCODING) ===
+# === BLUEBIRD FIBER PoP DISTANCE API (FOR MODAL) ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -274,68 +374,14 @@ def bbmap(app_number):
         entity_name, address1, city, state, zip_code = row
         full_address = f"{address1}, {city}, {state} {zip_code}".strip()
 
-        # GEOCODE ADDRESS (Nominatim API - free)
-        geocode_url = "https://nominatim.openstreetmap.org/search"
-        geocode_params = {
-            'q': full_address,
-            'format': 'json',
-            'limit': 1,
-            'addressdetails': 1
-        }
-        headers = {'User-Agent': 'E-Rate Dashboard/1.0'}
-        geocode_resp = requests.get(geocode_url, params=geocode_params, headers=headers, timeout=10)
-        geocode_data = geocode_resp.json()
-
-        if not geocode_data:
-            return jsonify({
-                "entity_name": entity_name,
-                "address": full_address,
-                "error": "Geocoding failed",
-                "pop_city": "Unknown",
-                "distance": "N/A",
-                "coverage": "Unknown"
-            })
-
-        applicant_lat = float(geocode_data[0]['lat'])
-        applicant_lon = float(geocode_data[0]['lon'])
-
-        # BLUEBIRD PoPs (lat/lon from network map)
-        pop_data = {
-            "Chicago, IL": (41.8781, -87.6298),
-            "St. Louis, MO": (38.6270, -90.1994),
-            "Kansas City, MO": (39.0997, -94.5786),
-            "Tulsa, OK": (36.1539, -95.9928),
-            "Springfield, MO": (37.2089, -93.2923),
-            "Peoria, IL": (40.6936, -89.5890),
-            "Rockford, IL": (42.2711, -89.0939),
-            "Shreveport, LA": (32.5252, -93.7502)
-        }
-
-        # Haversine distance
-        def haversine(lat1, lon1, lat2, lon2):
-            R = 3958.8  # Earth radius in miles
-            dlat = radians(lat2 - lat1)
-            dlon = radians(lon2 - lon1)
-            a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
-            c = 2 * atan2(sqrt(a), sqrt(1-a))
-            return R * c
-
-        min_dist = float('inf')
-        nearest_pop = None
-        for city, (pop_lat, pop_lon) in pop_data.items():
-            dist = haversine(applicant_lat, applicant_lon, pop_lat, pop_lon)
-            if dist < min_dist:
-                min_dist = dist
-                nearest_pop = city
-
-        coverage = "Full fiber" if min_dist <= 5 else "Nearby" if min_dist <= 50 else "Extended reach"
+        dist_info = get_bluebird_distance(full_address)
 
         return jsonify({
             "entity_name": entity_name,
             "address": full_address,
-            "pop_city": nearest_pop,
-            "distance": f"{min_dist:.1f} miles",
-            "coverage": coverage
+            "pop_city": dist_info['pop_city'],
+            "distance": f"{dist_info['distance']:.1f} miles" if dist_info['distance'] != float('inf') else "N/A",
+            "coverage": dist_info['coverage']
         })
 
     except Exception as e:
