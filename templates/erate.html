@@ -3,9 +3,7 @@
 <head>
     <title>E-Rate Dashboard</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!-- FAVICON -->
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
-    <!-- GOOGLE FONTS -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
@@ -30,13 +28,6 @@
             line-height: 1.6;
             position: relative;
             min-height: 100vh;
-        }
-        /* LOADING STATES */
-        body.loading {
-            cursor: wait !important;
-        }
-        body.loading * {
-            cursor: wait !important;
         }
         .overlay {
             display: none;
@@ -267,35 +258,30 @@
         <div class="spinner"></div>
     </div>
 
-    <!-- APPLICANT DETAILS MODAL -->
+    <!-- DETAILS MODAL -->
     <div class="modal" id="detail-modal">
         <div class="modal-content">
             <div class="modal-header">
                 <div class="modal-title">470 Form Details</div>
                 <button class="modal-close" onclick="closeModal('detail')">×</button>
             </div>
-            <div class="modal-body" id="detail-body">
-                Loading...
-            </div>
+            <div class="modal-body" id="detail-body">Loading...</div>
         </div>
     </div>
 
-    <!-- BLUEBIRD FIBER MODAL -->
+    <!-- BLUEBIRD MODAL -->
     <div class="modal" id="bbmap-modal">
         <div class="modal-content">
             <div class="modal-header">
                 <div class="modal-title">Bluebird Fiber Distance</div>
                 <button class="modal-close" onclick="closeModal('bbmap')">×</button>
             </div>
-            <div class="modal-body" id="bbmap-body">
-                Loading...
-            </div>
+            <div class="modal-body" id="bbmap-body">Loading...</div>
         </div>
     </div>
 
     <div class="container">
         <h1>E-Rate Dashboard</h1>
-        <!-- FLASH MESSAGES -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -305,23 +291,15 @@
         {% endwith %}
         <div class="filters">
             <form method="get" style="display: contents;" id="filter-form">
-                <label>
-                    State:
-                    <input type="text" name="state" value="{{ filters.state|default('') }}" maxlength="2" placeholder="KS">
-                </label>
-                <label>
-                    Modified After:
-                    <input type="date" name="modified_after" value="{{ filters.modified_after|default('') }}">
-                </label>
+                <label>State: <input type="text" name="state" value="{{ filters.state|default('') }}" maxlength="2" placeholder="KS"></label>
+                <label>Modified After: <input type="date" name="modified_after" value="{{ filters.modified_after|default('') }}"></label>
                 <button type="submit" class="btn btn-primary">Filter</button>
                 <a href="{{ url_for('erate.dashboard') }}" class="btn btn-secondary">Reset</a>
             </form>
             <a href="{{ url_for('erate.extract_csv') }}" class="btn btn-warning">Extract CSV</a>
             <a href="{{ url_for('erate.import_interactive') }}" class="btn btn-success">Resume Import</a>
         </div>
-        <p class="summary">
-            <strong>Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</strong>
-        </p>
+        <p class="summary"><strong>Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</strong></p>
         <table>
             <thead>
                 <tr>
@@ -337,39 +315,22 @@
                 {% if table_data %}
                     {% for row in table_data %}
                     <tr>
-                        <td>
-                            <span class="app-number" onclick="showDetails('{{ row.app_number }}')">
-                                {{ row.app_number|default('—') }}
-                            </span>
-                        </td>
-                        <td>
-                            <span class="bbmap-link" onclick="checkBluebird('{{ row.app_number }}')">
-                                {{ row.entity_name|default('—') }}
-                            </span>
-                        </td>
+                        <td><span class="app-number" onclick="showDetails('{{ row.app_number }}')">{{ row.app_number|default('—') }}</span></td>
+                        <td><span class="bbmap-link" onclick="checkBluebird('{{ row.app_number }}')">{{ row.entity_name|default('—') }}</span></td>
                         <td>{{ row.state|default('—') }}</td>
                         <td>{{ row.funding_year|default('—') }}</td>
                         <td>{{ row.fcc_status|default('—') }}</td>
-                        <td class="modified">
-                            {{ row.last_modified_datetime|strftime('%m/%d/%Y') if row.last_modified_datetime else '—' }}
-                        </td>
+                        <td class="modified">{{ row.last_modified_datetime|strftime('%m/%d/%Y') if row.last_modified_datetime else '—' }}</td>
                     </tr>
                     {% endfor %}
                 {% else %}
-                <tr>
-                    <td colspan="6" style="text-align:center; color:#999; padding:30px;">
-                        No records found. Try adjusting filters or <a href="{{ url_for('erate.import_interactive') }}">import data</a>.
-                    </td>
-                </tr>
+                <tr><td colspan="6" style="text-align:center; color:#999; padding:30px;">No records found. Try adjusting filters or <a href="{{ url_for('erate.import_interactive') }}">import data</a>.</td></tr>
                 {% endif %}
             </tbody>
         </table>
         {% if has_more|default(false) %}
         <div class="pagination">
-            <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&offset={{ next_offset|default(0) }}"
-               class="load-more">
-                Load More (+)
-            </a>
+            <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&offset={{ next_offset|default(0) }}" class="load-more">Load More (+)</a>
         </div>
         {% endif %}
     </div>
@@ -378,23 +339,13 @@
         const form = document.getElementById('filter-form');
         const overlay = document.getElementById('loading');
         const body = document.body;
-
-        // MODALS
         const detailModal = document.getElementById('detail-modal');
         const bbmapModal = document.getElementById('bbmap-modal');
         const detailBody = document.getElementById('detail-body');
         const bbmapBody = document.getElementById('bbmap-body');
 
-        form.addEventListener('submit', () => {
-            body.classList.add('loading');
-            overlay.classList.add('show');
-        });
-
-        window.addEventListener('load', () => {
-            body.classList.remove('loading');
-            overlay.classList.remove('show');
-        });
-
+        form.addEventListener('submit', () => { body.classList.add('loading'); overlay.classList.add('show'); });
+        window.addEventListener('load', () => { body.classList.remove('loading'); overlay.classList.remove('show'); });
         document.querySelectorAll('a').forEach(link => {
             link.addEventListener('click', (e) => {
                 const href = link.getAttribute('href');
@@ -405,17 +356,14 @@
             });
         });
 
-        // APPLICANT DETAILS
         async function showDetails(appNumber) {
             body.classList.add('loading');
             overlay.classList.add('show');
             detailBody.innerHTML = 'Loading...';
             detailModal.classList.add('show');
-
             try {
-                const response = await fetch(`/erate/details/${appNumber}`);
-                const data = await response.json();
-
+                const resp = await fetch(`/erate/details/${appNumber}`);
+                const data = await resp.json();
                 detailBody.innerHTML = `
                     <strong>Form Nickname:</strong> ${data.form_nickname}<br>
                     <strong>Form PDF:</strong> ${data.form_pdf}<br>
@@ -426,34 +374,31 @@
                     <strong>Certified:</strong> ${data.certified_datetime} by ${data.certified_by}<br>
                     <strong>Last Modified:</strong> ${data.last_modified_datetime} by ${data.last_modified_by}
                 `;
-            } catch (err) {
-                detailBody.innerHTML = `<strong>Error:</strong> Could not fetch details.`;
+            } catch {
+                detailBody.innerHTML = '<strong>Error:</strong> Could not load details.';
             } finally {
                 body.classList.remove('loading');
                 overlay.classList.remove('show');
             }
         }
 
-        // BLUEBIRD FIBER CHECK
         async function checkBluebird(appNumber) {
             body.classList.add('loading');
             overlay.classList.add('show');
             bbmapBody.innerHTML = 'Searching Bluebird Fiber...';
             bbmapModal.classList.add('show');
-
             try {
-                const response = await fetch(`/erate/bbmap/${appNumber}`);
-                const data = await response.json();
-
+                const resp = await fetch(`/erate/bbmap/${appNumber}`);
+                const data = await resp.json();
                 bbmapBody.innerHTML = `
                     <strong>Applicant:</strong> ${data.entity_name || 'N/A'}<br>
                     <strong>Address:</strong> ${data.address || 'N/A'}<br>
-                    <strong>Nearest Bluebird PoP:</strong> ${data.pop_city || 'Unknown'}<br>
+                    <strong>Nearest PoP:</strong> ${data.pop_city || 'Unknown'}<br>
                     <strong>Distance:</strong> ${data.distance || 'N/A'}<br>
                     <strong>Coverage:</strong> ${data.coverage || 'Unknown'}
                 `;
-            } catch (err) {
-                bbmapBody.innerHTML = `<strong>Error:</strong> Could not fetch data.`;
+            } catch {
+                bbmapBody.innerHTML = '<strong>Error:</strong> Could not fetch data.';
             } finally {
                 body.classList.remove('loading');
                 overlay.classList.remove('show');
@@ -465,11 +410,8 @@
             if (type === 'bbmap') bbmapModal.classList.remove('show');
         }
 
-        // Close on outside click
-        [detailModal, bbmapModal].forEach(modal => {
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) modal.classList.remove('show');
-            });
+        [detailModal, bbmapModal].forEach(m => {
+            m.addEventListener('click', (e) => { if (e.target === m) m.classList.remove('show'); });
         });
     </script>
 </body>
