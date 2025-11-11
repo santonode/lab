@@ -1,4 +1,4 @@
-# erate.py — FINAL VERSION (PDF LINKS + DUAL POPUPS + BLUEBIRD + NO SORT)
+# erate.py — FINAL (ALL FIELDS IN /details + MODAL TABS + PDF + BLUEBIRD)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -110,15 +110,38 @@ def parse_datetime(value):
             continue
     return None
 
+# === DEBUG: Track CSV headers and sample PDF paths ===
+CSV_HEADERS_LOGGED = False
+
 def _row_to_tuple(row):
-    # CORRECT PDF URL: http://publicdata.usac.org/
-    form_pdf_raw = row.get('Form PDF', '').strip()
+    global CSV_HEADERS_LOGGED
+    if not CSV_HEADERS_LOGGED:
+        log("CSV HEADERS: %s", list(row.keys()))
+        CSV_HEADERS_LOGGED = True
+
+    # === PDF COLUMN: Try multiple possible names ===
+    form_pdf_raw = (
+        row.get('Form PDF', '') or
+        row.get('Form PDF Link', '') or
+        row.get('PDF', '') or
+        row.get('Form PDF Path', '') or
+        ''
+    ).strip()
+
+    # DEBUG: Log first 5 PDF paths
+    if not hasattr(_row_to_tuple, "debug_count"):
+        _row_to_tuple.debug_count = 0
+    if _row_to_tuple.debug_count < 5:
+        log("DEBUG PDF RAW [%s]: %s", row.get('Application Number', ''), form_pdf_raw)
+        _row_to_tuple.debug_count += 1
+
+    # === BUILD FULL URL ===
     form_pdf = f"http://publicdata.usac.org/{form_pdf_raw.lstrip('/')}" if form_pdf_raw else ''
 
     return (
         truncate(row.get('Application Number', '')),
         truncate(row.get('Form Nickname', '')),
-        form_pdf,  # CORRECT DOMAIN
+        form_pdf,
         truncate(row.get('Funding Year', '')),
         truncate(row.get('FCC Form 470 Status', '')),
         parse_datetime(row.get('Allowable Contract Date')),
@@ -461,46 +484,93 @@ def bbmap(app_number):
     finally:
         conn.close()
 
-# === APPLICANT DETAILS API (WITH Markup) ===
+# === APPLICANT DETAILS API — NOW RETURNS ALL FIELDS ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT 
-                    form_nickname, form_pdf, funding_year, fcc_status,
-                    allowable_contract_date, created_datetime, created_by,
-                    certified_datetime, certified_by, last_modified_datetime, last_modified_by
-                FROM erate WHERE app_number = %s
+                SELECT * FROM erate WHERE app_number = %s
             """, (app_number,))
             row = cur.fetchone()
-        
-        if not row:
-            return jsonify({"error": "Applicant not found"}), 404
+            if not row:
+                return jsonify({"error": "Applicant not found"}), 404
 
-        (
-            form_nickname, form_pdf, funding_year, fcc_status,
-            allowable_contract_date, created_datetime, created_by,
-            certified_datetime, certified_by, last_modified_datetime, last_modified_by
-        ) = row
+            # Map all columns to dict
+            data = {
+                "form_nickname": row[1],
+                "form_pdf": Markup(f'<a href="{row[2]}" target="_blank">View PDF</a>') if row[2] else '—',
+                "funding_year": row[3],
+                "fcc_status": row[4],
+                "allowable_contract_date": row[5].strftime('%m/%d/%Y') if row[5] else '—',
+                "created_datetime": row[6].strftime('%m/%d/%Y %I:%M %p') if row[6] else '—',
+                "created_by": row[7],
+                "certified_datetime": row[8].strftime('%m/%d/%Y %I:%M %p') if row[8] else '—',
+                "certified_by": row[9],
+                "last_modified_datetime": row[10].strftime('%m/%d/%Y %I:%M %p') if row[10] else '—',
+                "last_modified_by": row[11],
+                "ben": row[12],
+                "entity_name": row[13],
+                "org_status": row[14],
+                "org_type": row[15],
+                "applicant_type": row[16],
+                "website": row[17],
+                "latitude": row[18],
+                "longitude": row[19],
+                "fcc_reg_num": row[20],
+                "address1": row[21],
+                "address2": row[22],
+                "city": row[23],
+                "state": row[24],
+                "zip_code": row[25],
+                "zip_ext": row[26],
+                "email": row[27],
+                "phone": row[28],
+                "phone_ext": row[29],
+                "num_eligible": row[30],
+                "contact_name": row[31],
+                "contact_address1": row[32],
+                "contact_address2": row[33],
+                "contact_city": row[34],
+                "contact_state": row[35],
+                "contact_zip": row[36],
+                "contact_zip_ext": row[37],
+                "contact_phone": row[38],
+                "contact_phone_ext": row[39],
+                "contact_email": row[40],
+                "tech_name": row[41],
+                "tech_title": row[42],
+                "tech_phone": row[43],
+                "tech_phone_ext": row[44],
+                "tech_email": row[45],
+                "auth_name": row[46],
+                "auth_address": row[47],
+                "auth_city": row[48],
+                "auth_state": row[49],
+                "auth_zip": row[50],
+                "auth_zip_ext": row[51],
+                "auth_phone": row[52],
+                "auth_phone_ext": row[53],
+                "auth_email": row[54],
+                "auth_title": row[55],
+                "auth_employer": row[56],
+                "cat1_desc": row[57],
+                "cat2_desc": row[58],
+                "installment_type": row[59],
+                "installment_min": row[60],
+                "installment_max": row[61],
+                "rfp_id": row[62],
+                "state_restrictions": row[63],
+                "restriction_desc": row[64],
+                "statewide": row[65],
+                "all_public": row[66],
+                "all_nonpublic": row[67],
+                "all_libraries": row[68],
+                "form_version": row[69]
+            }
 
-        def fmt(dt):
-            return dt.strftime('%m/%d/%Y %I:%M %p') if dt else '—'
-
-        return jsonify({
-            "form_nickname": form_nickname or '—',
-            "form_pdf": Markup(f'<a href="{form_pdf}" target="_blank">View PDF</a>') if form_pdf else '—',
-            "funding_year": funding_year or '—',
-            "fcc_status": fcc_status or '—',
-            "allowable_contract_date": fmt(allowable_contract_date),
-            "created_datetime": fmt(created_datetime),
-            "created_by": created_by or '—',
-            "certified_datetime": fmt(certified_datetime),
-            "certified_by": certified_by or '—',
-            "last_modified_datetime": fmt(last_modified_datetime),
-            "last_modified_by": last_modified_by or '—'
-        })
+            return jsonify(data)
 
     except Exception as e:
         log("Details API error: %s", e)
