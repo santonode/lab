@@ -1,4 +1,4 @@
-# erate.py — FINAL VERSION (FULL IMPORT + VERIFICATION + NO EARLY STOP)
+# erate.py — FINAL VERSION (SKIPS CSV DUPLICATES + VERIFIED INSERTS)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app
@@ -358,7 +358,7 @@ def import_interactive():
 
     return render_template('erate_import.html', progress=progress, is_importing=is_importing)
 
-# === BULK IMPORT — FULL IMPORT + VERIFICATION + NO EARLY STOP ===
+# === BULK IMPORT — SKIPS CSV DUPLICATES + VERIFIED INSERTS ===
 def _import_all_background(app):
     time.sleep(1)
     try:
@@ -382,6 +382,7 @@ def _import_all_background(app):
             log("Skipped to record %s", start_index)
 
             batch = []
+            seen_in_csv = set()  # TRACK DUPLICATES IN CSV
             imported = 0
             last_heartbeat = time.time()
 
@@ -393,11 +394,17 @@ def _import_all_background(app):
                 app_number = row.get('Application Number', '').strip()
                 if not app_number: continue
 
+                # SKIP IF ALREADY IN THIS CSV BATCH
+                if app_number in seen_in_csv:
+                    log("SKIPPED CSV DUPLICATE: %s", app_number)
+                    continue
+
                 batch.append(row)
+                seen_in_csv.add(app_number)
                 imported += 1
 
                 if len(batch) >= 1000:
-                    # DUPLICATE CHECK
+                    # DUPLICATE CHECK IN DB
                     cur.execute(
                         "SELECT app_number FROM erate WHERE app_number = ANY(%s)",
                         ([r['Application Number'] for r in batch],)
@@ -411,7 +418,6 @@ def _import_all_background(app):
                             cur.executemany(INSERT_SQL, [_row_to_tuple(r) for r in filtered_batch])
                             conn.commit()
                             log("COMMITTED BATCH OF %s", len(filtered_batch))
-                            # VERIFY
                             cur.execute("SELECT COUNT(*) FROM erate WHERE app_number = ANY(%s)",
                                         ([r['Application Number'] for r in filtered_batch],))
                             actual = cur.fetchone()[0]
@@ -427,6 +433,7 @@ def _import_all_background(app):
                         log("Progress: %s / %s", app.config['import_index'], total)
 
                     batch = []
+                    seen_in_csv = set()  # RESET FOR NEXT BATCH
 
             # FINAL BATCH
             if batch:
