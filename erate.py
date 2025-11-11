@@ -1,4 +1,4 @@
-# erate.py
+# erate.py — FINAL VERSION (NO SQLAlchemy, PURE psycopg)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app
@@ -63,7 +63,7 @@ try:
 except Exception as e:
     log("DB connection test: FAILED → %s", e)
 
-# === SQL INSERT ===
+# === SQL INSERT (70 columns) ===
 INSERT_SQL = '''
     INSERT INTO erate (
         app_number, form_nickname, form_pdf, funding_year, fcc_status,
@@ -89,7 +89,10 @@ INSERT_SQL = '''
     )
 '''
 
-# === TIME PARSING ===
+# === TRUNCATE + PARSE ===
+def truncate(value, length=100):
+    return str(value)[:length] if value else ''
+
 def parse_datetime(value):
     if not value or not str(value).strip():
         return None
@@ -108,76 +111,76 @@ def parse_datetime(value):
 
 def _row_to_tuple(row):
     return (
-        row.get('Application Number', '').strip(),
-        row.get('Form Nickname', ''),
-        row.get('Form PDF', ''),
-        row.get('Funding Year', ''),
-        row.get('FCC Form 470 Status', ''),
+        truncate(row.get('Application Number', '')),
+        truncate(row.get('Form Nickname', '')),
+        truncate(row.get('Form PDF', '')),
+        truncate(row.get('Funding Year', '')),
+        truncate(row.get('FCC Form 470 Status', '')),
         parse_datetime(row.get('Allowable Contract Date')),
         parse_datetime(row.get('Created Date/Time')),
-        row.get('Created By', ''),
+        truncate(row.get('Created By', '')),
         parse_datetime(row.get('Certified Date/Time')),
-        row.get('Certified By', ''),
+        truncate(row.get('Certified By', '')),
         parse_datetime(row.get('Last Modified Date/Time')),
-        row.get('Last Modified By', ''),
-        row.get('Billed Entity Number', ''),
-        row.get('Billed Entity Name', ''),
-        row.get('Organization Status', ''),
-        row.get('Organization Type', ''),
-        row.get('Applicant Type', ''),
-        row.get('Website URL', ''),
+        truncate(row.get('Last Modified By', '')),
+        truncate(row.get('Billed Entity Number', '')),
+        truncate(row.get('Billed Entity Name', '')),
+        truncate(row.get('Organization Status', '')),
+        truncate(row.get('Organization Type', '')),
+        truncate(row.get('Applicant Type', '')),
+        truncate(row.get('Website URL', '')),
         float(row.get('Latitude') or 0),
         float(row.get('Longitude') or 0),
-        row.get('Billed Entity FCC Registration Number', ''),
-        row.get('Billed Entity Address 1', ''),
-        row.get('Billed Entity Address 2', ''),
-        row.get('Billed Entity City', ''),
-        row.get('Billed Entity State', ''),
-        row.get('Billed Entity Zip Code', ''),
-        row.get('Billed Entity Zip Code Ext', ''),
-        row.get('Billed Entity Email', ''),
-        row.get('Billed Entity Phone', ''),
-        row.get('Billed Entity Phone Ext', ''),
+        truncate(row.get('Billed Entity FCC Registration Number', '')),
+        truncate(row.get('Billed Entity Address 1', '')),
+        truncate(row.get('Billed Entity Address 2', '')),
+        truncate(row.get('Billed Entity City', '')),
+        truncate(row.get('Billed Entity State', '')),
+        truncate(row.get('Billed Entity Zip Code', '')),
+        truncate(row.get('Billed Entity Zip Code Ext', '')),
+        truncate(row.get('Billed Entity Email', '')),
+        truncate(row.get('Billed Entity Phone', '')),
+        truncate(row.get('Billed Entity Phone Ext', '')),
         int(row.get('Number of Eligible Entities') or 0),
-        row.get('Contact Name', ''),
-        row.get('Contact Address 1', ''),
-        row.get('Contact Address 2', ''),
-        row.get('Contact City', ''),
-        row.get('Contact State', ''),
-        row.get('Contact Zip', ''),
-        row.get('Contact Zip Ext', ''),
-        row.get('Contact Phone', ''),
-        row.get('Contact Phone Ext', ''),
-        row.get('Contact Email', ''),
-        row.get('Technical Contact Name', ''),
-        row.get('Technical Contact Title', ''),
-        row.get('Technical Contact Phone', ''),
-        row.get('Technical Contact Phone Ext', ''),
-        row.get('Technical Contact Email', ''),
-        row.get('Authorized Person Name', ''),
-        row.get('Authorized Person Address', ''),
-        row.get('Authorized Person City', ''),
-        row.get('Authorized Person State', ''),
-        row.get('Authorized Person Zip', ''),
-        row.get('Authorized Person Zip Ext', ''),
-        row.get('Authorized Person Phone Number', ''),
-        row.get('Authorized Person Phone Number Ext', ''),
-        row.get('Authorized Person Email', ''),
-        row.get('Authorized Person Title', ''),
-        row.get('Authorized Person Employer', ''),
-        row.get('Category One Description', ''),
-        row.get('Category Two Description', ''),
-        row.get('Installment Type', ''),
+        truncate(row.get('Contact Name', '')),
+        truncate(row.get('Contact Address 1', '')),
+        truncate(row.get('Contact Address 2', '')),
+        truncate(row.get('Contact City', '')),
+        truncate(row.get('Contact State', '')),
+        truncate(row.get('Contact Zip', '')),
+        truncate(row.get('Contact Zip Ext', '')),
+        truncate(row.get('Contact Phone', '')),
+        truncate(row.get('Contact Phone Ext', '')),
+        truncate(row.get('Contact Email', '')),
+        truncate(row.get('Technical Contact Name', '')),
+        truncate(row.get('Technical Contact Title', '')),
+        truncate(row.get('Technical Contact Phone', '')),
+        truncate(row.get('Technical Contact Phone Ext', '')),
+        truncate(row.get('Technical Contact Email', '')),
+        truncate(row.get('Authorized Person Name', '')),
+        truncate(row.get('Authorized Person Address', '')),
+        truncate(row.get('Authorized Person City', '')),
+        truncate(row.get('Authorized Person State', '')),
+        truncate(row.get('Authorized Person Zip', '')),
+        truncate(row.get('Authorized Person Zip Ext', '')),
+        truncate(row.get('Authorized Person Phone Number', '')),
+        truncate(row.get('Authorized Person Phone Number Ext', '')),
+        truncate(row.get('Authorized Person Email', '')),
+        truncate(row.get('Authorized Person Title', '')),
+        truncate(row.get('Authorized Person Employer', '')),
+        truncate(row.get('Category One Description', '')),
+        truncate(row.get('Category Two Description', '')),
+        truncate(row.get('Installment Type', '')),
         int(row.get('Installment Min Range Years') or 0),
         int(row.get('Installment Max Range Years') or 0),
-        row.get('Request for Proposal Identifier', ''),
-        row.get('State or Local Restrictions', ''),
-        row.get('State or Local Restrictions Description', ''),
-        row.get('Statewide State', ''),
-        row.get('All Public Schools Districts', ''),
-        row.get('All Non-Public schools', ''),
-        row.get('All Libraries', ''),
-        row.get('Form Version', '')
+        truncate(row.get('Request for Proposal Identifier', '')),
+        truncate(row.get('State or Local Restrictions', '')),
+        truncate(row.get('State or Local Restrictions Description', '')),
+        truncate(row.get('Statewide State', '')),
+        truncate(row.get('All Public Schools Districts', '')),
+        truncate(row.get('All Non-Public schools', '')),
+        truncate(row.get('All Libraries', '')),
+        truncate(row.get('Form Version', ''))
     )
 
 # === DASHBOARD ===
@@ -349,7 +352,7 @@ def import_interactive():
 
     return render_template('erate_import.html', progress=progress, is_importing=is_importing)
 
-# === BULK IMPORT — BATCH DUPLICATE CHECK + BATCH INSERT, 1000x FASTER ===
+# === BULK IMPORT — BATCH DUPLICATE CHECK + BATCH INSERT + TRUNCATE TO 100 CHARS ===
 def _import_all_background(app):
     time.sleep(1)
     batch_size = 1000
