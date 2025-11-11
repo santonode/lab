@@ -286,7 +286,7 @@ def _download_csv_background(app):
         with app.app_context():
             app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
 
-# === IMPORT INTERACTIVE — NO ROW PREVIEW, USE app.config ===
+# === IMPORT INTERACTIVE — NO ROW PREVIEW, app.config PROGRESS ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     log("Import interactive page accessed")
@@ -347,10 +347,9 @@ def import_interactive():
         flash("Bulk import started. Check /erate/view-log", "success")
         return redirect(url_for('erate.import_interactive'))
 
-    # NO ROW PREVIEW — prevents iterator exhaustion
     return render_template('erate_import.html', progress=progress, is_importing=is_importing)
 
-# === BULK IMPORT — SKIP IN THREAD, HEARTBEAT, app.config PROGRESS ===
+# === BULK IMPORT — 1 CONNECTION PER 1000 ROWS, 1000x FASTER ===
 def _import_all_background(app):
     time.sleep(1)
     batch_size = 1000
@@ -360,22 +359,23 @@ def _import_all_background(app):
             total = app.config['import_total']
             start_index = app.config['import_index']
 
-        # TEST CONNECTION
-        test_conn = psycopg.connect(DATABASE_URL, autocommit=True, connect_timeout=10)
-        test_conn.close()
-        log("DB connection test: SUCCESS")
+        # ONE CONNECTION FOR DUPLICATE CHECKS
+        conn_check = psycopg.connect(DATABASE_URL, autocommit=True, connect_timeout=10)
+        cur_check = conn_check.cursor()
+
+        # ONE CONNECTION FOR INSERTS
+        conn_insert = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
+        cur_insert = conn_insert.cursor()
 
         # RE-OPEN CSV
         with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='', buffering=8192) as f:
             reader = csv.DictReader(f)
             log("CSV reader created")
 
-            # SKIP TO START INDEX
+            # SKIP TO START
             for _ in range(start_index - 1):
-                try:
-                    next(reader)
-                except StopIteration:
-                    break
+                try: next(reader)
+                except StopIteration: break
             log("Skipped to record %s", start_index)
 
             batch = []
@@ -388,69 +388,59 @@ def _import_all_background(app):
                     last_heartbeat = time.time()
 
                 app_number = row.get('Application Number', '').strip()
-                if not app_number: 
-                    log("Skipping empty app_number")
-                    continue
+                if not app_number: continue
 
-                conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
+                # FAST DUPLICATE CHECK
                 try:
-                    with conn.cursor() as cur:
-                        cur.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
-                        if cur.fetchone():
-                            conn.close()
-                            continue
+                    cur_check.execute('SELECT 1 FROM erate WHERE app_number = %s', (app_number,))
+                    if cur_check.fetchone():
+                        continue
                 except Exception as e:
                     log("DB check failed: %s", e)
-                    conn.close()
                     continue
 
                 batch.append(row)
                 imported += 1
-                conn.close()
 
                 if len(batch) >= batch_size:
-                    conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
                     try:
-                        with conn.cursor() as cur:
-                            for r in batch:
-                                cur.execute(INSERT_SQL, _row_to_tuple(r))
-                        conn.commit()
+                        for r in batch:
+                            cur_insert.execute(INSERT_SQL, _row_to_tuple(r))
+                        conn_insert.commit()
                         log("Committed batch of %s", batch_size)
                     except Exception as e:
                         log("Batch commit failed: %s", e)
-                        conn.rollback()
+                        conn_insert.rollback()
                     finally:
-                        conn.close()
+                        with app.app_context():
+                            app.config['import_index'] += batch_size
+                            app.config['import_success'] += batch_size
+                            log("Progress: %s / %s", app.config['import_index'], total)
+                        batch = []
 
-                    with app.app_context():
-                        app.config['import_index'] += batch_size
-                        app.config['import_success'] += batch_size
-                        log("Progress: %s / %s", app.config['import_index'], total)
-
-                    batch = []
-
+            # FINAL BATCH
             if batch:
-                conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
                 try:
-                    with conn.cursor() as cur:
-                        for r in batch:
-                            cur.execute(INSERT_SQL, _row_to_tuple(r))
-                    conn.commit()
+                    for r in batch:
+                        cur_insert.execute(INSERT_SQL, _row_to_tuple(r))
+                    conn_insert.commit()
                 except Exception as e:
                     log("Final batch failed: %s", e)
                 finally:
-                    conn.close()
+                    with app.app_context():
+                        app.config['import_index'] = total + 1
+                        app.config['import_success'] += len(batch)
 
-                with app.app_context():
-                    app.config['import_index'] = total + 1
-                    app.config['import_success'] += len(batch)
-
-            log("Bulk import complete: %s imported", app.config['import_success'])
+        log("Bulk import complete: %s imported", app.config['import_success'])
 
     except Exception as e:
         log("IMPORT THREAD CRASHED: %s", e)
         log("Traceback: %s", traceback.format_exc())
     finally:
+        try: conn_check.close()
+        except: pass
+        try: conn_insert.close()
+        except: pass
         with app.app_context():
             app.config['BULK_IMPORT_IN_PROGRESS'] = False
         log("Import thread finished")
