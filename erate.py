@@ -1,4 +1,4 @@
-# erate.py — FINAL (strftime fix + full modal data + PDF + skip CSV duplicates)
+# erate.py — FINAL (ALL FIXES: strftime, full text, PDF, modal tabs)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -483,7 +483,7 @@ def bbmap(app_number):
     finally:
         conn.close()
 
-# === APPLICANT DETAILS API — SAFE STRFTIME + FULL DATA ===
+# === APPLICANT DETAILS API — FULL DATA + SAFE DATES ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -494,45 +494,44 @@ def details(app_number):
             if not row:
                 return jsonify({"error": "Applicant not found"}), 404
 
-            # Safe formatting
-            def safe_date(dt):
-                return dt.strftime('%m/%d/%Y') if dt else '—'
+            def fmt_date(dt):
+                return dt.strftime('%m/%d/%Y') if dt else ''
 
-            def safe_datetime(dt):
-                return dt.strftime('%m/%d/%Y %I:%M %p') if dt else '—'
+            def fmt_datetime(dt):
+                return dt.strftime('%m/%d/%Y %I:%M %p') if dt else ''
 
             data = {
-                "form_nickname": row[1] or '—',
-                "form_pdf": Markup(f'<a href="{row[2]}" target="_blank">View PDF</a>') if row[2] else '—',
-                "funding_year": row[3] or '—',
-                "fcc_status": row[4] or '—',
-                "allowable_contract_date": safe_date(row[5]),
-                "created_datetime": safe_datetime(row[6]),
-                "created_by": row[7] or '—',
-                "certified_datetime": safe_datetime(row[8]),
-                "certified_by": row[9] or '—',
-                "last_modified_datetime": safe_datetime(row[10]),
-                "last_modified_by": row[11] or '—',
-                "ben": row[12] or '—',
-                "entity_name": row[13] or '—',
-                "org_status": row[14] or '—',
-                "org_type": row[15] or '—',
-                "applicant_type": row[16] or '—',
-                "website": row[17] or '—',
+                "form_nickname": row[1] or '',
+                "form_pdf": Markup(f'<a href="{row[2]}" target="_blank">View PDF</a>') if row[2] else '',
+                "funding_year": row[3] or '',
+                "fcc_status": row[4] or '',
+                "allowable_contract_date": fmt_date(row[5]),
+                "created_datetime": fmt_datetime(row[6]),
+                "created_by": row[7] or '',
+                "certified_datetime": fmt_datetime(row[8]),
+                "certified_by": row[9] or '',
+                "last_modified_datetime": fmt_datetime(row[10]),
+                "last_modified_by": row[11] or '',
+                "ben": row[12] or '',
+                "entity_name": row[13] or '',
+                "org_status": row[14] or '',
+                "org_type": row[15] or '',
+                "applicant_type": row[16] or '',
+                "website": row[17] or '',
                 "latitude": row[18],
                 "longitude": row[19],
-                "fcc_reg_num": row[20] or '—',
+                "fcc_reg_num": row[20] or '',
                 "address1": row[21] or '',
                 "address2": row[22] or '',
                 "city": row[23] or '',
                 "state": row[24] or '',
                 "zip_code": row[25] or '',
                 "zip_ext": row[26] or '',
-                "email": row[27] or '—',
+                "email": row[27] or '',
                 "phone": row[28] or '',
                 "phone_ext": row[29] or '',
-                "num_eligible": row[30],
-                "contact_name": row[31] or '—',
+                "num_eligible": row[30] if row[30] is not None else 0,
+                "contact_name": row[31] or '',
                 "contact_address1": row[32] or '',
                 "contact_address2": row[33] or '',
                 "contact_city": row[34] or '',
@@ -541,36 +540,36 @@ def details(app_number):
                 "contact_zip_ext": row[37] or '',
                 "contact_phone": row[38] or '',
                 "contact_phone_ext": row[39] or '',
-                "contact_email": row[40] or '—',
-                "tech_name": row[41] or '—',
-                "tech_title": row[42] or '—',
+                "contact_email": row[40] or '',
+                "tech_name": row[41] or '',
+                "tech_title": row[42] or '',
                 "tech_phone": row[43] or '',
                 "tech_phone_ext": row[44] or '',
-                "tech_email": row[45] or '—',
-                "auth_name": row[46] or '—',
-                "auth_address": row[47] or '—',
+                "tech_email": row[45] or '',
+                "auth_name": row[46] or '',
+                "auth_address": row[47] or '',
                 "auth_city": row[48] or '',
                 "auth_state": row[49] or '',
                 "auth_zip": row[50] or '',
                 "auth_zip_ext": row[51] or '',
                 "auth_phone": row[52] or '',
                 "auth_phone_ext": row[53] or '',
-                "auth_email": row[54] or '—',
-                "auth_title": row[55] or '—',
-                "auth_employer": row[56] or '—',
-                "cat1_desc": row[57] or '—',
-                "cat2_desc": row[58] or '—',
-                "installment_type": row[59] or '—',
-                "installment_min": row[60] or 0,
-                "installment_max": row[61] or 0,
-                "rfp_id": row[62] or '—',
-                "state_restrictions": row[63] or '—',
-                "restriction_desc": row[64] or '—',
-                "statewide": row[65] or '—',
-                "all_public": row[66] or '—',
-                "all_nonpublic": row[67] or '—',
-                "all_libraries": row[68] or '—',
-                "form_version": row[69] or '—'
+                "auth_email": row[54] or '',
+                "auth_title": row[55] or '',
+                "auth_employer": row[56] or '',
+                "cat1_desc": row[57] or '',
+                "cat2_desc": row[58] or '',
+                "installment_type": row[59] or '',
+                "installment_min": row[60] if row[60] is not None else 0,
+                "installment_max": row[61] if row[61] is not None else 0,
+                "rfp_id": row[62] or '',
+                "state_restrictions": row[63] or '',
+                "restriction_desc": row[64] or '',
+                "statewide": row[65] or '',
+                "all_public": row[66] or '',
+                "all_nonpublic": row[67] or '',
+                "all_libraries": row[68] or '',
+                "form_version": row[69] or ''
             }
 
             return jsonify(data)
@@ -682,7 +681,7 @@ def import_interactive():
 
     return render_template('erate_import.html', progress=progress, is_importing=is_importing)
 
-# === BULK IMPORT — SKIP CSV DUPLICATES (as requested) ===
+# === BULK IMPORT — SKIP CSV DUPLICATES ===
 def _import_all_background(app):
     time.sleep(1)
     try:
