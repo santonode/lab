@@ -1,4 +1,4 @@
-# erate.py — FINAL (CORS/CORB FIXED + SKIP id + PDF FIX + DEBUG + EXACT models.py ORDER)
+# erate.py — FINAL (SYNTAX FIXED + CORS/CORB + ALL FIELDS CORRECT)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -222,7 +222,7 @@ pop_data = {
     "Albany, MO": (40.251695, -94.332911),
     "Alhambra, IL": (38.888443, -89.731215),
     "Alma, MO": (39.094677, -93.546614),
-    "Aur.orgAurora, IL": (41.797086, -88.244751),
+    "Aurora, IL": (41.797086, -88.244751),
     "Auxvasse, MO": (39.017858, -91.898057),
     "Branson, MO": (36.642988, -93.219762),
     "Baldwin, IL": (38.185584, -89.844811),
@@ -321,7 +321,7 @@ pop_data = {
     "Peculiar, MO": (38.718657, -94.462079),
     "Peoria, IL": (40.692106, -89.5909),
     "Platte City, MO": (39.418636, -94.76626),
-    "Pilot Grove, MO": (38.874257, Refresh-92.910989),
+    "Pilot Grove, MO": (38.874257, -92.910989),
     "Pulaski, IL": (37.20226, -89.21105),
     "Princeton, MO": (40.397807, -93.584988),
     "Quincy, IL": (39.938443, -91.409804),
@@ -605,7 +605,7 @@ def extract_csv():
         return redirect(url_for('erate.dashboard'))
     if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 500_000_000:
         flash("Large CSV exists. Delete to re-download.", "warning")
-        return redirect(url_for('erate.dashboard')
+        return redirect(url_for('erate.dashboard'))
 
     current_app.config['CSV_DOWNLOAD_IN_PROGRESS'] = True
     thread = threading.Thread(target=_download_csv_background, args=(current_app._get_current_object(),))
@@ -613,7 +613,7 @@ def extract_csv():
     thread.start()
     flash("CSV download started. Check in 2-5 min.", "info")
     return redirect(url_for('erate.dashboard'))
-    
+
 def _download_csv_background(app):
     time.sleep(1)
     try:
