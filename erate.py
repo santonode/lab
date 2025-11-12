@@ -1,4 +1,4 @@
-# erate.py — FINAL (NO parse_datetime on text + EXACT models.py ORDER + FULL DATA)
+# erate.py — FINAL (CSV-SAFE + DEBUG + EXACT models.py ORDER + FULL DATA)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -117,14 +117,20 @@ def parse_datetime(value):
             continue
     return None  # Silent fail
 
-# === DEBUG: Track CSV headers and sample PDF paths ===
+# === DEBUG: Track CSV headers and sample rows ===
 CSV_HEADERS_LOGGED = False
+ROW_DEBUG_COUNT = 0
 
 def _row_to_tuple(row):
-    global CSV_HEADERS_LOGGED
+    global CSV_HEADERS_LOGGED, ROW_DEBUG_COUNT
     if not CSV_HEADERS_LOGGED:
         log("CSV HEADERS: %s", list(row.keys()))
         CSV_HEADERS_LOGGED = True
+
+    # === DEBUG: Log first 3 rows fully ===
+    if ROW_DEBUG_COUNT < 3:
+        log("DEBUG ROW %s: %s", ROW_DEBUG_COUNT + 1, dict(row))
+        ROW_DEBUG_COUNT += 1
 
     # === PDF: CORRECT DOMAIN + NO DUPLICATE ===
     form_pdf_raw = (
@@ -152,11 +158,11 @@ def _row_to_tuple(row):
         row.get('FCC Form 470 Status', ''),                    # fcc_status
         parse_datetime(row.get('Allowable Contract Date')),    # allowable_contract_date
         parse_datetime(row.get('Created Date/Time')),          # created_datetime
-        row.get('Created By', ''),                             # created_by — TEXT
+        row.get('Created By', ''),                             # created_by
         parse_datetime(row.get('Certified Date/Time')),        # certified_datetime
-        row.get('Certified By', ''),                           # certified_by — TEXT
+        row.get('Certified By', ''),                           # certified_by
         parse_datetime(row.get('Last Modified Date/Time')),    # last_modified_datetime
-        row.get('Last Modified By', ''),                       # last_modified_by — TEXT
+        row.get('Last Modified By', ''),                       # last_modified_by
 
         # === BILLED ENTITY ===
         row.get('Billed Entity Number', ''),                   # ben
@@ -502,7 +508,7 @@ def bbmap(app_number):
     finally:
         conn.close()
 
-# === APPLICANT DETAILS API — FULL DATA + SAFE DATES ===
+# === APPLICANT DETAILS API — FULL DATA + SAFE DATES + DEBUG ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -512,6 +518,9 @@ def details(app_number):
             row = cur.fetchone()
             if not row:
                 return jsonify({"error": "Applicant not found"}), 404
+
+            # === DEBUG: Log row values ===
+            log("DETAILS ROW for %s: %s", app_number, row[:10])  # First 10 fields
 
             def fmt_date(dt):
                 if isinstance(dt, datetime):
@@ -681,7 +690,7 @@ def import_interactive():
 
     if is_importing or progress['index'] > progress['total']:
         log("Import complete page shown")
-        return render_template('erate_import_complete.html', progress=progress)
+        return render_template('erate participantes_complete.html', progress=progress)
 
     if request.method == 'POST' and request.form.get('action') == 'import_all':
         if is_importing:
@@ -704,7 +713,7 @@ def import_interactive():
 
     return render_template('erate_import.html', progress=progress, is_importing=is_importing)
 
-# === BULK IMPORT — SKIP CSV DUPLICATES ===
+# === BULK IMPORT — CSV-SAFE + DEBUG ===
 def _import_all_background(app):
     time.sleep(1)
     try:
@@ -716,9 +725,10 @@ def _import_all_background(app):
         conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
         cur = conn.cursor()
 
-        with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='', buffering=8192) as f:
-            reader = csv.DictReader(f)
-            log("CSV reader created")
+        # === CSV-SAFE: Use excel dialect ===
+        with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
+            reader = csv.DictReader(f, dialect='excel')
+            log("CSV reader created with excel dialect")
 
             for _ in range(start_index - 1):
                 try: next(reader)
@@ -771,7 +781,6 @@ def _import_all_background(app):
                     with app.app_context():
                         app.config['import_index'] += len(batch)
                         app.config['import_success'] += len(filtered_batch)
-  # FIXED: was += len(batch)
                         log("Progress: %s / %s", app.config['import_index'], total)
 
                     batch = []
