@@ -1,4 +1,4 @@
-# erate.py — FINAL (Public dashboard + Admin-only CSV via login)
+# erate.py — FINAL (Public + Admin CSV + strftime fixed)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup, session
@@ -64,7 +64,7 @@ try:
 except Exception as e:
     log("DB connection test: FAILED to %s", e)
 
-# === ADMIN PASSWORD (FOR CSV DOWNLOAD ONLY) ===
+# === ADMIN PASSWORD ===
 ADMIN_PASS = os.getenv('ADMIN_PASS', 'defaultpass123')
 log("ADMIN_PASS set: %s", "YES" if ADMIN_PASS != 'defaultpass123' else "NO (use env)")
 
@@ -76,18 +76,17 @@ def admin_login():
         if password == ADMIN_PASS:
             session['admin_authenticated'] = True
             flash("Admin access granted. CSV download started in background.", "success")
-            # Start CSV download
             if not current_app.config.get('CSV_DOWNLOAD_IN_PROGRESS'):
                 current_app.config['CSV_DOWNLOAD_IN_PROGRESS'] = True
                 thread = threading.Thread(target=_download_csv_background, args=(current_app._get_current_object(),))
                 thread.daemon = True
                 thread.start()
-            return redirect(url_for('erate.dashboard'))  # Back to public dashboard
+            return redirect(url_for('erate.dashboard'))
         else:
             flash("Incorrect password.", "error")
     return render_template('admin_login.html')
 
-# === PUBLIC DASHBOARD (ANY USER) ===
+# === PUBLIC DASHBOARD (FIXED strftime) ===
 @erate_bp.route('/')
 def dashboard():
     log("Public dashboard accessed")
@@ -99,6 +98,7 @@ def dashboard():
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10, autocommit=True)
     try:
         with conn.cursor() as cur:
+            # === COUNT ===
             count_sql = 'SELECT COUNT(*) FROM erate'
             count_params = []
             where_clauses = []
@@ -113,6 +113,7 @@ def dashboard():
             cur.execute(count_sql, count_params)
             total_count = cur.fetchone()[0]
 
+            # === FETCH DATA ===
             sql = '''
                 SELECT app_number, entity_name, state, funding_year,
                        fcc_status, last_modified_datetime
@@ -127,14 +128,22 @@ def dashboard():
             cur.execute(sql, params)
             rows = cur.fetchall()
 
-            table_data = [
-                {
-                    'app_number': r[0], 'entity_name': r[1], 'state': r[2],
-                    'funding_year': r[3], 'fcc_status': r[4],
-                    'last_modified_datetime': r[5]
-                }
-                for r in rows
-            ]
+            table_data = []
+            for r in rows:
+                last_mod = r[5]
+                if isinstance(last_mod, str) and last_mod:
+                    try:
+                        last_mod = datetime.fromisoformat(last_mod.replace('Z', '+00:00'))
+                    except:
+                        last_mod = None
+                table_data.append({
+                    'app_number': r[0],
+                    'entity_name': r[1],
+                    'state': r[2],
+                    'funding_year': r[3],
+                    'fcc_status': r[4],
+                    'last_modified_datetime': last_mod
+                })
 
             has_more = len(table_data) > limit
             table_data = table_data[:limit]
@@ -151,7 +160,6 @@ def dashboard():
             has_more=has_more,
             next_offset=next_offset,
             cache_bust=int(time.time()),
-            # Show download link only if admin
             show_download_link=session.get('admin_authenticated', False)
         )
 
@@ -294,7 +302,7 @@ def details(app_number):
     finally:
         conn.close()
 
-# === CSV DOWNLOAD BACKGROUND (TRIGGERED BY ADMIN LOGIN) ===
+# === CSV DOWNLOAD BACKGROUND ===
 def _download_csv_background(app):
     time.sleep(1)
     try:
