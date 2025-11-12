@@ -1,4 +1,4 @@
-# erate.py — FINAL (CSV-SAFE + DEBUG + EXACT models.py ORDER + FULL DATA)
+# erate.py — FINAL (DEBUG LOGS + CSV-SAFE + EXACT models.py ORDER + FULL DATA)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -119,7 +119,7 @@ def parse_datetime(value):
 
 # === DEBUG: Track CSV headers and sample rows ===
 CSV_HEADERS_LOGGED = False
-ROW_DEBUG_COUNT = 0
+ROW_DEBUG_COUNT = 0  # Reset on import
 
 def _row_to_tuple(row):
     global CSV_HEADERS_LOGGED, ROW_DEBUG_COUNT
@@ -690,7 +690,7 @@ def import_interactive():
 
     if is_importing or progress['index'] > progress['total']:
         log("Import complete page shown")
-        return render_template('erate participantes_complete.html', progress=progress)
+        return render_template('erate_import_complete.html', progress=progress)
 
     if request.method == 'POST' and request.form.get('action') == 'import_all':
         if is_importing:
@@ -713,9 +713,12 @@ def import_interactive():
 
     return render_template('erate_import.html', progress=progress, is_importing=is_importing)
 
-# === BULK IMPORT — CSV-SAFE + DEBUG ===
+# === BULK IMPORT — CSV-SAFE + DEBUG + RESET COUNTERS ===
 def _import_all_background(app):
-    time.sleep(1)
+    global CSV_HEADERS_LOGGED, ROW_DEBUG_COUNT
+    CSV_HEADERS_LOGGED = False
+    ROW_DEBUG_COUNT = 0
+    log("=== IMPORT STARTED — DEBUG ENABLED ===")
     try:
         log("Bulk import started")
         with app.app_context():
@@ -815,7 +818,7 @@ def _import_all_background(app):
         log("Bulk import complete: %s imported", app.config['import_success'])
 
     except Exception as e:
-        log("IMPORT THREAD CRASHED: %s", e)
+        log("IMPORT thread CRASHED: %s", e)
         log("Traceback: %s", traceback.format_exc())
     finally:
         try: conn.close()
