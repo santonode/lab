@@ -1,4 +1,4 @@
-# erate.py — FINAL (ADMIN AUTH + PDF + CORS + ALL FIELDS + SESSION)
+# erate.py — FINAL (NO template_folder + admin_login.html in templates/)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup, session
@@ -42,8 +42,8 @@ CSV_FILE = os.path.join(os.path.dirname(__file__), "470schema.csv")
 log("CSV_FILE: %s", CSV_FILE)
 log("CSV exists: %s, size: %s", os.path.exists(CSV_FILE), os.path.getsize(CSV_FILE) if os.path.exists(CSV_FILE) else 0)
 
-# === BLUEPRINT ===
-erate_bp = Blueprint('erate', __name__, url_prefix='/erate', template_folder='templates')
+# === BLUEPRINT — NO template_folder (uses app's templates/) ===
+erate_bp = Blueprint('erate', __name__, url_prefix='/erate')
 
 # === DATABASE_URL ===
 DATABASE_URL = os.getenv('DATABASE_URL')
@@ -65,7 +65,7 @@ except Exception as e:
     log("DB connection test: FAILED to %s", e)
 
 # === ADMIN PASSWORD ===
-ADMIN_PASS = os.getenv('ADMIN_PASS', 'defaultpass123')  # SET IN ENV
+ADMIN_PASS = os.getenv('ADMIN_PASS', 'defaultpass123')
 log("ADMIN_PASS set: %s", "YES" if ADMIN_PASS != 'defaultpass123' else "NO (use env)")
 
 # === ADMIN LOGIN DECORATOR ===
@@ -90,7 +90,7 @@ def admin_login():
             return redirect(url_for('erate.admin'))
         else:
             flash("Incorrect password.", "error")
-    return render_template('admin_login.html')
+    return render_template('admin_login.html')  # ← In templates/
 
 # === ADMIN PANEL (MEMES + USERS) ===
 @erate_bp.route('/admin', methods=['GET', 'POST'])
@@ -770,7 +770,7 @@ def _import_all_background(app):
         conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
         cur = conn.cursor()
 
-        with open(CSV_FILE, 'r', encoding='-utf-8-sig', newline='') as f:
+        with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
             reader = csv.DictReader(f, dialect='excel')
             log("CSV reader created with excel dialect")
 
