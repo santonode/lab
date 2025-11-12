@@ -701,50 +701,42 @@ def import_interactive():
     return render_template('erate_import.html', progress=progress, is_importing=is_importing)
 
 # === BULK IMPORT — CSV-SAFE + DEBUG + RESET COUNTERS ===
+# === LINES 15–90: FIXED _import_all_background() ===
 def _import_all_background(app):
     global CSV_HEADERS_LOGGED, ROW_DEBUG_COUNT
     CSV_HEADERS_LOGGED = False
     ROW_DEBUG_COUNT = 0
+    seen_in_csv = set()  # ← GLOBAL, NEVER RESET
     log("=== IMPORT STARTED — DEBUG ENABLED ===")
     try:
         log("Bulk import started")
         with app.app_context():
             total = app.config['import_total']
             start_index = app.config['import_index']
-
         conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
         cur = conn.cursor()
-
         with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
             reader = csv.DictReader(f, dialect='excel')
             log("CSV reader created with excel dialect")
-
             for _ in range(start_index - 1):
                 try: next(reader)
                 except StopIteration: break
             log("Skipped to record %s", start_index)
-
             batch = []
-            seen_in_csv = set()
             imported = 0
             last_heartbeat = time.time()
-
             for row in reader:
                 if time.time() - last_heartbeat > 5:
                     log("HEARTBEAT: %s rows processed", imported)
                     last_heartbeat = time.time()
-
                 app_number = row.get('Application Number', '').strip()
                 if not app_number: continue
-
                 if app_number in seen_in_csv:
                     log("SKIPPED CSV DUPLICATE: %s", app_number)
                     continue
-
                 batch.append(row)
                 seen_in_csv.add(app_number)
                 imported += 1
-
                 if len(batch) >= 1000:
                     cur.execute(
                         "SELECT app_number FROM erate WHERE app_number = ANY(%s)",
@@ -752,7 +744,6 @@ def _import_all_background(app):
                     )
                     existing = {row[0] for row in cur.fetchall()}
                     filtered_batch = [r for r in batch if r['Application Number'] not in existing]
-
                     if filtered_batch:
                         try:
                             cur.executemany(INSERT_SQL, [_row_to_tuple(r) for r in filtered_batch])
@@ -766,14 +757,12 @@ def _import_all_background(app):
                             log("COMMIT FAILED: %s", e)
                             conn.rollback()
                             raise
-
                     with app.app_context():
                         app.config['import_index'] += len(batch)
                         app.config['import_success'] += len(filtered_batch)
                         log("Progress: %s / %s", app.config['import_index'], total)
-
                     batch = []
-                    seen_in_csv = set()
+                    # DO NOT RESET seen_in_csv HERE
 
             if batch:
                 cur.execute(
