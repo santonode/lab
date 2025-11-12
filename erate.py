@@ -1,4 +1,4 @@
-# erate.py — FINAL (PDF DOUBLE URL FIXED + CORS/CORB + ALL FIELDS CORRECT)
+# erate.py — FINAL (PDF DOUBLE URL FULLY FIXED + CORS/CORB + ALL FIELDS CORRECT)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -130,7 +130,7 @@ def _row_to_tuple(row):
         log("DEBUG ROW %s: %s", ROW_DEBUG_COUNT + 1, dict(row))
         ROW_DEBUG_COUNT += 1
 
-    # === PDF: REMOVE ALL DOUBLE DOMAINS ===
+    # === PDF: REMOVE ALL DUPLICATE DOMAINS ===
     form_pdf_raw = (
         row.get('Form PDF', '') or
         row.get('Form PDF Link', '') or
@@ -139,11 +139,13 @@ def _row_to_tuple(row):
         ''
     ).strip()
 
-    # Remove ALL duplicate domains
-    while 'http://publicdata.usac.org/http://' in form_pdf_raw:
-        form_pdf_raw = form_pdf_raw.replace('http://publicdata.usac.org/', '', 1)
+    # Remove ALL instances of the base domain
+    base = 'http://publicdata.usac.org/'
+    while form_pdf_raw.startswith(base):
+        form_pdf_raw = form_pdf_raw[len(base):]
 
-    form_pdf = f"http://publicdata.usac.org/{form_pdf_raw.lstrip('/')}" if form_pdf_raw else ''
+    # Final clean URL
+    form_pdf = f"http://publicdata.usac.org{form_pdf_raw}" if form_pdf_raw else ''
 
     return (
         row.get('Application Number', ''),
