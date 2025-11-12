@@ -1,7 +1,7 @@
-# erate.py — FINAL (PDF DOUBLE URL FULLY FIXED + CORS/CORB + ALL FIELDS CORRECT)
+# erate.py — FINAL (ADMIN AUTH + PDF + CORS + ALL FIELDS + SESSION)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
-    send_file, flash, current_app, jsonify, Markup
+    send_file, flash, current_app, jsonify, Markup, session
 )
 import csv
 import os
@@ -64,6 +64,82 @@ try:
 except Exception as e:
     log("DB connection test: FAILED to %s", e)
 
+# === ADMIN PASSWORD ===
+ADMIN_PASS = os.getenv('ADMIN_PASS', 'defaultpass123')  # SET IN ENV
+log("ADMIN_PASS set: %s", "YES" if ADMIN_PASS != 'defaultpass123' else "NO (use env)")
+
+# === ADMIN LOGIN DECORATOR ===
+def admin_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('admin_authenticated'):
+            flash("Admin password required.", "warning")
+            return redirect(url_for('erate.admin_login'))
+        return f(*args, **kwargs)
+    return decorated
+
+# === ADMIN LOGIN PAGE ===
+@erate_bp.route('/admin-login', methods=['GET', 'POST'])
+def admin_login():
+    if request.method == 'POST':
+        password = request.form.get('admin_pass', '')
+        if password == ADMIN_PASS:
+            session['admin_authenticated'] = True
+            flash("Admin access granted.", "success")
+            return redirect(url_for('erate.admin'))
+        else:
+            flash("Incorrect password.", "error")
+    return render_template('admin_login.html')
+
+# === ADMIN PANEL (MEMES + USERS) ===
+@erate_bp.route('/admin', methods=['GET', 'POST'])
+@admin_required
+def admin():
+    conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
+    try:
+        with conn.cursor() as cur:
+            # Users
+            cur.execute("SELECT id, username, password, points FROM users ORDER BY id")
+            users = [dict(id=r[0], username=r[1], password=r[2], points=r[3]) for r in cur.fetchall()]
+
+            # All Memes
+            cur.execute("""
+                SELECT m.meme_id, m.type, m.meme_description, m.owner, m.meme_download_counts
+                FROM memes m ORDER BY m.meme_id
+            """)
+            all_memes = [dict(meme_id=r[0], type=r[1], meme_description=r[2], owner=r[3], meme_download_counts=r[4]) for r in cur.fetchall()]
+
+            # Current user
+            current_user = session.get('username', 'admin')
+            is_santo = current_user == 'santo'
+
+            # Next ID
+            cur.execute("SELECT COALESCE(MAX(meme_id), 0) + 1 FROM memes")
+            next_meme_id = cur.fetchone()[0]
+
+    except Exception as e:
+        log("Admin panel error: %s", e)
+        users = []
+        all_memes = []
+        is_santo = False
+        next_meme_id = 1
+    finally:
+        conn.close()
+
+    memes = all_memes if is_santo else [m for m in all_memes if m['owner'] == session.get('user_id')]
+
+    return render_template(
+        'admin.html',
+        authenticated=True,
+        username=current_user,
+        is_santo=is_santo,
+        users=users,
+        memes=memes,
+        all_memes=all_memes,
+        next_meme_id=next_meme_id
+    )
+
 # === SQL INSERT (70 columns) ===
 INSERT_SQL = '''
     INSERT INTO erate (
@@ -90,24 +166,17 @@ INSERT_SQL = '''
     )
 '''
 
-# === PARSE DATETIME — ONLY IF LOOKS LIKE DATE ===
+# === PARSE DATETIME ===
 def parse_datetime(value):
     if not value or not str(value).strip():
         return None
     value = str(value).strip()
-
     if not any(c.isdigit() for c in value):
         return None
-
     formats = [
-        "%Y-%m-%d %H:%M:%S",
-        "%Y-%m-%d",
-        "%m/%d/%Y %I:%M:%S %p",
-        "%m/%d/%Y %H:%M:%S",
-        "%m/%d/%Y %I:%M %p",
-        "%m/%d/%Y %H:%M",
-        "%m/%d/%Y",
-        "%Y-%m-%d %H:%M:%S.%f",
+        "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%m/%d/%Y %I:%M:%S %p",
+        "%m/%d/%Y %H:%M:%S", "%m/%d/%Y %I:%M %p", "%m/%d/%Y %H:%M",
+        "%m/%d/%Y", "%Y-%m-%d %H:%M:%S.%f",
     ]
     for fmt in formats:
         try:
@@ -116,7 +185,7 @@ def parse_datetime(value):
             continue
     return None
 
-# === DEBUG: Track CSV headers and sample rows ===
+# === DEBUG ===
 CSV_HEADERS_LOGGED = False
 ROW_DEBUG_COUNT = 0
 
@@ -125,7 +194,6 @@ def _row_to_tuple(row):
     if not CSV_HEADERS_LOGGED:
         log("CSV HEADERS: %s", list(row.keys()))
         CSV_HEADERS_LOGGED = True
-
     if ROW_DEBUG_COUNT < 3:
         log("DEBUG ROW %s: %s", ROW_DEBUG_COUNT + 1, dict(row))
         ROW_DEBUG_COUNT += 1
@@ -139,12 +207,10 @@ def _row_to_tuple(row):
         ''
     ).strip()
 
-    # Remove ALL instances of the base domain
     base = 'http://publicdata.usac.org/'
     while form_pdf_raw.startswith(base):
         form_pdf_raw = form_pdf_raw[len(base):]
 
-    # Final clean URL
     form_pdf = f"http://publicdata.usac.org{form_pdf_raw}" if form_pdf_raw else ''
 
     return (
@@ -349,14 +415,8 @@ pop_data = {
 def get_bluebird_distance(address):
     if not address:
         return {"distance": float('inf'), "pop_city": "N/A", "coverage": "Unknown"}
-
     geocode_url = "https://nominatim.openstreetmap.org/search"
-    geocode_params = {
-        'q': address,
-        'format': 'json',
-        'limit': 1,
-        'addressdetails': 1
-    }
+    geocode_params = {'q': address, 'format': 'json', 'limit': 1, 'addressdetails': 1}
     headers = {'User-Agent': 'E-Rate Dashboard/1.0'}
     try:
         geocode_resp = requests.get(geocode_url, params=geocode_params, headers=headers, timeout=10)
@@ -493,7 +553,7 @@ def bbmap(app_number):
     finally:
         conn.close()
 
-# === APPLICANT DETAILS API — SKIP id + JSON HEADER + DEBUG ===
+# === APPLICANT DETAILS API ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -504,20 +564,13 @@ def details(app_number):
             if not row:
                 return jsonify({"error": "Applicant not found"}), 404
 
-            # === SKIP id (row[0]) ===
-            row = row[1:]
-
+            row = row[1:]  # Skip id
             log("DETAILS ROW for %s: %s", app_number, row[:10])
 
             def fmt_date(dt):
-                if isinstance(dt, datetime):
-                    return dt.strftime('%m/%d/%Y')
-                return '—'
-
+                return dt.strftime('%m/%d/%Y') if isinstance(dt, datetime) else '—'
             def fmt_datetime(dt):
-                if isinstance(dt, datetime):
-                    return dt.strftime('%m/%d/%Y %I:%M %p')
-                return '—'
+                return dt.strftime('%m/%d/%Y %I:%M %p') if isinstance(dt, datetime) else '—'
 
             data = {
                 "form_nickname": row[1] or '—',
@@ -599,10 +652,11 @@ def details(app_number):
     finally:
         conn.close()
 
-# === EXTRACT CSV ===
+# === EXTRACT CSV — ADMIN REQUIRED ===
 @erate_bp.route('/extract-csv')
+@admin_required
 def extract_csv():
-    log("Extract CSV requested")
+    log("Admin: Extract CSV requested")
     if current_app.config.get('CSV_DOWNLOAD_IN_PROGRESS'):
         flash("CSV download already in progress.", "info")
         return redirect(url_for('erate.dashboard'))
@@ -639,10 +693,11 @@ def _download_csv_background(app):
         with app.app_context():
             app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
 
-# === IMPORT INTERACTIVE ===
+# === IMPORT INTERACTIVE — ADMIN REQUIRED ===
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
+@admin_required
 def import_interactive():
-    log("Import interactive page accessed")
+    log("Admin: Import interactive accessed")
     if not os.path.exists(CSV_FILE):
         log("CSV not found")
         return "<h2>CSV not found: 470schema.csv</h2>", 404
@@ -700,7 +755,7 @@ def import_interactive():
 
     return render_template('erate_import.html', progress=progress, is_importing=is_importing)
 
-# === BULK IMPORT — CSV-SAFE + DEBUG + RESET COUNTERS ===
+# === BULK IMPORT ===
 def _import_all_background(app):
     global CSV_HEADERS_LOGGED, ROW_DEBUG_COUNT
     CSV_HEADERS_LOGGED = False
@@ -715,7 +770,7 @@ def _import_all_background(app):
         conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
         cur = conn.cursor()
 
-        with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
+        with open(CSV_FILE, 'r', encoding='-utf-8-sig', newline='') as f:
             reader = csv.DictReader(f, dialect='excel')
             log("CSV reader created with excel dialect")
 
@@ -815,6 +870,7 @@ def _import_all_background(app):
 
 # === VIEW LOG ===
 @erate_bp.route('/view-log')
+@admin_required
 def view_log():
     log("View log requested")
     if os.path.exists(LOG_FILE):
@@ -823,6 +879,7 @@ def view_log():
 
 # === RESET IMPORT ===
 @erate_bp.route('/reset-import', methods=['POST'])
+@admin_required
 def reset_import():
     log("Import reset requested")
     current_app.config.update({
