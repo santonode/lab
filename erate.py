@@ -1,4 +1,4 @@
-# erate.py — FINAL (NO TRUNCATE IN DB + FULL DATA + SAFE DATES + CORRECT PDF)
+# erate.py — FINAL (ALL FIXES: safe dates, full text, no truncate, PDF fix)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -90,21 +90,28 @@ INSERT_SQL = '''
     )
 '''
 
-# === PARSE DATETIME ===
+# === PARSE DATETIME — ALL FORMATS ===
 def parse_datetime(value):
     if not value or not str(value).strip():
         return None
     value = str(value).strip()
+
     formats = [
-        "%m/%d/%Y %I:%M:%S %p", "%m/%d/%Y %H:%M:%S",
-        "%m/%d/%Y %I:%M %p", "%m/%d/%Y %H:%M",
-        "%m/%d/%Y", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"
+        "%Y-%m-%d %H:%M:%S",           # 2025-12-08 00:00:00
+        "%Y-%m-%d",                    # 2025-12-08
+        "%m/%d/%Y %I:%M:%S %p",        # 07/03/2015 10:14:00 AM
+        "%m/%d/%Y %H:%M:%S",           # 07/03/2015 10:14:00
+        "%m/%d/%Y %I:%M %p",           # 07/03/2015 10:14 AM
+        "%m/%d/%Y %H:%M",              # 07/03/2015 10:14
+        "%m/%d/%Y",                    # 07/03/2015
+        "%Y-%m-%d %H:%M:%S.%f",        # 2025-07-03 10:14:00.000
     ]
     for fmt in formats:
         try:
             return datetime.strptime(value, fmt)
         except ValueError:
             continue
+    log("Failed to parse datetime: %s", value)
     return None
 
 # === DEBUG: Track CSV headers and sample PDF paths ===
@@ -116,7 +123,7 @@ def _row_to_tuple(row):
         log("CSV HEADERS: %s", list(row.keys()))
         CSV_HEADERS_LOGGED = True
 
-    # === PDF: CORRECT DOMAIN + FULL PATH ===
+    # === PDF: CORRECT DOMAIN + NO DUPLICATE ===
     form_pdf_raw = (
         row.get('Form PDF', '') or
         row.get('Form PDF Link', '') or
@@ -124,6 +131,10 @@ def _row_to_tuple(row):
         row.get('Form PDF Path', '') or
         ''
     ).strip()
+
+    # Fix double domain
+    if form_pdf_raw.startswith('http://publicdata.usac.org/http://'):
+        form_pdf_raw = form_pdf_raw.replace('http://publicdata.usac.org/', '', 1)
 
     form_pdf = f"http://publicdata.usac.org/{form_pdf_raw.lstrip('/')}" if form_pdf_raw else ''
 
@@ -630,10 +641,20 @@ def details(app_number):
             if not row:
                 return jsonify({"error": "Applicant not found"}), 404
 
+            # Convert str to datetime if needed
+            def to_datetime(val):
+                if isinstance(val, datetime):
+                    return val
+                if isinstance(val, str):
+                    return parse_datetime(val)
+                return None
+
             def fmt_date(dt):
+                dt = to_datetime(dt)
                 return dt.strftime('%m/%d/%Y') if dt else '—'
 
             def fmt_datetime(dt):
+                dt = to_datetime(dt)
                 return dt.strftime('%m/%d/%Y %I:%M %p') if dt else '—'
 
             data = {
