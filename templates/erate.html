@@ -1,190 +1,325 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>E-Rate 470 Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <title>E-Rate Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #26A69A;
-            --primary-dark: #1e7d71;
-            --gray: #f5f5f5;
-            --dark: #263238;
-            --light: #ffffff;
-            --border: #e0e0e0;
+            --primary: #1a5d57;
+            --accent: #007bff;
+            --success: #27ae60;
+            --warning: #ffc107;
+            --bg: #f4f7f9;
+            --card: white;
+            --border: #ddd;
             --text: #333;
-            --success: #4caf50;
-            --warning: #ff9800;
-            --error: #f44336;
+            --hover: #f0f7ff;
         }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { box-sizing: border-box; }
         body {
-            font-family: 'Inter', sans-serif;
-            background: var(--gray);
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            background: var(--bg);
             color: var(--text);
             line-height: 1.6;
+            position: relative;
+            min-height: 100vh;
+        }
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.4);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(3px);
+        }
+        .overlay.show { display: flex; }
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 6px solid #f3f3f3;
+            border-top: 6px solid var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
         .container {
             max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
+            margin: 40px auto;
+            background: var(--card);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            position: relative;
+            z-index: 1;
         }
-        header {
-            background: var(--light);
-            padding: 20px 0;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 20px;
+        h1 {
             text-align: center;
-        }
-        header h1 {
-            color: var(--dark);
-            font-size: 2rem;
+            color: var(--primary);
+            margin: 0 0 10px;
             font-weight: 600;
+            font-size: 2.2rem;
         }
-        .controls {
-            background: var(--light);
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            margin-bottom: 20px;
+        .filters {
             display: flex;
+            gap: 12px;
+            margin: 25px 0;
             flex-wrap: wrap;
-            gap: 15px;
             align-items: center;
-            justify-content: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
         }
-        .form-group {
-            display: flex;
-            flex-direction: column;
-            min-width: 180px;
-        }
-        label {
+        .filters label {
             font-weight: 600;
-            margin-bottom: 5px;
-            color: var(--dark);
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
         }
-        input, select {
-            padding: 10px;
+        .filters input[type="text"],
+        .filters input[type="date"] {
+            padding: 8px 12px;
             border: 1px solid var(--border);
             border-radius: 6px;
-            font-size: 1rem;
+            font-size: 0.95rem;
+            min-width: 100px;
         }
-        button {
+        .filters input[type="text"] {
+            width: 60px;
+            text-transform: uppercase;
+        }
+        .btn {
             padding: 10px 20px;
-            background: var(--primary);
-            color: white;
             border: none;
             border-radius: 6px;
-            font-weight: 600;
             cursor: pointer;
-            transition: background 0.2s;
-        }
-        button:hover {
-            background: var(--primary-dark);
-        }
-        .btn-admin {
-            background: var(--warning);
-            color: white;
-            text-decoration: none;
-            padding: 10px 20px;
-            border-radius: 6px;
             font-weight: 600;
+            text-decoration: none;
             display: inline-block;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+            text-align: center;
         }
-        .btn-admin:hover {
-            background: #f57c00;
-        }
-        .results-info {
-            margin: 15px 0;
-            font-size: 0.9rem;
-            color: #666;
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-warning { background: var(--warning); color: #212529; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn:active { transform: translateY(0); }
+        .summary {
+            font-weight: 600;
+            color: var(--primary);
+            margin: 20px 0;
+            font-size: 1.1rem;
             text-align: center;
         }
         table {
             width: 100%;
-            background: var(--light);
             border-collapse: collapse;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            margin-top: 20px;
+            font-size: 0.95rem;
+        }
+        th, td {
+            border: 1px solid var(--border);
+            padding: 12px 10px;
+            text-align: left;
+            vertical-align: middle;
         }
         th {
-            background: var(--dark);
-            color: white;
-            padding: 15px;
-            text-align: left;
-            font-weight: 600;
-        }
-        td {
-            padding: 12px 15px;
-            border-bottom: 1px solid var(--border);
-        }
-        tr:hover {
-            background: #f9f9f9;
-        }
-        .app-link {
-            color: var(--primary);
-            text-decoration: none;
-            font-weight: 600;
-        }
-        .app-link:hover {
-            text-decoration: underline;
-        }
-        .pagination {
-            margin: 20px 0;
-            text-align: center;
-        }
-        .pagination a {
-            display: inline-block;
-            padding: 8px 16px;
-            margin: 0 5px;
-            background: var(--light);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            text-decoration: none;
-            color: var(--text);
-        }
-        .pagination a:hover, .pagination a.active {
             background: var(--primary);
             color: white;
-            border-color: var(--primary);
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        tr:hover { background-color: var(--hover); }
+        td { word-wrap: break-word; }
+        .app-number {
+            font-family: monospace;
+            font-weight: 600;
+            color: var(--accent);
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        .app-number:hover { color: #0056b3; }
+        .bbmap-link {
+            color: var(--accent);
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        .bbmap-link:hover { color: #0056b3; }
+        .modified { font-size: 0.9rem; color: #666; }
+        .pagination {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .load-more {
+            display: inline-block;
+            padding: 12px 30px;
+            background: var(--accent);
+            color: white;
+            border-radius: 8px;
+            font-weight: 600;
+            text-decoration: none;
+            box-shadow: 0 2px 8px rgba(0,123,255,0.3);
+        }
+        .load-more:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,123,255,0.4);
         }
         .flash {
-            padding: 12px;
-            margin: 15px 0;
+            padding: 15px;
+            margin: 20px 0;
             border-radius: 6px;
+            text-align: center;
             font-weight: 600;
         }
-        .flash.success { background: #e8f5e8; color: var(--success); border: 1px solid #c8e6c9; }
-        .flash.warning { background: #fff3e0; color: var(--warning); border: 1px solid #ffe0b2; }
-        .flash.error { background: #ffebee; color: var(--error); border: 1px solid #ffcdd2; }
-        footer {
-            text-align: center;
-            margin-top: 40px;
-            padding: 20px;
-            color: #888;
-            font-size: 0.9rem;
+        .flash.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .flash.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+        /* MODAL */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
         }
+        .modal.show { display: flex; }
+        .modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .modal-title {
+            font-weight: 600;
+            color: var(--primary);
+            font-size: 1.3rem;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #999;
+        }
+        .modal-close:hover { color: #333; }
+        .modal-body {
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+        .modal-body strong { color: var(--primary); }
+        .modal-body a { color: var(--accent); text-decoration: underline; }
+
+        /* MINI FOOTER */
+        .modal-footer {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            border-top: 1px solid #eee;
+            padding-top: 12px;
+            font-size: 0.9rem;
+            flex-wrap: wrap;
+        }
+        .modal-footer a {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 500;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .modal-footer a:hover {
+            background: var(--hover);
+            color: #0056b3;
+        }
+        .modal-footer a.active {
+            background: var(--accent);
+            color: white;
+        }
+
         @media (max-width: 768px) {
-            .controls { flex-direction: column; }
-            .form-group { width: 100%; }
-            table, thead, tbody, th, td, tr { display: block; }
-            thead tr { position: absolute; top: -9999px; left: -9999px; }
-            tr { border: 1px solid var(--border); border-radius: 6px; margin-bottom: 10px; }
-            td { border: none; position: relative; padding-left: 50%; }
-            td:before { 
-                position: absolute; left: 15px; top: 12px; 
-                content: attr(data-label); font-weight: 600; 
-            }
+            .container { margin: 20px; padding: 20px; }
+            .filters { flex-direction: column; align-items: stretch; }
+            .filters label { justify-content: center; }
+            table { font-size: 0.85rem; }
+            th, td { padding: 8px 6px; }
+            .btn { width: 100%; margin: 5px 0; }
+            .modal-content { max-width: 95%; }
+            .modal-footer { gap: 6px; }
         }
     </style>
 </head>
 <body>
+    <!-- LOADING OVERLAY -->
+    <div class="overlay" id="loading">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- DETAILS MODAL -->
+    <div class="modal" id="detail-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">470 Form Details</div>
+                <button class="modal-close" onclick="closeModal('detail')">x</button>
+            </div>
+            <div class="modal-body" id="detail-body">Loading...</div>
+            <div class="modal-footer">
+                <a href="#" class="tab-link active" data-section="basic">basic info</a>
+                <a href="#" class="tab-link" data-section="billed">billed entity</a>
+                <a href="#" class="tab-link" data-section="contact">contact</a>
+                <a href="#" class="tab-link" data-section="tech">technical contact</a>
+                <a href="#" class="tab-link" data-section="auth">authorized persons</a>
+                <a href="#" class="tab-link" data-section="services">services</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- BLUEBIRD MODAL -->
+    <div class="modal" id="bbmap-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Bluebird Fiber Distance</div>
+                <button class="modal-close" onclick="closeModal('bbmap')">x</button>
+            </div>
+            <div class="modal-body" id="bbmap-body">Loading...</div>
+        </div>
+    </div>
+
     <div class="container">
-        <header>
-            <h1>E-Rate 470 Dashboard</h1>
-        </header>
+        <h1>E-Rate Dashboard</h1>
 
         <!-- FLASH MESSAGES -->
         {% with messages = get_flashed_messages(with_categories=true) %}
@@ -195,45 +330,19 @@
             {% endif %}
         {% endwith %}
 
-        <!-- FILTERS & CONTROLS -->
-        <div class="controls">
-            <div class="form-group">
-                <label for="state">State</label>
-                <select id="state" onchange="updateFilters()">
-                    <option value="">All States</option>
-                    {% for state in ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'] %}
-                        <option value="{{ state }}" {% if filters.state == state %}selected{% endif %}>{{ state }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="modified_after">Modified After</label>
-                <input type="date" id="modified_after" value="{{ filters.modified_after }}" onchange="updateFilters()">
-            </div>
-            <button onclick="clearFilters()">Clear Filters</button>
-
-            <!-- ADMIN-ONLY CSV DOWNLOAD -->
-            {% if show_download_link %}
-                <a href="{{ url_for('erate.admin_login') }}" class="btn-admin">
-                    Download Full CSV (Admin)
-                </a>
-            {% endif %}
+        <div class="filters">
+            <form method="get" style="display: contents;" id="filter-form">
+                <label>State: <input type="text" name="state" value="{{ filters.state|default('') }}" maxlength="2" placeholder="KS"></label>
+                <label>Modified After: <input type="date" name="modified_after" value="{{ filters.modified_after|default('') }}"></label>
+                <button type="submit" class="btn btn-primary">Filter</button>
+                <a href="{{ url_for('erate.dashboard') }}" class="btn btn-secondary">Reset</a>
+            </form>
+            <a href="{{ url_for('erate.extract_csv') }}" class="btn btn-warning">Extract CSV</a>
+            <a href="{{ url_for('erate.import_interactive') }}" class="btn btn-success">Resume Import</a>
         </div>
 
-        <!-- RESULTS INFO -->
-        <div class="results-info">
-            Showing {{ total_filtered }} of {{ total_count }} records
-            {% if has_more %}
-                <span style="margin-left: 20px;">
-                    <a href="{{ url_for('erate.dashboard', state=filters.state, modified_after=filters.modified_after, offset=next_offset) }}" class="app-link">
-                        Load More
-                    </a>
-                </span>
-            {% endif %}
-        </div>
+        <p class="summary"><strong szczegółów>Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</strong></p>
 
-        <!-- RESULTS TABLE -->
-        {% if table_data %}
         <table>
             <thead>
                 <tr>
@@ -242,63 +351,221 @@
                     <th>State</th>
                     <th>Funding Year</th>
                     <th>FCC Status</th>
-                    <th>Last Modified</th>
+                    <th>Modified</th>
                 </tr>
             </thead>
             <tbody>
-                {% for row in table_data %}
+                {% if table_data %}
+                    {% for row in table_data %}
+                    <tr>
+                        <td><span class="app-number" onclick="showDetails('{{ row.app_number }}')">{{ row.app_number|default('—') }}</span></td>
+                        <td><span class="bbmap-link" onclick="checkBluebird('{{ row.app_number }}')">{{ row.entity_name|default('—') }}</span></td>
+                        <td>{{ row.state|default('—') }}</td>
+                        <td>{{ row.funding_year|default('—') }}</td>
+                        <td>{{ row.fcc_status|default('—') }}</td>
+                        <td class="modified">{{ row.last_modified_datetime|strftime('%m/%d/%Y') if row.last_modified_datetime else '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
                 <tr>
-                    <td data-label="App #">
-                        <a href="{{ url_for('erate.details', app_number=row.app_number) }}" class="app-link" target="_blank">
-                            {{ row.app_number }}
-                        </a>
-                    </td>
-                    <td data-label="Entity">{{ row.entity_name }}</td>
-                    <td data-label="State">{{ row.state }}</td>
-                    <td data-label="Year">{{ row.funding_year }}</td>
-                    <td data-label="Status">{{ row.fcc_status }}</td>
-                    <td data-label="Modified">
-                        {{ row.last_modified_datetime|strftime('%m/%d/%Y') if row.last_modified_datetime else '—' }}
+                    <td colspan="6" style="text-align:center; color:#999; padding:30px;">
+                        No records found. Try adjusting filters or <a href="{{ url_for('erate.import_interactive') }}">import data</a>.
                     </td>
                 </tr>
-                {% endfor %}
+                {% endif %}
             </tbody>
         </table>
-        {% else %}
-        <p style="text-align:center; color:#666; padding:40px;">No records found. Try adjusting filters.</p>
-        {% endif %}
 
-        <!-- PAGINATION -->
-        {% if has_more %}
+        {% if has_more|default(false) %}
         <div class="pagination">
-            <a href="{{ url_for('erate.dashboard', state=filters.state, modified_after=filters.modified_after, offset=next_offset) }}">
-                Load More Records
-            </a>
+            <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&offset={{ next_offset|default(0) }}" class="load-more">Load More (+)</a>
         </div>
         {% endif %}
     </div>
 
-    <footer>
-        <p>E-Rate 470 Public Dashboard • Data updated: {{ "now"|strftime('%m/%d/%Y') }}</p>
-    </footer>
-
     <script>
-        function updateFilters() {
-            const state = document.getElementById('state').value;
-            const modified = document.getElementById('modified_after').value;
-            const url = new URL(window.location);
-            if (state) url.searchParams.set('state', state); else url.searchParams.delete('state');
-            if (modified) url.searchParams.set('modified_after', modified); else url.searchParams.delete('modified_after');
-            url.searchParams.delete('offset');
-            window.location = url;
+        const form = document.getElementById('filter-form');
+        const overlay = document.getElementById('loading');
+        const body = document.body;
+        const detailModal = document.getElementById('detail-modal');
+        const bbmapModal = document.getElementById('bbmap-modal');
+        const detailBody = document.getElementById('detail-body');
+        const bbmapBody = document.getElementById('bbmap-body');
+        let currentAppNumber = null;
+
+        // Loading
+        form.addEventListener('submit', () => { body.classList.add('loading'); overlay.classList.add('show'); });
+        window.addEventListener('load', () => { body.classList.remove('loading'); overlay.classList.remove('show'); });
+        document.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', (e) => {
+                const href = link.getAttribute('href');
+                if (href && href.includes('?')) {
+                    body.classList.add('loading');
+                    overlay.classList.add('show');
+                }
+            });
+        });
+
+        // === APPLICANT DETAILS MODAL ===
+        async function showDetails(appNumber) {
+            currentAppNumber = appNumber;
+            body.classList.add('loading');
+            overlay.classList.add('show');
+            detailBody.innerHTML = 'Loading...';
+            detailModal.classList.add('show');
+
+            try {
+                const resp = await fetch(`/erate/details/${appNumber}`);
+                const data = await resp.json();
+
+                renderSection('basic', data);
+                activateTab('basic');
+            } catch (err) {
+                detailBody.innerHTML = '<strong>Error:</strong> Could not load details.';
+            } finally {
+                body.classList.remove('loading');
+                overlay.classList.remove('show');
+            }
         }
 
-        function clearFilters() {
-            window.location = "{{ url_for('erate.dashboard') }}";
+        function renderSection(section, data) {
+            let html = '';
+
+            if (section === 'basic') {
+                html = `
+                    <strong>Form Nickname:</strong> ${data.form_nickname || ''}<br>
+                    <strong>Form PDF:</strong> ${data.form_pdf || ''}<br>
+                    <strong>Funding Year:</strong> ${data.funding_year || ''}<br>
+                    <strong>FCC Status:</strong> ${data.fcc_status || ''}<br>
+                    <strong>Allowable Contract Date:</strong> ${data.allowable_contract_date || ''}<br>
+                    <strong>Created:</strong> ${data.created_datetime || ''} by ${data.created_by || ''}<br>
+                    <strong>Certified:</strong> ${data.certified_datetime || ''} by ${data.certified_by || ''}<br>
+                    <strong>Last Modified:</strong> ${data.last_modified_datetime || ''} by ${data.last_modified_by || ''}
+                `;
+            } else if (section === 'billed') {
+                html = `
+                    <strong>Billed Entity #:</strong> ${data.ben || ''}<br>
+                    <strong>Entity Name:</strong> ${data.entity_name || ''}<br>
+                    <strong># of Eligible Entities:</strong> ${data.num_eligible || ''}<br>
+                    <strong>Org Status:</strong> ${data.org_status || ''}<br>
+                    <strong>Org Type:</strong> ${data.org_type || ''}<br>
+                    <strong>Applicant Type:</strong> ${data.applicant_type || ''}<br>
+                    <strong>Website:</strong> ${data.website ? `<a href="${data.website}" target="_blank">${data.website}</a>` : ''}<br>
+                    <strong>FCC Reg #:</strong> ${data.fcc_reg_num || ''}<br>
+                    <strong>Address:</strong> ${data.address1 || ''} ${data.address2 || ''}<br>
+                    <strong>City/State/ZIP:</strong> ${data.city || ''}, ${data.state || ''} ${data.zip_code || ''}${data.zip_ext ? '-' + data.zip_ext : ''}<br>
+                    <strong>Email:</strong> ${data.email || ''}<br>
+                    <strong>Phone:</strong> ${data.phone || ''}${data.phone_ext ? ' x' + data.phone_ext : ''}
+                `;
+            } else if (section === 'contact') {
+                html = `
+                    <strong>Contact Name:</strong> ${data.contact_name || ''}<br>
+                    <strong>Address:</strong> ${data.contact_address1 || ''} ${data.contact_address2 || ''}<br>
+                    <strong>City/State/ZIP:</strong> ${data.contact_city || ''}, ${data.contact_state || ''} ${data.contact_zip || ''}${data.contact_zip_ext ? '-' + data.contact_zip_ext : ''}<br>
+                    <strong>Phone:</strong> ${data.contact_phone || ''}${data.contact_phone_ext ? ' x' + data.contact_phone_ext : ''}<br>
+                    <strong>Email:</strong> ${data.contact_email || ''}
+                `;
+            } else if (section === 'tech') {
+                html = `
+                    <strong>Name:</strong> ${data.tech_name || ''}<br>
+                    <strong>Title:</strong> ${data.tech_title || ''}<br>
+                    <strong>Phone:</strong> ${data.tech_phone || ''}${data.tech_phone_ext ? ' x' + data.tech_phone_ext : ''}<br>
+                    <strong>Email:</strong> ${data.tech_email || ''}
+                `;
+            } else if (section === 'auth') {
+                html = `
+                    <strong>Name:</strong> ${data.auth_name || ''}<br>
+                    <strong>Title:</strong> ${data.auth_title || ''}<br>
+                    <strong>Employer:</strong> ${data.auth_employer || ''}<br>
+                    <strong>Address:</strong> ${data.auth_address || ''}<br>
+                    <strong>City/State/ZIP:</strong> ${data.auth_city || ''}, ${data.auth_state || ''} ${data.auth_zip || ''}${data.auth_zip_ext ? '-' + data.auth_zip_ext : ''}<br>
+                    <strong>Phone:</strong> ${data.auth_phone || ''}${data.auth_phone_ext ? ' x' + data.auth_phone_ext : ''}<br>
+                    <strong>Email:</strong> ${data.auth_email || ''}
+                `;
+            } else if (section === 'services') {
+                html = `
+                    <strong>Category 1:</strong> ${data.cat1_desc || ''}<br>
+                    <strong>Category 2:</strong> ${data.cat2_desc || ''}<br>
+                    <strong>Installment Type:</strong> ${data.installment_type || ''}<br>
+                    <strong>Min/Max Years:</strong> ${data.installment_min || ''} / ${data.installment_max || ''}<br>
+                    <strong>RFP ID:</strong> ${data.rfp_id || ''}<br>
+                    <strong>State Restrictions:</strong> ${data.state_restrictions || ''}<br>
+                    <strong>Restriction Desc:</strong> ${data.restriction_desc || ''}<br>
+                    <strong>Statewide:</strong> ${data.statewide || ''}<br>
+                    <strong>All Public:</strong> ${data.all_public || ''}<br>
+                    <strong>All Non-Public:</strong> ${data.all_nonpublic || ''}<br>
+                    <strong>All Libraries:</strong> ${data.all_libraries || ''}<br>
+                    <strong>Form Version:</strong> ${data.form_version || ''}
+                `;
+            }
+
+            detailBody.innerHTML = html;
         }
 
-        document.getElementById('modified_after').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') updateFilters();
+        function activateTab(section) {
+            document.querySelectorAll('.tab-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.dataset.section === section) {
+                    link.classList.add('active');
+                }
+            });
+        }
+
+        // Tab click
+        document.querySelectorAll('.tab-link').forEach(link => {
+            link.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const section = link.dataset.section;
+                activateTab(section);
+                if (currentAppNumber) {
+                    body.classList.add('loading');
+                    overlay.classList.add('show');
+                    try {
+                        const resp = await fetch(`/erate/details/${currentAppNumber}`);
+                        const data = await resp.json();
+                        renderSection(section, data);
+                    } catch {}
+                    body.classList.remove('loading');
+                    overlay.classList.remove('show');
+                }
+            });
+        });
+
+        // === BLUEBIRD MODAL ===
+        async function checkBluebird(appNumber) {
+            body.classList.add('loading');
+            overlay.classList.add('show');
+            bbmapBody.innerHTML = 'Searching Bluebird Fiber...';
+            bbmapModal.classList.add('show');
+            try {
+                const resp = await fetch(`/erate/bbmap/${appNumber}`);
+                const data = await resp.json();
+                bbmapBody.innerHTML = `
+                    <strong>Applicant:</strong> ${data.entity_name || 'N/A'}<br>
+                    <strong>Address:</strong> ${data.address || 'N/A'}<br>
+                    <strong>Nearest PoP:</strong> ${data.pop_city || 'Unknown'}<br>
+                    <strong>Distance:</strong> ${data.distance || 'N/A'}<br>
+                    <strong>Coverage:</strong> ${data.coverage || 'Unknown'}
+                `;
+            } catch {
+                bbmapBody.innerHTML = '<strong>Error:</strong> Could not fetch data.';
+            } finally {
+                body.classList.remove('loading');
+                overlay.classList.remove('show');
+            }
+        }
+
+        // Close modal
+        function closeModal(type) {
+            if (type === 'detail') detailModal.classList.remove('show');
+            if (type === 'bbmap') bbmapModal.classList.remove('show');
+        }
+
+        // Close on outside click
+        [detailModal, bbmapModal].forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.classList.remove('show');
+            });
         });
     </script>
 </body>
