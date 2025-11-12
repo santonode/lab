@@ -18,12 +18,20 @@ app.config['DATABASE_URL'] = os.getenv(
     'postgresql://wurdle_db_user:your_password@dpg-d2qcuan5r7bs73aid7p0-a/wurdle_db'
 )
 
-# === JINJA FILTERS ===
+# === JINJA FILTERS — SAFE strftime (handles str → datetime) ===
 def strftime_filter(value, format="%m/%d/%Y %H:%M"):
-    """Format datetime for Jinja templates"""
+    """Format datetime for Jinja templates — safely handles string input"""
     if value is None:
         return ""
+    if isinstance(value, str):
+        try:
+            # Handle ISO format: "2025-03-15T14:22:10.123456+00:00" or with Z
+            cleaned = value.replace('Z', '+00:00')
+            value = datetime.fromisoformat(cleaned)
+        except ValueError:
+            return value  # Return original string if parsing fails
     return value.strftime(format)
+
 app.jinja_env.filters['strftime'] = strftime_filter
 
 # === CACHE BUSTER ===
