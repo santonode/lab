@@ -7,7 +7,6 @@
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
     <link rel="stylesheet" href="{{ url_for('static2_files', filename='styles.css') }}?v={{ cache_buster }}">
     <style>
-        /* [ALL YOUR STYLES - UNCHANGED] */
         body { min-height: 100%; margin: 0; padding: 0; box-sizing: border-box; }
         .header { position: fixed; top: 0; width: 100%; background-color: #263238; color: white; padding: 5px 0; text-align: center; z-index: 1000; font-family: Arial, sans-serif; font-weight: bold; border-bottom: 2px solid #000000; height: 45px; box-sizing: border-box; display: flex; justify-content: center; align-items: center; }
         .header h1 { margin: 0; font-size: 28px; text-transform: uppercase; letter-spacing: 2px; border-radius: 10px; display: inline-block; padding: 5px 10px; background: linear-gradient(45deg, #26A69A, #FFCA28); -webkit-background-clip: text; background-clip: text; color: transparent; }
@@ -74,82 +73,45 @@
         }
         .footer { position: fixed; bottom: 0; width: 100%; background-color: #263238; color: white; padding: 5px 0; text-align: center; z-index: 1000; border-top: 2px solid #000000; height: 35px; box-sizing: border-box; }
         .footer p { margin: 3px 0; font-size: 12px; }
-        .popup { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; padding: 20px; border: 2px solid #263238; box-shadow: 0 0 10px rgba(0,0,0,0.5); z-index: 2000; width: 300px; text-align: center; border-radius: 8px; }
-        .popup-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1500; }
-        .popup h3 { margin: 0 0 15px; color: #263238; }
-        .popup input { width: 80%; padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; }
-        .popup button { padding: 8px 15px; margin: 5px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        .popup .register-btn { background-color: #26A69A; color: white; }
-        .popup .login-btn { background-color: #1976D2; color: white; }
-        .popup .decline-btn { background-color: #FFCA28; color: black; }
-        .popup button:hover { opacity: 0.9; }
-        .popup .tab-btn { padding: 8px 15px; margin: 5px 2px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; background-color: #ddd; color: #333; }
-        .popup .tab-btn.active { background-color: #26A69A; color: white; }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>Assets</h1>
-        {% if username %}
-            <a href="/" class="user-info">{{ username }}</a>
-        {% endif %}
-        <a href="/profile" class="gear-icon">
-            <img src="{{ url_for('static2_files', filename='gear-icon.png') }}?v={{ cache_buster }}" alt="Settings">
-        </a>
         <a href="/admin" class="admin-link">Admin</a>
     </div>
-
     <div class="content">
-        <div class="summary">Total Assets: {{ meme_count|default(0) }} assets / Total Downloads: {{ total_downloads|default(0) }}</div>
-
+        <div class="summary">Total Assets: {{ memes|length }} assets / Total Downloads: {{ (memes|sum(attribute='meme_download_counts')) }}</div>
         <table class="meme-table">
             <thead>
                 <tr>
-                    <th><a href="?sort=id&order={{ 'asc' if request.args.get('sort') != 'id' or request.args.get('order') == 'desc' else 'desc' }}">ID</a><div class="sort-tooltip">Click to sort</div></th>
-                    <th><a href="?sort=type&order={{ 'asc' if request.args.get('sort') != 'type' or request.args.get('order') == 'desc' else 'desc' }}">Type</a><div class="sort-tooltip">Click to sort</div></th>
-                    <th><a href="?sort=thumb&order={{ 'asc' if request.args.get('sort') != 'thumb' or request.args.get('order') == 'desc' else 'desc' }}">Thumb</a><div class="sort-tooltip">Click to sort</div></th>
-                    <th><a href="?sort=description&order={{ 'asc' if request.args.get('sort') != 'description' or request.args.get('order') == 'desc' else 'desc' }}">Description / Owner</a><div class="sort-tooltip">Click to sort</div></th>
-                    <th><a href="?sort=counts&order={{ 'asc' if request.args.get('sort') != 'counts' or request.args.get('order') == 'desc' else 'desc' }}">Counts</a><div class="sort-tooltip">Click to sort</div></th>
+                    <th>ID</th>
+                    <th>Type</th>
+                    <th>Thumb</th>
+                    <th>Description / Owner</th>
+                    <th>Downloads</th>
                 </tr>
             </thead>
             <tbody>
-                {% set sort_key = request.args.get('sort', 'counts') %}
-                {% set sort_order = request.args.get('order', 'desc') %}
-                {% if sort_key == 'counts' %}
-                    {% set sorted_memes = memes|sort(attribute='meme_download_counts', reverse=(sort_order == 'desc')) %}
-                {% elif sort_key == 'id' %}
-                    {% set sorted_memes = memes|sort(attribute='meme_id', reverse=(sort_order == 'desc')) %}
-                {% elif sort_key == 'type' %}
-                    {% set sorted_memes = memes|sort(attribute='type', reverse=(sort_order == 'desc')) %}
-                {% elif sort_key == 'thumb' %}
-                    {% set sorted_memes = memes|sort(attribute='meme_id', reverse=(sort_order == 'desc')) %}
-                {% elif sort_key == 'description' %}
-                    {% set sorted_memes = memes|sort(attribute='meme_description', reverse=(sort_order == 'desc')) %}
-                {% else %}
-                    {% set sorted_memes = memes|sort(attribute='meme_download_counts', reverse=True) %}
-                {% endif %}
-                {% for meme in sorted_memes %}
+                {% for meme in memes %}
                     <tr>
                         <td class="meme-id">{{ meme.meme_id }}</td>
                         <td class="meme-type">{{ meme.type }}</td>
                         <td class="meme-thumb">
-                            <img src="{{ url_for('serve_thumbs', filename=meme.meme_id|string + '.jpg') }}"
+                            <img src="{{ meme.thumbnail_url or '/static/thumbs/na.jpg' }}"
                                  alt="Thumb"
                                  loading="lazy"
-                                 onerror="this.onerror=null; this.parentNode.innerHTML={{ '<span class=\"meme-thumb-na\" onclick=\"openThumbModal(' ~ meme.meme_id ~ ', ' ~ (meme.meme_description or '')|tojson ~ ')\">na</span>'|safe }}"
-                                 onclick="openThumbModal({{ meme.meme_id }}, {{ (meme.meme_description or '')|tojson }})">
+                                 onerror="this.src='/static/thumbs/na.jpg'"
+                                 onclick="openThumbModal({{ meme.meme_id }}, {{ meme.meme_description|tojson }})">
                         </td>
                         <td class="meme-description">
                             {{ meme.meme_description if meme.meme_description else 'No description' }}<br>
-                            {% if meme.meme_description %}
-                                <a class="download-link"
-                                   href="javascript:void(0)"
-                                   onclick="handleDownload('{{ meme.meme_id }}', {{ (meme.meme_description or '')|tojson }})">
-                                   Download
-                                </a> /
-                            {% endif %}
-                            {% set owner = users|selectattr('id', 'equalto', meme.owner)|first %}
-                            <small style="color: #666;">{{ owner.username if owner else 'Unknown' }}</small>
+                            <a class="download-link"
+                               href="javascript:void(0)"
+                               onclick="handleDownload({{ meme.meme_id }}, {{ meme.meme_description|tojson }})">
+                               Download
+                            </a>
+                            <small style="color: #666;"> (Owner ID: {{ meme.owner }})</small>
                         </td>
                         <td class="meme-download-counts">{{ meme.meme_download_counts }}</td>
                     </tr>
@@ -180,28 +142,6 @@
         </div>
     </div>
 
-    <!-- GUEST / AUTH POPUP -->
-    <div id="guestPopup" class="popup">
-        <h3>Welcome to Santo!</h3>
-        <p>Choose how you'd like to continue:</p>
-        <div style="margin-bottom: 15px;">
-            <button class="tab-btn active" onclick="showTab('register')">Register</button>
-            <button class="tab-btn" onclick="showTab('login')">Login</button>
-        </div>
-        <form id="registerForm" method="POST" action="/memes/register" style="display: block;">
-            <input type="text" name="register_username" placeholder="Username (1-12 chars)" requiredmaxlength="12" pattern="[a-zA-Z0-9]+">
-            <input type="password" name="register_password" placeholder="Password" required minlength="4">
-            <button type="submit" class="register-btn">Register</button>
-        </form>
-        <form id="loginForm" method="POST" action="/memes/login" style="display: none;">
-            <input type="text" name="login_username" placeholder="Username" required>
-            <input type="password" name="login_password" placeholder="Password" required>
-            <button type="submit" class="login-btn">Login</button>
-        </form>
-        <button class="decline-btn" onclick="closePopup()">Continue as Guest</button>
-    </div>
-    <div id="popupOverlay" class="popup-overlay"></div>
-
     <div class="footer">
         <p>Made with Love by Team Santo <a href="https://santoelectronics.com/tosvm" style="color:#FF0000;">TOS</a></p>
     </div>
@@ -211,8 +151,8 @@
         function openThumbModal(memeId, memeDesc) {
             document.getElementById('modalMemeId').textContent = memeId;
             document.getElementById('modalMemeDesc').textContent = memeDesc || 'No description';
-            document.getElementById('modalThumbImg').src = `{{ url_for('serve_thumbs', filename='${memeId}.jpg') }}`;
-            const fullUrl = `{{ url_for('serve_vids', filename='${memeId}.mp4') }}`;
+            document.getElementById('modalThumbImg').src = `{{ url_for('serve_thumbs', filename='') }}${memeId}.jpg`;
+            const fullUrl = `{{ url_for('serve_vids', filename='') }}${memeId}.mp4`;
             const shortUrl = `.../vids/${memeId}.mp4`;
             const link = document.getElementById('modalVideoLink');
             link.href = fullUrl;
@@ -242,73 +182,20 @@
                 alert('Copied to clipboard!');
             }
         }
-        document.addEventListener('DOMContentLoaded', function() {
-            const username = "{{ username }}";
-            const user_type = "{{ user_type }}";
-            const showedPopup = sessionStorage.getItem('showedGuestPopup');
-            if (username && user_type === 'Guest' && !showedPopup) {
-                document.getElementById('guestPopup').style.display = 'block';
-                document.getElementById('popupOverlay').style.display = 'block';
-                sessionStorage.setItem('showedGuestPopup', 'true');
-            }
-        });
-        function closePopup() {
-            document.getElementById('guestPopup').style.display = 'none';
-            document.getElementById('popupOverlay').style.display = 'none';
-        }
-        function showTab(tab) {
-            document.getElementById('registerForm').style.display = tab === 'register' ? 'block' : 'none';
-            document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('active');
-                if (btn.textContent === (tab === 'register' ? 'Register' : 'Login')) {
-                    btn.classList.add('active');
-                }
-            });
-        }
-        document.getElementById('registerForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(this);
-            fetch('/memes/register', { method: 'POST', body: formData })
-            .then(r => r.json())
-            .then(data => {
-                alert(data.message || (data.success ? 'Registered!' : 'Failed'));
-                if (data.success) window.location.reload();
-            })
-            .catch(() => alert('Error. Try again.'));
-        });
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(this);
-            fetch('/memes/login', { method: 'POST', body: formData })
-            .then(r => r.json())
-            .then(data => {
-                alert(data.message || (data.success ? 'Logged in!' : 'Failed'));
-                if (data.success) window.location.reload();
-            })
-            .catch(() => alert('Error. Try again.'));
-        });
         function handleDownload(memeId, description) {
-            const videoFilename = `${description}.mp4`;
-            const videoUrl = `{{ url_for('serve_vids', filename='${memeId}.mp4') }}`;
-            fetch(`/increment_download/${memeId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+            fetch(`/memes/increment_download/${memeId}`, { method: 'POST' })
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
-                    fetch(videoUrl)
-                        .then(r => r.ok ? r.blob() : Promise.reject())
-                        .then(blob => {
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = videoFilename;
-                            a.click();
-                            URL.revokeObjectURL(url);
-                        })
-                        .catch(() => window.open(videoUrl, '_blank'));
+                    const a = document.createElement('a');
+                    a.href = `/static/vids/${memeId}.mp4`;
+                    a.download = `${description || 'meme'}.mp4`;
+                    a.click();
                 }
             })
-            .catch(() => window.open(videoUrl, '_blank'));
+            .catch(() => {
+                window.open(`/static/vids/${memeId}.mp4`, '_blank');
+            });
         }
     </script>
 </body>
