@@ -613,7 +613,7 @@ def extract_csv():
     thread.start()
     flash("CSV download started. Check in 2-5 min.", "info")
     return redirect(url_for('erate.dashboard'))
-
+    
 def _download_csv_background(app):
     time.sleep(1)
     try:
