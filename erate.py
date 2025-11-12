@@ -1,4 +1,4 @@
-# erate.py — FINAL (TEXT FIELDS + CORRECT PDF + MODAL TABS + BLUEBIRD)
+# erate.py — FINAL (strftime fix + keep duplicate skip + full text + PDF)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -62,7 +62,7 @@ try:
         log("DB connection test: SUCCESS")
     test_conn.close()
 except Exception as e:
-    log("DB connection test: FAILED → %s", e)
+    log("DB connection test: FAILED to %s", e)
 
 # === SQL INSERT (70 columns) ===
 INSERT_SQL = '''
@@ -483,7 +483,7 @@ def bbmap(app_number):
     finally:
         conn.close()
 
-# === APPLICANT DETAILS API — ALL FIELDS + TEXT FIELDS ===
+# === APPLICANT DETAILS API — SAFE STRFTIME ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -494,17 +494,24 @@ def details(app_number):
             if not row:
                 return jsonify({"error": "Applicant not found"}), 404
 
+            # Safe formatting
+            def safe_date(dt):
+                return dt.strftime('%m/%d/%Y') if dt else '—'
+
+            def safe_datetime(dt):
+                return dt.strftime('%m/%d/%Y %I:%M %p') if dt else '—'
+
             data = {
                 "form_nickname": row[1],
                 "form_pdf": Markup(f'<a href="{row[2]}" target="_blank">View PDF</a>') if row[2] else '—',
                 "funding_year": row[3],
                 "fcc_status": row[4],
-                "allowable_contract_date": row[5].strftime('%m/%d/%Y') if row[5] else '—',
-                "created_datetime": row[6].strftime('%m/%d/%Y %I:%M %p') if row[6] else '—',
+                "allowable_contract_date": safe_date(row[5]),
+                "created_datetime": safe_datetime(row[6]),
                 "created_by": row[7],
-                "certified_datetime": row[8].strftime('%m/%d/%Y %I:%M %p') if row[8] else '—',
+                "certified_datetime": safe_datetime(row[8]),
                 "certified_by": row[9],
-                "last_modified_datetime": row[10].strftime('%m/%d/%Y %I:%M %p') if row[10] else '—',
+                "last_modified_datetime": safe_datetime(row[10]),
                 "last_modified_by": row[11],
                 "ben": row[12],
                 "entity_name": row[13],
@@ -551,14 +558,14 @@ def details(app_number):
                 "auth_email": row[54],
                 "auth_title": row[55],
                 "auth_employer": row[56],
-                "cat1_desc": row[57],        # TEXT — FULL
-                "cat2_desc": row[58],        # TEXT — FULL
+                "cat1_desc": row[57],
+                "cat2_desc": row[58],
                 "installment_type": row[59],
                 "installment_min": row[60],
                 "installment_max": row[61],
                 "rfp_id": row[62],
                 "state_restrictions": row[63],
-                "restriction_desc": row[64], # TEXT — FULL
+                "restriction_desc": row[64],
                 "statewide": row[65],
                 "all_public": row[66],
                 "all_nonpublic": row[67],
@@ -675,7 +682,7 @@ def import_interactive():
 
     return render_template('erate_import.html', progress=progress, is_importing=is_importing)
 
-# === BULK IMPORT ===
+# === BULK IMPORT — KEEP DUPLICATE SKIP (as requested) ===
 def _import_all_background(app):
     time.sleep(1)
     try:
