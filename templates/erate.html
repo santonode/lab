@@ -418,7 +418,6 @@
                 const resp = await fetch(`/erate/details/${appNumber}`);
                 const data = await resp.json();
 
-                // Default to basic info
                 renderSection('basic', data);
                 activateTab('basic');
             } catch (err) {
@@ -434,14 +433,14 @@
 
             if (section === 'basic') {
                 html = `
-                    <strong>Form Nickname:</strong> ${data.form_nickname}<br>
-                    <strong>Form PDF:</strong> ${data.form_pdf}<br>
-                    <strong>Funding Year:</strong> ${data.funding_year}<br>
-                    <strong>FCC Status:</strong> ${data.fcc_status}<br>
-                    <strong>Allowable Contract Date:</strong> ${data.allowable_contract_date}<br>
-                    <strong>Created:</strong> ${data.created_datetime} by ${data.created_by}<br>
-                    <strong>Certified:</strong> ${data.certified_datetime} by ${data.certified_by}<br>
-                    <strong>Last Modified:</strong> ${data.last_modified_datetime} by ${data.last_modified_by}
+                    <strong>Form Nickname:</strong> ${data.form_nickname || '—'}<br>
+                    <strong>Form PDF:</strong> ${data.form_pdf || '—'}<br>
+                    <strong>Funding Year:</strong> ${data.funding_year || '—'}<br>
+                    <strong>FCC Status:</strong> ${data.fcc_status || '—'}<br>
+                    <strong>Allowable Contract Date:</strong> ${data.allowable_contract_date || '—'}<br>
+                    <strong>Created:</strong> ${data.created_datetime || '—'} by ${data.created_by || '—'}<br>
+                    <strong>Certified:</strong> ${data.certified_datetime || '—'} by ${data.certified_by || '—'}<br>
+                    <strong>Last Modified:</strong> ${data.last_modified_datetime || '—'} by ${data.last_modified_by || '—'}
                 `;
             } else if (section === 'billed') {
                 html = `
