@@ -1,104 +1,51 @@
-# memes.py
-from flask import Blueprint, render_template, request, flash, redirect, url_for, session, jsonify
-import os
-from werkzeug.utils import secure_filename
+# memes.py — FINAL: READ-ONLY + DOWNLOAD COUNT (real memes table)
+from flask import Blueprint, render_template, jsonify
 from db import get_conn
-from datetime import datetime
 
 memes_bp = Blueprint('memes', __name__, url_prefix='/memes')
 
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-@memes_bp.route('/', methods=['GET', 'POST'])
-def memes():
-    if request.method == 'POST':
-        if 'file' not in request.files:
-            flash('No file part')
-            return redirect(request.url)
-        file = request.files['file']
-        title = request.form.get('title', '').strip()
-        ip_address = request.remote_addr
-        uploader_username = session.get('username', 'Guest') or 'Guest'
-
-        if file.filename == '':
-            flash('No selected file')
-            return redirect(request.url)
-        if title == '':
-            flash('Title is required')
-            return redirect(request.url)
-        if not file or not allowed_file(file.filename):
-            flash('Invalid file type.')
-            return redirect(request.url)
-
-        filename = secure_filename(file.filename)
-        file_path = os.path.join('static', filename)
-        file.save(file_path)
-
-        try:
-            with get_conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        'INSERT INTO memes (filename, title, upload_time, uploader_ip, uploader_username) VALUES (%s, %s, %s, %s, %s)',
-                        (filename, title, datetime.now(), ip_address, uploader_username)
-                    )
-                    conn.commit()
-            flash('Meme uploaded successfully!')
-        except Exception as e:
-            print(f"Database error uploading meme: {str(e)}")
-            flash('Error uploading meme.')
-
-        return redirect(url_for('memes.memes'))
-
-    # GET
+@memes_bp.route('/')
+def index():
+    """Display all memes from real DB table"""
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute('SELECT id, filename, title, upload_time, uploader_username, likes, dislikes FROM memes ORDER BY upload_time DESC')
+                cur.execute('''
+                    SELECT meme_id, meme_url, meme_description, meme_download_counts, 
+                           type, owner, thumbnail_url
+                    FROM memes 
+                    ORDER BY meme_id DESC
+                ''')
+                rows = cur.fetchall()
                 memes = [
                     {
-                        'id': row[0],
-                        'filename': row[1],
-                        'title': row[2],
-                        'upload_time': row[3],
-                        'uploader': row[4],
-                        'likes': row[5],
-                        'dislikes': row[6]
+                        'meme_id': r[0],
+                        'meme_url': r[1],
+                        'meme_description': r[2],
+                        'meme_download_counts': r[3],
+                        'type': r[4],
+                        'owner': r[5],
+                        'thumbnail_url': r[6]
                     }
-                    for row in cur.fetchall()
+                    for r in rows
                 ]
         return render_template('memes.html', memes=memes)
     except Exception as e:
-        print(f"Database error fetching memes: {str(e)}")
+        print(f"Error loading memes: {e}")
         return render_template('memes.html', memes=[])
 
-@memes_bp.route('/vote', methods=['POST'])
-def vote():
-    meme_id = request.form.get('meme_id')
-    vote_type = request.form.get('vote_type')
-    ip_address = request.remote_addr
-
-    if not meme_id or vote_type not in ['like', 'dislike']:
-        return jsonify({'success': False, 'message': 'Invalid request.'})
-
+@memes_bp.route('/increment_download/<int:meme_id>', methods=['POST'])
+def increment_download(meme_id):
+    """Increment download count"""
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute('SELECT 1 FROM votes WHERE meme_id = %s AND voter_ip = %s', (meme_id, ip_address))
-                if cur.fetchone():
-                    return jsonify({'success': False, 'message': 'You have already voted on this meme.'})
-
-                cur.execute('INSERT INTO votes (meme_id, voter_ip, vote_type) VALUES (%s, %s, %s)', (meme_id, ip_address, vote_type))
-
-                if vote_type == 'like':
-                    cur.execute('UPDATE memes SET likes = likes + 1 WHERE id = %s', (meme_id,))
-                else:
-                    cur.execute('UPDATE memes SET dislikes = dislikes + 1 WHERE id = %s', (meme_id,))
-
+                cur.execute(
+                    'UPDATE memes SET meme_download_counts = meme_download_counts + 1 WHERE meme_id = %s',
+                    (meme_id,)
+                )
                 conn.commit()
         return jsonify({'success': True})
     except Exception as e:
-        print(f"Database error in vote: {str(e)}")
-        return jsonify({'success': False, 'message': 'Database error.'})
+        print(f"Download count error: {e}")
+        return jsonify({'success': False})
