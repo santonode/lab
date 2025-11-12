@@ -1,14 +1,22 @@
 # app.py
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, session
+from flask_session import Session
 import os
 from datetime import datetime
-from db import init_db, init_app as init_db_app  # REMOVED init_db_pool
+from db import init_db, init_app as init_db_app
 from erate import erate_bp
 from memes import memes_bp
 
 # === CREATE APP ===
 app = Flask(__name__, static_folder='static', template_folder='templates')
+
+# === SECRET KEY (REQUIRED FOR SESSION) ===
 app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))
+
+# === SESSION CONFIG (FILESYSTEM) ===
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_FILE_DIR'] = '/tmp/flask_session'  # Render-safe path
+Session(app)
 
 # === DATABASE URL ===
 app.config['DATABASE_URL'] = os.getenv(
@@ -30,7 +38,7 @@ def inject_cache_buster():
     return dict(cache_buster=int(datetime.now().timestamp()))
 
 # === REGISTER BLUEPRINTS WITH PREFIXES ===
-app.register_blueprint(erate_bp, url_prefix='/erate')  # /erate/, /erate/import-interactive
+app.register_blueprint(erate_bp, url_prefix='/erate')  # /erate/, /erate/admin, etc.
 app.register_blueprint(memes_bp, url_prefix='/memes')   # /memes, /memes/register, etc.
 
 # === SERVE /static/thumbs/ AND /static/vids/ ===
@@ -49,7 +57,17 @@ def static2_files(filename):
     response.headers['Cache-Control'] = 'no-cache'
     return response
 
-# === INIT DB ON START (NO POOL) ===
+# === ADMIN LOGOUT HANDLER (SHARED) ===
+@app.route('/admin')
+def admin_logout():
+    if request.args.get('logout'):
+        session.pop('admin_authenticated', None)
+        session.pop('username', None)
+        session.pop('user_id', None)
+        flash("Logged out successfully.", "info")
+    return redirect(url_for('erate.admin'))
+
+# === INIT DB ON START ===
 init_db_app(app)  # Calls: init_db() + teardown
 
 # === GUNICORN HANDLES $PORT — NO app.run() ===
