@@ -1,4 +1,4 @@
-# erate.py — FINAL (100% CORRECT COLUMN MAPPING + FULL DATA + SAFE DATES + PDF FIX)
+# erate.py — FINAL (EXACT models.py ORDER + num_eligible IN BILLED + FULL DATA)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -138,223 +138,92 @@ def _row_to_tuple(row):
 
     form_pdf = f"http://publicdata.usac.org/{form_pdf_raw.lstrip('/')}" if form_pdf_raw else ''
 
-    # DEBUG: Log first 5 PDF paths
-    if not hasattr(_row_to_tuple, "debug_count"):
-        _row_to_tuple.debug_count = 0
-    if _row_to_tuple.debug_count < 5:
-        log("DEBUG PDF RAW [%s]: %s", row.get('Application Number', ''), form_pdf_raw)
-        _row_to_tuple.debug_count += 1
-
     return (
-        # 1. app_number
-        row.get('Application Number', ''),
-
-        # 2. form_nickname
-        row.get('Form Nickname', ''),
-
-        # 3. form_pdf
-        form_pdf,
-
-        # 4. funding_year
-        row.get('Funding Year', ''),
-
-        # 5. fcc_status
-        row.get('FCC Form 470 Status', ''),
-
-        # 6. allowable_contract_date
-        parse_datetime(row.get('Allowable Contract Date')),
-
-        # 7. created_datetime
-        parse_datetime(row.get('Created Date/Time')),
-
-        # 8. created_by
-        row.get('Created By', ''),
-
-        # 9. certified_datetime
-        parse_datetime(row.get('Certified Date/Time')),
-
-        # 10. certified_by
-        row.get('Certified By', ''),
-
-        # 11. last_modified_datetime
-        parse_datetime(row.get('Last Modified Date/Time')),
-
-        # 12. last_modified_by
-        row.get('Last Modified By', ''),
-
-        # 13. ben
-        row.get('Billed Entity Number', ''),
-
-        # 14. entity_name
-        row.get('Billed Entity Name', ''),
-
-        # 15. org_status
-        row.get('Organization Status', ''),
-
-        # 16. org_type
-        row.get('Organization Type', ''),
-
-        # 17. applicant_type
-        row.get('Applicant Type', ''),
-
-        # 18. website
-        row.get('Website URL', ''),
-
-        # 19. latitude
-        float(row.get('Latitude') or 0),
-
-        # 20. longitude
-        float(row.get('Longitude') or 0),
-
-        # 21. fcc_reg_num
-        row.get('Billed Entity FCC Registration Number', ''),
-
-        # 22. address1
-        row.get('Billed Entity Address 1', ''),
-
-        # 23. address2
-        row.get('Billed Entity Address 2', ''),
-
-        # 24. city
-        row.get('Billed Entity City', ''),
-
-        # 25. state
-        row.get('Billed Entity State', ''),
-
-        # 26. zip_code
-        row.get('Billed Entity Zip Code', ''),
-
-        # 27. zip_ext
-        row.get('Billed Entity Zip Code Ext', ''),
-
-        # 28. email
-        row.get('Billed Entity Email', ''),
-
-        # 29. phone
-        row.get('Billed Entity Phone', ''),
-
-        # 30. phone_ext
-        row.get('Billed Entity Phone Ext', ''),
-
-        # 31. num_eligible
-        int(row.get('Number of Eligible Entities') or 0),
-
-        # 32. contact_name
-        row.get('Contact Name', ''),
-
-        # 33. contact_address1
-        row.get('Contact Address 1', ''),
-
-        # 34. contact_address2
-        row.get('Contact Address 2', ''),
-
-        # 35. contact_city
-        row.get('Contact City', ''),
-
-        # 36. contact_state
-        row.get('Contact State', ''),
-
-        # 37. contact_zip
-        row.get('Contact Zip', ''),
-
-        # 38. contact_zip_ext
-        row.get('Contact Zip Ext', ''),
-
-        # 39. contact_phone
-        row.get('Contact Phone', ''),
-
-        # 40. contact_phone_ext
-        row.get('Contact Phone Ext', ''),
-
-        # 41. contact_email
-        row.get('Contact Email', ''),
-
-        # 42. tech_name
-        row.get('Technical Contact Name', ''),
-
-        # 43. tech_title
-        row.get('Technical Contact Title', ''),
-
-        # 44. tech_phone
-        row.get('Technical Contact Phone', ''),
-
-        # 45. tech_phone_ext
-        row.get('Technical Contact Phone Ext', ''),
-
-        # 46. tech_email
-        row.get('Technical Contact Email', ''),
-
-        # 47. auth_name
-        row.get('Authorized Person Name', ''),
-
-        # 48. auth_address
-        row.get('Authorized Person Address', ''),
-
-        # 49. auth_city
-        row.get('Authorized Person City', ''),
-
-        # 50. auth_state
-        row.get('Authorized Person State', ''),
-
-        # 51. auth_zip
-        row.get('Authorized Person Zip', ''),
-
-        # 52. auth_zip_ext
-        row.get('Authorized Person Zip Ext', ''),
-
-        # 53. auth_phone
-        row.get('Authorized Person Phone Number', ''),
-
-        # 54. auth_phone_ext
-        row.get('Authorized Person Phone Number Ext', ''),
-
-        # 55. auth_email
-        row.get('Authorized Person Email', ''),
-
-        # 56. auth_title
-        row.get('Authorized Person Title', ''),
-
-        # 57. auth_employer
-        row.get('Authorized Person Employer', ''),
-
-        # 58. cat1_desc
-        row.get('Category One Description', ''),
-
-        # 59. cat2_desc
-        row.get('Category Two Description', ''),
-
-        # 60. installment_type
-        row.get('Installment Type', ''),
-
-        # 61. installment_min
-        int(row.get('Installment Min Range Years') or 0),
-
-        # 62. installment_max
-        int(row.get('Installment Max Range Years') or 0),
-
-        # 63. rfp_id
-        row.get('Request for Proposal Identifier', ''),
-
-        # 64. state_restrictions
-        row.get('State or Local Restrictions', ''),
-
-        # 65. restriction_desc
-        row.get('State or Local Restrictions Description', ''),
-
-        # 66. statewide
-        row.get('Statewide State', ''),
-
-        # 67. all_public
-        row.get('All Public Schools Districts', ''),
-
-        # 68. all_nonpublic
-        row.get('All Non-Public schools', ''),
-
-        # 69. all_libraries
-        row.get('All Libraries', ''),
-
-        # 70. form_version
-        row.get('Form Version', '')
+        # === PRIMARY KEY ===
+        row.get('Application Number', ''),                     # app_number
+
+        # === BASIC INFO ===
+        row.get('Form Nickname', ''),                          # form_nickname
+        form_pdf,                                              # form_pdf
+        row.get('Funding Year', ''),                           # funding_year
+        row.get('FCC Form 470 Status', ''),                    # fcc_status
+        parse_datetime(row.get('Allowable Contract Date')),    # allowable_contract_date
+        parse_datetime(row.get('Created Date/Time')),          # created_datetime
+        row.get('Created By', ''),                             # created_by
+        parse_datetime(row.get('Certified Date/Time')),        # certified_datetime
+        row.get('Certified By', ''),                           # certified_by
+        parse_datetime(row.get('Last Modified Date/Time')),    # last_modified_datetime
+        row.get('Last Modified By', ''),                       # last_modified_by
+
+        # === BILLED ENTITY ===
+        row.get('Billed Entity Number', ''),                   # ben
+        row.get('Billed Entity Name', ''),                     # entity_name
+        row.get('Organization Status', ''),                    # org_status
+        row.get('Organization Type', ''),                      # org_type
+        row.get('Applicant Type', ''),                         # applicant_type
+        row.get('Website URL', ''),                            # website
+        float(row.get('Latitude') or 0),                       # latitude
+        float(row.get('Longitude') or 0),                      # longitude
+        row.get('Billed Entity FCC Registration Number', ''),  # fcc_reg_num
+        row.get('Billed Entity Address 1', ''),                # address1
+        row.get('Billed Entity Address 2', ''),                # address2
+        row.get('Billed Entity City', ''),                     # city
+        row.get('Billed Entity State', ''),                    # state
+        row.get('Billed Entity Zip Code', ''),                 # zip_code
+        row.get('Billed Entity Zip Code Ext', ''),             # zip_ext
+        row.get('Billed Entity Email', ''),                    # email
+        row.get('Billed Entity Phone', ''),                    # phone
+        row.get('Billed Entity Phone Ext', ''),                # phone_ext
+
+        # === ELIGIBLE ENTITIES (GROUPED WITH BILLED) ===
+        int(row.get('Number of Eligible Entities') or 0),      # num_eligible
+
+        # === CONTACT ===
+        row.get('Contact Name', ''),                           # contact_name
+        row.get('Contact Address 1', ''),                      # contact_address1
+        row.get('Contact Address 2', ''),                      # contact_address2
+        row.get('Contact City', ''),                           # contact_city
+        row.get('Contact State', ''),                          # contact_state
+        row.get('Contact Zip', ''),                            # contact_zip
+        row.get('Contact Zip Ext', ''),                        # contact_zip_ext
+        row.get('Contact Phone', ''),                          # contact_phone
+        row.get('Contact Phone Ext', ''),                      # contact_phone_ext
+        row.get('Contact Email', ''),                          # contact_email
+
+        # === TECHNICAL CONTACT ===
+        row.get('Technical Contact Name', ''),                 # tech_name
+        row.get('Technical Contact Title', ''),                # tech_title
+        row.get('Technical Contact Phone', ''),                # tech_phone
+        row.get('Technical Contact Phone Ext', ''),            # tech_phone_ext
+        row.get('Technical Contact Email', ''),                # tech_email
+
+        # === AUTHORIZED PERSON ===
+        row.get('Authorized Person Name', ''),                 # auth_name
+        row.get('Authorized Person Address', ''),              # auth_address
+        row.get('Authorized Person City', ''),                 # auth_city
+        row.get('Authorized Person State', ''),                # auth_state
+        row.get('Authorized Person Zip', ''),                  # auth_zip
+        row.get('Authorized Person Zip Ext', ''),              # auth_zip_ext
+        row.get('Authorized Person Phone Number', ''),         # auth_phone
+        row.get('Authorized Person Phone Number Ext', ''),     # auth_phone_ext
+        row.get('Authorized Person Email', ''),                # auth_email
+        row.get('Authorized Person Title', ''),                # auth_title
+        row.get('Authorized Person Employer', ''),             # auth_employer
+
+        # === SERVICES ===
+        row.get('Category One Description', ''),               # cat1_desc
+        row.get('Category Two Description', ''),               # cat2_desc
+        row.get('Installment Type', ''),                       # installment_type
+        int(row.get('Installment Min Range Years') or 0),      # installment_min
+        int(row.get('Installment Max Range Years') or 0),      # installment_max
+        row.get('Request for Proposal Identifier', ''),        # rfp_id
+        row.get('State or Local Restrictions', ''),            # state_restrictions
+        row.get('State or Local Restrictions Description', ''),# restriction_desc
+        row.get('Statewide State', ''),                        # statewide
+        row.get('All Public Schools Districts', ''),           # all_public
+        row.get('All Non-Public schools', ''),                 # all_nonpublic
+        row.get('All Libraries', ''),                          # all_libraries
+        row.get('Form Version', '')                            # form_version
     )
 
 # === FULL BLUEBIRD POP LIST (223) ===
