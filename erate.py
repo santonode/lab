@@ -1,4 +1,4 @@
-# erate.py — FINAL (SKIP id + PDF FIX + DEBUG + EXACT models.py ORDER)
+# erate.py — FINAL (CORS/CORB FIXED + SKIP id + PDF FIX + DEBUG + EXACT models.py ORDER)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -130,7 +130,7 @@ def _row_to_tuple(row):
         log("DEBUG ROW %s: %s", ROW_DEBUG_COUNT + 1, dict(row))
         ROW_DEBUG_COUNT += 1
 
-    # === PDF: CORRECT DOMAIN + NO DUPLICATE ===
+    # === PDF: CORRECT DOMAIN + NO DOUBLE ===
     form_pdf_raw = (
         row.get('Form PDF', '') or
         row.get('Form PDF Link', '') or
@@ -139,7 +139,7 @@ def _row_to_tuple(row):
         ''
     ).strip()
 
-    if form_pdf_raw.startswith('http://publicdata.usac.org/http://'):
+    if 'http://publicdata.usac.org/http://' in form_pdf_raw:
         form_pdf_raw = form_pdf_raw.replace('http://publicdata.usac.org/', '', 1)
 
     form_pdf = f"http://publicdata.usac.org/{form_pdf_raw.lstrip('/')}" if form_pdf_raw else ''
@@ -222,7 +222,7 @@ pop_data = {
     "Albany, MO": (40.251695, -94.332911),
     "Alhambra, IL": (38.888443, -89.731215),
     "Alma, MO": (39.094677, -93.546614),
-    "Aurora, IL": (41.797086, -88.244751),
+    "Aur.orgAurora, IL": (41.797086, -88.244751),
     "Auxvasse, MO": (39.017858, -91.898057),
     "Branson, MO": (36.642988, -93.219762),
     "Baldwin, IL": (38.185584, -89.844811),
@@ -321,7 +321,7 @@ pop_data = {
     "Peculiar, MO": (38.718657, -94.462079),
     "Peoria, IL": (40.692106, -89.5909),
     "Platte City, MO": (39.418636, -94.76626),
-    "Pilot Grove, MO": (38.874257, -92.910989),
+    "Pilot Grove, MO": (38.874257, Refresh-92.910989),
     "Pulaski, IL": (37.20226, -89.21105),
     "Princeton, MO": (40.397807, -93.584988),
     "Quincy, IL": (39.938443, -91.409804),
@@ -482,7 +482,7 @@ def bbmap(app_number):
             "pop_city": dist_info['pop_city'],
             "distance": f"{dist_info['distance']:.1f} miles" if dist_info['distance'] != float('inf') else "N/A",
             "coverage": dist_info['coverage']
-        })
+        }), 200, {'Content-Type': 'application/json'}
 
     except Exception as e:
         log("Bluebird API error: %s", e)
@@ -490,7 +490,7 @@ def bbmap(app_number):
     finally:
         conn.close()
 
-# === APPLICANT DETAILS API — SKIP id + SAFE DATES + DEBUG ===
+# === APPLICANT DETAILS API — SKIP id + JSON HEADER + DEBUG ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -504,7 +504,7 @@ def details(app_number):
             # === SKIP id (row[0]) ===
             row = row[1:]
 
-            log("DETAILS ROW for %s (after skip id): %s", app_number, row[:10])
+            log("DETAILS ROW for %s: %s", app_number, row[:10])
 
             def fmt_date(dt):
                 if isinstance(dt, datetime):
@@ -517,78 +517,78 @@ def details(app_number):
                 return '—'
 
             data = {
-                "form_nickname": row[0] or '—',
-                "form_pdf": Markup(f'<a href="{row[1]}" target="_blank">View PDF</a>') if row[1] else '—',
-                "funding_year": row[2] or '—',
-                "fcc_status": row[3] or '—',
-                "allowable_contract_date": fmt_date(row[4]),
-                "created_datetime": fmt_datetime(row[5]),
-                "created_by": row[6] or '—',
-                "certified_datetime": fmt_datetime(row[7]),
-                "certified_by": row[8] or '—',
-                "last_modified_datetime": fmt_datetime(row[9]),
-                "last_modified_by": row[10] or '—',
-                "ben": row[11] or '—',
-                "entity_name": row[12] or '—',
-                "org_status": row[13] or '—',
-                "org_type": row[14] or '—',
-                "applicant_type": row[15] or '—',
-                "website": row[16] or '—',
-                "latitude": row[17],
-                "longitude": row[18],
-                "fcc_reg_num": row[19] or '—',
-                "address1": row[20] or '',
-                "address2": row[21] or '',
-                "city": row[22] or '',
-                "state": row[23] or '',
-                "zip_code": row[24] or '',
-                "zip_ext": row[25] or '',
-                "email": row[26] or '—',
-                "phone": row[27] or '',
-                "phone_ext": row[28] or '',
-                "num_eligible": row[29] if row[29] is not None else 0,
-                "contact_name": row[30] or '—',
-                "contact_address1": row[31] or '',
-                "contact_address2": row[32] or '',
-                "contact_city": row[33] or '',
-                "contact_state": row[34] or '',
-                "contact_zip": row[35] or '',
-                "contact_zip_ext": row[36] or '',
-                "contact_phone": row[37] or '',
-                "contact_phone_ext": row[38] or '',
-                "contact_email": row[39] or '—',
-                "tech_name": row[40] or '—',
-                "tech_title": row[41] or '—',
-                "tech_phone": row[42] or '',
-                "tech_phone_ext": row[43] or '',
-                "tech_email": row[44] or '—',
-                "auth_name": row[45] or '—',
-                "auth_address": row[46] or '—',
-                "auth_city": row[47] or '',
-                "auth_state": row[48] or '',
-                "auth_zip": row[49] or '',
-                "auth_zip_ext": row[50] or '',
-                "auth_phone": row[51] or '',
-                "auth_phone_ext": row[52] or '',
-                "auth_email": row[53] or '—',
-                "auth_title": row[54] or '—',
-                "auth_employer": row[55] or '—',
-                "cat1_desc": row[56] or '—',
-                "cat2_desc": row[57] or '—',
-                "installment_type": row[58] or '—',
-                "installment_min": row[59] if row[59] is not None else 0,
-                "installment_max": row[60] if row[60] is not None else 0,
-                "rfp_id": row[61] or '—',
-                "state_restrictions": row[62] or '—',
-                "restriction_desc": row[63] or '—',
-                "statewide": row[64] or '—',
-                "all_public": row[65] or '—',
-                "all_nonpublic": row[66] or '—',
-                "all_libraries": row[67] or '—',
-                "form_version": row[68] or '—'
+                "form_nickname": row[1] or '—',
+                "form_pdf": Markup(f'<a href="{row[2]}" target="_blank">View PDF</a>') if row[2] else '—',
+                "funding_year": row[3] or '—',
+                "fcc_status": row[4] or '—',
+                "allowable_contract_date": fmt_date(row[5]),
+                "created_datetime": fmt_datetime(row[6]),
+                "created_by": row[7] or '—',
+                "certified_datetime": fmt_datetime(row[8]),
+                "certified_by": row[9] or '—',
+                "last_modified_datetime": fmt_datetime(row[10]),
+                "last_modified_by": row[11] or '—',
+                "ben": row[12] or '—',
+                "entity_name": row[13] or '—',
+                "org_status": row[14] or '—',
+                "org_type": row[15] or '—',
+                "applicant_type": row[16] or '—',
+                "website": row[17] or '—',
+                "latitude": row[18],
+                "longitude": row[19],
+                "fcc_reg_num": row[20] or '—',
+                "address1": row[21] or '',
+                "address2": row[22] or '',
+                "city": row[23] or '',
+                "state": row[24] or '',
+                "zip_code": row[25] or '',
+                "zip_ext": row[26] or '',
+                "email": row[27] or '—',
+                "phone": row[28] or '',
+                "phone_ext": row[29] or '',
+                "num_eligible": row[30] if row[30] is not None else 0,
+                "contact_name": row[31] or '—',
+                "contact_address1": row[32] or '',
+                "contact_address2": row[33] or '',
+                "contact_city": row[34] or '',
+                "contact_state": row[35] or '',
+                "contact_zip": row[36] or '',
+                "contact_zip_ext": row[37] or '',
+                "contact_phone": row[38] or '',
+                "contact_phone_ext": row[39] or '',
+                "contact_email": row[40] or '—',
+                "tech_name": row[41] or '—',
+                "tech_title": row[42] or '—',
+                "tech_phone": row[43] or '',
+                "tech_phone_ext": row[44] or '',
+                "tech_email": row[45] or '—',
+                "auth_name": row[46] or '—',
+                "auth_address": row[47] or '—',
+                "auth_city": row[48] or '',
+                "auth_state": row[49] or '',
+                "auth_zip": row[50] or '',
+                "auth_zip_ext": row[51] or '',
+                "auth_phone": row[52] or '',
+                "auth_phone_ext": row[53] or '',
+                "auth_email": row[54] or '—',
+                "auth_title": row[55] or '—',
+                "auth_employer": row[56] or '—',
+                "cat1_desc": row[57] or '—',
+                "cat2_desc": row[58] or '—',
+                "installment_type": row[59] or '—',
+                "installment_min": row[60] if row[60] is not None else 0,
+                "installment_max": row[61] if row[61] is not None else 0,
+                "rfp_id": row[62] or '—',
+                "state_restrictions": row[63] or '—',
+                "restriction_desc": row[64] or '—',
+                "statewide": row[65] or '—',
+                "all_public": row[66] or '—',
+                "all_nonpublic": row[67] or '—',
+                "all_libraries": row[68] or '—',
+                "form_version": row[69] or '—'
             }
 
-            return jsonify(data)
+            return jsonify(data), 200, {'Content-Type': 'application/json'}
 
     except Exception as e:
         log("Details API error: %s", e)
@@ -605,7 +605,7 @@ def extract_csv():
         return redirect(url_for('erate.dashboard'))
     if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 500_000_000:
         flash("Large CSV exists. Delete to re-download.", "warning")
-        return redirect(url_for('erate.dashboard'))
+        return redirect(url_for('erate.dashboard')
 
     current_app.config['CSV_DOWNLOAD_IN_PROGRESS'] = True
     thread = threading.Thread(target=_download_csv_background, args=(current_app._get_current_object(),))
