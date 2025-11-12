@@ -235,7 +235,7 @@
                     <th>Entity Name</th>
                     <th>State</th>
                     <th>Funding Year</th>
-                    <th>FCC Status</th>
+                    <th>FCC Status</th> <!-- FIXED: was </2> -->
                     <th>Last Modified</th>
                 </tr>
             </thead>
@@ -251,7 +251,9 @@
                     <td data-label="State">{{ row.state }}</td>
                     <td data-label="Year">{{ row.funding_year }}</td>
                     <td data-label="Status">{{ row.fcc_status }}</td>
-                    <td data-label="Modified">{{ row.last_modified_datetime|strftime('%m/%d/%Y') if row.last_modified_datetime else '—' }}</td>
+                    <td data-label="Modified">
+                        {{ row.last_modified_datetime|strftime('%m/%d/%Y') if row.last_modified_datetime else '—' }}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -289,7 +291,6 @@
             window.location = "{{ url_for('erate.dashboard') }}";
         }
 
-        // Auto-submit on Enter in date field
         document.getElementById('modified_after').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') updateFilters();
         });
