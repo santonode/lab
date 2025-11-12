@@ -1,4 +1,4 @@
-# erate.py — FINAL (ALL FIELDS IN /details + MODAL TABS + PDF + BLUEBIRD)
+# erate.py — FINAL (TEXT FIELDS + ALL MODAL TABS + PDF + BLUEBIRD)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -196,14 +196,14 @@ def _row_to_tuple(row):
         truncate(row.get('Authorized Person Email', '')),
         truncate(row.get('Authorized Person Title', '')),
         truncate(row.get('Authorized Person Employer', '')),
-        truncate(row.get('Category One Description', '')),
-        truncate(row.get('Category Two Description', '')),
+        row.get('Category One Description', ''),        # TEXT — NO TRUNCATE
+        row.get('Category Two Description', ''),        # TEXT — NO TRUNCATE
         truncate(row.get('Installment Type', '')),
         int(row.get('Installment Min Range Years') or 0),
         int(row.get('Installment Max Range Years') or 0),
         truncate(row.get('Request for Proposal Identifier', '')),
         truncate(row.get('State or Local Restrictions', '')),
-        truncate(row.get('State or Local Restrictions Description', '')),
+        row.get('State or Local Restrictions Description', ''),  # TEXT — NO TRUNCATE
         truncate(row.get('Statewide State', '')),
         truncate(row.get('All Public Schools Districts', '')),
         truncate(row.get('All Non-Public schools', '')),
@@ -484,20 +484,17 @@ def bbmap(app_number):
     finally:
         conn.close()
 
-# === APPLICANT DETAILS API — NOW RETURNS ALL FIELDS ===
+# === APPLICANT DETAILS API — ALL FIELDS + TEXT FIELDS ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
     try:
         with conn.cursor() as cur:
-            cur.execute("""
-                SELECT * FROM erate WHERE app_number = %s
-            """, (app_number,))
+            cur.execute("SELECT * FROM erate WHERE app_number = %s", (app_number,))
             row = cur.fetchone()
             if not row:
                 return jsonify({"error": "Applicant not found"}), 404
 
-            # Map all columns to dict
             data = {
                 "form_nickname": row[1],
                 "form_pdf": Markup(f'<a href="{row[2]}" target="_blank">View PDF</a>') if row[2] else '—',
@@ -555,14 +552,14 @@ def details(app_number):
                 "auth_email": row[54],
                 "auth_title": row[55],
                 "auth_employer": row[56],
-                "cat1_desc": row[57],
-                "cat2_desc": row[58],
+                "cat1_desc": row[57],        # TEXT — FULL
+                "cat2_desc": row[58],        # TEXT — FULL
                 "installment_type": row[59],
                 "installment_min": row[60],
                 "installment_max": row[61],
                 "rfp_id": row[62],
                 "state_restrictions": row[63],
-                "restriction_desc": row[64],
+                "restriction_desc": row[64], # TEXT — FULL
                 "statewide": row[65],
                 "all_public": row[66],
                 "all_nonpublic": row[67],
