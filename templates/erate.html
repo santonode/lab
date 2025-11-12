@@ -85,6 +85,12 @@
         }
         .btn-admin {
             background: var(--warning);
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: 600;
+            display: inline-block;
         }
         .btn-admin:hover {
             background: #f57c00;
@@ -208,7 +214,7 @@
 
             <!-- ADMIN-ONLY CSV DOWNLOAD -->
             {% if show_download_link %}
-                <a href="{{ url_for('erate.admin_login') }}" class="btn-admin" style="text-decoration:none; color:white;">
+                <a href="{{ url_for('erate.admin_login') }}" class="btn-admin">
                     Download Full CSV (Admin)
                 </a>
             {% endif %}
@@ -235,7 +241,7 @@
                     <th>Entity Name</th>
                     <th>State</th>
                     <th>Funding Year</th>
-                    <th>FCC Status</th> <!-- FIXED: was </2> -->
+                    <th>FCC Status</th>
                     <th>Last Modified</th>
                 </tr>
             </thead>
