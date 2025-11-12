@@ -86,7 +86,7 @@ def admin_login():
             flash("Incorrect password.", "error")
     return render_template('admin_login.html')
 
-# === PUBLIC DASHBOARD (FIXED strftime) ===
+# === DASHBOARD (FIXED strftime) ===
 @erate_bp.route('/')
 def dashboard():
     log("Public dashboard accessed")
@@ -98,7 +98,6 @@ def dashboard():
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10, autocommit=True)
     try:
         with conn.cursor() as cur:
-            # === COUNT ===
             count_sql = 'SELECT COUNT(*) FROM erate'
             count_params = []
             where_clauses = []
@@ -113,7 +112,6 @@ def dashboard():
             cur.execute(count_sql, count_params)
             total_count = cur.fetchone()[0]
 
-            # === FETCH DATA ===
             sql = '''
                 SELECT app_number, entity_name, state, funding_year,
                        fcc_status, last_modified_datetime
@@ -134,7 +132,8 @@ def dashboard():
                 if isinstance(last_mod, str) and last_mod:
                     try:
                         last_mod = datetime.fromisoformat(last_mod.replace('Z', '+00:00'))
-                    except:
+                    except ValueError as e:
+                        log("Failed to parse date: %s → %s", last_mod, e)
                         last_mod = None
                 table_data.append({
                     'app_number': r[0],
