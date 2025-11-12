@@ -1,4 +1,4 @@
-# erate.py — FINAL (TEXT FIELDS + ALL MODAL TABS + PDF + BLUEBIRD)
+# erate.py — FINAL (TEXT FIELDS + CORRECT PDF + MODAL TABS + BLUEBIRD)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -119,7 +119,7 @@ def _row_to_tuple(row):
         log("CSV HEADERS: %s", list(row.keys()))
         CSV_HEADERS_LOGGED = True
 
-    # === PDF COLUMN: Try multiple possible names ===
+    # === PDF: CORRECT DOMAIN + FULL PATH ===
     form_pdf_raw = (
         row.get('Form PDF', '') or
         row.get('Form PDF Link', '') or
@@ -128,15 +128,14 @@ def _row_to_tuple(row):
         ''
     ).strip()
 
+    form_pdf = f"http://publicdata.usac.org/{form_pdf_raw.lstrip('/')}" if form_pdf_raw else ''
+
     # DEBUG: Log first 5 PDF paths
     if not hasattr(_row_to_tuple, "debug_count"):
         _row_to_tuple.debug_count = 0
     if _row_to_tuple.debug_count < 5:
         log("DEBUG PDF RAW [%s]: %s", row.get('Application Number', ''), form_pdf_raw)
         _row_to_tuple.debug_count += 1
-
-    # === BUILD FULL URL ===
-    form_pdf = f"http://publicdata.usac.org/{form_pdf_raw.lstrip('/')}" if form_pdf_raw else ''
 
     return (
         truncate(row.get('Application Number', '')),
@@ -152,16 +151,16 @@ def _row_to_tuple(row):
         parse_datetime(row.get('Last Modified Date/Time')),
         truncate(row.get('Last Modified By', '')),
         truncate(row.get('Billed Entity Number', '')),
-        truncate(row.get('Billed Entity Name', '')),
+        row.get('Billed Entity Name', ''),           # TEXT
         truncate(row.get('Organization Status', '')),
         truncate(row.get('Organization Type', '')),
         truncate(row.get('Applicant Type', '')),
-        truncate(row.get('Website URL', '')),
+        row.get('Website URL', ''),                  # TEXT
         float(row.get('Latitude') or 0),
         float(row.get('Longitude') or 0),
         truncate(row.get('Billed Entity FCC Registration Number', '')),
-        truncate(row.get('Billed Entity Address 1', '')),
-        truncate(row.get('Billed Entity Address 2', '')),
+        row.get('Billed Entity Address 1', ''),      # TEXT
+        row.get('Billed Entity Address 2', ''),      # TEXT
         truncate(row.get('Billed Entity City', '')),
         truncate(row.get('Billed Entity State', '')),
         truncate(row.get('Billed Entity Zip Code', '')),
@@ -171,8 +170,8 @@ def _row_to_tuple(row):
         truncate(row.get('Billed Entity Phone Ext', '')),
         int(row.get('Number of Eligible Entities') or 0),
         truncate(row.get('Contact Name', '')),
-        truncate(row.get('Contact Address 1', '')),
-        truncate(row.get('Contact Address 2', '')),
+        row.get('Contact Address 1', ''),            # TEXT
+        row.get('Contact Address 2', ''),            # TEXT
         truncate(row.get('Contact City', '')),
         truncate(row.get('Contact State', '')),
         truncate(row.get('Contact Zip', '')),
@@ -186,7 +185,7 @@ def _row_to_tuple(row):
         truncate(row.get('Technical Contact Phone Ext', '')),
         truncate(row.get('Technical Contact Email', '')),
         truncate(row.get('Authorized Person Name', '')),
-        truncate(row.get('Authorized Person Address', '')),
+        row.get('Authorized Person Address', ''),    # TEXT
         truncate(row.get('Authorized Person City', '')),
         truncate(row.get('Authorized Person State', '')),
         truncate(row.get('Authorized Person Zip', '')),
@@ -196,14 +195,14 @@ def _row_to_tuple(row):
         truncate(row.get('Authorized Person Email', '')),
         truncate(row.get('Authorized Person Title', '')),
         truncate(row.get('Authorized Person Employer', '')),
-        row.get('Category One Description', ''),        # TEXT — NO TRUNCATE
-        row.get('Category Two Description', ''),        # TEXT — NO TRUNCATE
+        row.get('Category One Description', ''),     # TEXT — FULL
+        row.get('Category Two Description', ''),     # TEXT — FULL
         truncate(row.get('Installment Type', '')),
         int(row.get('Installment Min Range Years') or 0),
         int(row.get('Installment Max Range Years') or 0),
         truncate(row.get('Request for Proposal Identifier', '')),
         truncate(row.get('State or Local Restrictions', '')),
-        row.get('State or Local Restrictions Description', ''),  # TEXT — NO TRUNCATE
+        row.get('State or Local Restrictions Description', ''),  # TEXT — FULL
         truncate(row.get('Statewide State', '')),
         truncate(row.get('All Public Schools Districts', '')),
         truncate(row.get('All Non-Public schools', '')),
