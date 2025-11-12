@@ -1,4 +1,4 @@
-# erate.py — FINAL (EXACT models.py ORDER + num_eligible IN BILLED + FULL DATA)
+# erate.py — FINAL (NO parse_datetime on text + EXACT models.py ORDER + FULL DATA)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -90,29 +90,32 @@ INSERT_SQL = '''
     )
 '''
 
-# === PARSE DATETIME — ALL FORMATS ===
+# === PARSE DATETIME — ONLY IF LOOKS LIKE DATE ===
 def parse_datetime(value):
     if not value or not str(value).strip():
         return None
     value = str(value).strip()
 
+    # Skip if no digits (e.g. "Certified", "Tamera Burke")
+    if not any(c.isdigit() for c in value):
+        return None
+
     formats = [
-        "%Y-%m-%d %H:%M:%S",           # 2025-12-08 00:00:00
-        "%Y-%m-%d",                    # 2025-12-08
-        "%m/%d/%Y %I:%M:%S %p",        # 07/03/2015 10:14:00 AM
-        "%m/%d/%Y %H:%M:%S",           # 07/03/2015 10:14:00
-        "%m/%d/%Y %I:%M %p",           # 07/03/2015 10:14 AM
-        "%m/%d/%Y %H:%M",              # 07/03/2015 10:14
-        "%m/%d/%Y",                    # 07/03/2015
-        "%Y-%m-%d %H:%M:%S.%f",        # 2025-07-03 10:14:00.000
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d",
+        "%m/%d/%Y %I:%M:%S %p",
+        "%m/%d/%Y %H:%M:%S",
+        "%m/%d/%Y %I:%M %p",
+        "%m/%d/%Y %H:%M",
+        "%m/%d/%Y",
+        "%Y-%m-%d %H:%M:%S.%f",
     ]
     for fmt in formats:
         try:
             return datetime.strptime(value, fmt)
         except ValueError:
             continue
-    log("Failed to parse datetime: %s", value)
-    return None
+    return None  # Silent fail
 
 # === DEBUG: Track CSV headers and sample PDF paths ===
 CSV_HEADERS_LOGGED = False
@@ -149,11 +152,11 @@ def _row_to_tuple(row):
         row.get('FCC Form 470 Status', ''),                    # fcc_status
         parse_datetime(row.get('Allowable Contract Date')),    # allowable_contract_date
         parse_datetime(row.get('Created Date/Time')),          # created_datetime
-        row.get('Created By', ''),                             # created_by
+        row.get('Created By', ''),                             # created_by — TEXT
         parse_datetime(row.get('Certified Date/Time')),        # certified_datetime
-        row.get('Certified By', ''),                           # certified_by
+        row.get('Certified By', ''),                           # certified_by — TEXT
         parse_datetime(row.get('Last Modified Date/Time')),    # last_modified_datetime
-        row.get('Last Modified By', ''),                       # last_modified_by
+        row.get('Last Modified By', ''),                       # last_modified_by — TEXT
 
         # === BILLED ENTITY ===
         row.get('Billed Entity Number', ''),                   # ben
@@ -510,20 +513,15 @@ def details(app_number):
             if not row:
                 return jsonify({"error": "Applicant not found"}), 404
 
-            def to_datetime(val):
-                if isinstance(val, datetime):
-                    return val
-                if isinstance(val, str):
-                    return parse_datetime(val)
-                return None
-
             def fmt_date(dt):
-                dt = to_datetime(dt)
-                return dt.strftime('%m/%d/%Y') if dt else '—'
+                if isinstance(dt, datetime):
+                    return dt.strftime('%m/%d/%Y')
+                return '—'
 
             def fmt_datetime(dt):
-                dt = to_datetime(dt)
-                return dt.strftime('%m/%d/%Y %I:%M %p') if dt else '—'
+                if isinstance(dt, datetime):
+                    return dt.strftime('%m/%d/%Y %I:%M %p')
+                return '—'
 
             data = {
                 "form_nickname": row[1] or '—',
@@ -773,6 +771,7 @@ def _import_all_background(app):
                     with app.app_context():
                         app.config['import_index'] += len(batch)
                         app.config['import_success'] += len(filtered_batch)
+  # FIXED: was += len(batch)
                         log("Progress: %s / %s", app.config['import_index'], total)
 
                     batch = []
