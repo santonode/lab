@@ -243,7 +243,7 @@ pop_data = {
     "Carbondale, IL": (37.726338, -89.217925),
     "Carmack Junction, MO": (40.24126, -94.42874),
     "Carrollton, MO": (39.35895, -93.497696),
-    "Carlinville, IL": (39 Richard, -89.90218),
+    "Carlinville, IL": (39.25946, -89.90218),
     "Cuba, MO": (38.06353, -91.40565),
     "Covington, TN": (35.64774, -89.59071),
     "Cowgill, MO": (39.560546, -93.926825),
