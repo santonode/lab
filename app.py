@@ -1,6 +1,5 @@
 # app.py
-from flask import Flask, send_from_directory, session
-from flask_session import Session
+from flask import Flask, send_from_directory, session, request, redirect, url_for, flash
 import os
 from datetime import datetime
 from db import init_db, init_app as init_db_app
@@ -12,11 +11,6 @@ app = Flask(__name__, static_folder='static', template_folder='templates')
 
 # === SECRET KEY (REQUIRED FOR SESSION) ===
 app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))
-
-# === SESSION CONFIG (FILESYSTEM) ===
-app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SESSION_FILE_DIR'] = '/tmp/flask_session'  # Render-safe path
-Session(app)
 
 # === DATABASE URL ===
 app.config['DATABASE_URL'] = os.getenv(
@@ -38,8 +32,8 @@ def inject_cache_buster():
     return dict(cache_buster=int(datetime.now().timestamp()))
 
 # === REGISTER BLUEPRINTS WITH PREFIXES ===
-app.register_blueprint(erate_bp, url_prefix='/erate')  # /erate/, /erate/admin, etc.
-app.register_blueprint(memes_bp, url_prefix='/memes')   # /memes, /memes/register, etc.
+app.register_blueprint(erate_bp, url_prefix='/erate')
+app.register_blueprint(memes_bp, url_prefix='/memes')
 
 # === SERVE /static/thumbs/ AND /static/vids/ ===
 @app.route('/static/thumbs/<path:filename>')
