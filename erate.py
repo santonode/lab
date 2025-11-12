@@ -1,4 +1,4 @@
-# erate.py — FINAL (NO template_folder + admin_login.html in templates/)
+# erate.py — FINAL (Admin Login = CSV Download + Redirect to erate.html)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup, session
@@ -79,18 +79,24 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
-# === ADMIN LOGIN PAGE ===
+# === ADMIN LOGIN + CSV DOWNLOAD ===
 @erate_bp.route('/admin-login', methods=['GET', 'POST'])
 def admin_login():
     if request.method == 'POST':
         password = request.form.get('admin_pass', '')
         if password == ADMIN_PASS:
             session['admin_authenticated'] = True
-            flash("Admin access granted.", "success")
-            return redirect(url_for('erate.admin'))
+            flash("Admin access granted. CSV download started in background.", "success")
+            # Start CSV download
+            if not current_app.config.get('CSV_DOWNLOAD_IN_PROGRESS'):
+                current_app.config['CSV_DOWNLOAD_IN_PROGRESS'] = True
+                thread = threading.Thread(target=_download_csv_background, args=(current_app._get_current_object(),))
+                thread.daemon = True
+                thread.start()
+            return redirect(url_for('erate.dashboard'))  # GO TO erate.html
         else:
             flash("Incorrect password.", "error")
-    return render_template('admin_login.html')  # ← In templates/
+    return render_template('admin_login.html')
 
 # === ADMIN PANEL (MEMES + USERS) ===
 @erate_bp.route('/admin', methods=['GET', 'POST'])
@@ -99,22 +105,18 @@ def admin():
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
     try:
         with conn.cursor() as cur:
-            # Users
             cur.execute("SELECT id, username, password, points FROM users ORDER BY id")
             users = [dict(id=r[0], username=r[1], password=r[2], points=r[3]) for r in cur.fetchall()]
 
-            # All Memes
             cur.execute("""
                 SELECT m.meme_id, m.type, m.meme_description, m.owner, m.meme_download_counts
                 FROM memes m ORDER BY m.meme_id
             """)
             all_memes = [dict(meme_id=r[0], type=r[1], meme_description=r[2], owner=r[3], meme_download_counts=r[4]) for r in cur.fetchall()]
 
-            # Current user
             current_user = session.get('username', 'admin')
             is_santo = current_user == 'santo'
 
-            # Next ID
             cur.execute("SELECT COALESCE(MAX(meme_id), 0) + 1 FROM memes")
             next_meme_id = cur.fetchone()[0]
 
@@ -652,25 +654,7 @@ def details(app_number):
     finally:
         conn.close()
 
-# === EXTRACT CSV — ADMIN REQUIRED ===
-@erate_bp.route('/extract-csv')
-@admin_required
-def extract_csv():
-    log("Admin: Extract CSV requested")
-    if current_app.config.get('CSV_DOWNLOAD_IN_PROGRESS'):
-        flash("CSV download already in progress.", "info")
-        return redirect(url_for('erate.dashboard'))
-    if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 500_000_000:
-        flash("Large CSV exists. Delete to re-download.", "warning")
-        return redirect(url_for('erate.dashboard'))
-
-    current_app.config['CSV_DOWNLOAD_IN_PROGRESS'] = True
-    thread = threading.Thread(target=_download_csv_background, args=(current_app._get_current_object(),))
-    thread.daemon = True
-    thread.start()
-    flash("CSV download started. Check in 2-5 min.", "info")
-    return redirect(url_for('erate.dashboard'))
-
+# === CSV DOWNLOAD BACKGROUND ===
 def _download_csv_background(app):
     time.sleep(1)
     try:
