@@ -1,4 +1,4 @@
-# erate.py — FINAL (ALL FIXES: full text, safe dates, no truncate, correct PDF)
+# erate.py — FINAL (ALL FIXES: correct column mapping, safe dates, full text, PDF)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -138,76 +138,215 @@ def _row_to_tuple(row):
         _row_to_tuple.debug_count += 1
 
     return (
-        truncate(row.get('Application Number', '')),
-        truncate(row.get('Form Nickname', '')),
+        # 1. app_number
+        row.get('Application Number', ''),
+
+        # 2. form_nickname
+        row.get('Form Nickname', ''),
+
+        # 3. form_pdf
         form_pdf,
-        truncate(row.get('Funding Year', '')),
-        truncate(row.get('FCC Form 470 Status', '')),
+
+        # 4. funding_year
+        row.get('Funding Year', ''),
+
+        # 5. fcc_status
+        row.get('FCC Form 470 Status', ''),
+
+        # 6. allowable_contract_date
         parse_datetime(row.get('Allowable Contract Date')),
+
+        # 7. created_datetime
         parse_datetime(row.get('Created Date/Time')),
-        truncate(row.get('Created By', '')),
+
+        # 8. created_by
+        row.get('Created By', ''),
+
+        # 9. certified_datetime
         parse_datetime(row.get('Certified Date/Time')),
-        truncate(row.get('Certified By', '')),
+
+        # 10. certified_by
+        row.get('Certified By', ''),
+
+        # 11. last_modified_datetime
         parse_datetime(row.get('Last Modified Date/Time')),
-        truncate(row.get('Last Modified By', '')),
-        truncate(row.get('Billed Entity Number', '')),
-        row.get('Billed Entity Name', ''),           # TEXT
-        truncate(row.get('Organization Status', '')),
-        truncate(row.get('Organization Type', '')),
-        truncate(row.get('Applicant Type', '')),
-        row.get('Website URL', ''),                  # TEXT
+
+        # 12. last_modified_by
+        row.get('Last Modified By', ''),
+
+        # 13. ben
+        row.get('Billed Entity Number', ''),
+
+        # 14. entity_name
+        row.get('Billed Entity Name', ''),
+
+        # 15. org_status
+        row.get('Organization Status', ''),
+
+        # 16. org_type
+        row.get('Organization Type', ''),
+
+        # 17. applicant_type
+        row.get('Applicant Type', ''),
+
+        # 18. website
+        row.get('Website URL', ''),
+
+        # 19. latitude
         float(row.get('Latitude') or 0),
+
+        # 20. longitude
         float(row.get('Longitude') or 0),
-        truncate(row.get('Billed Entity FCC Registration Number', '')),
-        row.get('Billed Entity Address 1', ''),      # TEXT
-        row.get('Billed Entity Address 2', ''),      # TEXT
-        truncate(row.get('Billed Entity City', '')),
-        truncate(row.get('Billed Entity State', '')),
-        truncate(row.get('Billed Entity Zip Code', '')),
-        truncate(row.get('Billed Entity Zip Code Ext', '')),
-        truncate(row.get('Billed Entity Email', '')),
-        truncate(row.get('Billed Entity Phone', '')),
-        truncate(row.get('Billed Entity Phone Ext', '')),
+
+        # 21. fcc_reg_num
+        row.get('Billed Entity FCC Registration Number', ''),
+
+        # 22. address1
+        row.get('Billed Entity Address 1', ''),
+
+        # 23. address2
+        row.get('Billed Entity Address 2', ''),
+
+        # 24. city
+        row.get('Billed Entity City', ''),
+
+        # 25. state
+        row.get('Billed Entity State', ''),
+
+        # 26. zip_code
+        row.get('Billed Entity Zip Code', ''),
+
+        # 27. zip_ext
+        row.get('Billed Entity Zip Code Ext', ''),
+
+        # 28. email
+        row.get('Billed Entity Email', ''),
+
+        # 29. phone
+        row.get('Billed Entity Phone', ''),
+
+        # 30. phone_ext
+        row.get('Billed Entity Phone Ext', ''),
+
+        # 31. num_eligible
         int(row.get('Number of Eligible Entities') or 0),
-        truncate(row.get('Contact Name', '')),
-        row.get('Contact Address 1', ''),            # TEXT
-        row.get('Contact Address 2', ''),            # TEXT
-        truncate(row.get('Contact City', '')),
-        truncate(row.get('Contact State', '')),
-        truncate(row.get('Contact Zip', '')),
-        truncate(row.get('Contact Zip Ext', '')),
-        truncate(row.get('Contact Phone', '')),
-        truncate(row.get('Contact Phone Ext', '')),
-        truncate(row.get('Contact Email', '')),
-        truncate(row.get('Technical Contact Name', '')),
-        truncate(row.get('Technical Contact Title', '')),
-        truncate(row.get('Technical Contact Phone', '')),
-        truncate(row.get('Technical Contact Phone Ext', '')),
-        truncate(row.get('Technical Contact Email', '')),
-        truncate(row.get('Authorized Person Name', '')),
-        row.get('Authorized Person Address', ''),    # TEXT
-        truncate(row.get('Authorized Person City', '')),
-        truncate(row.get('Authorized Person State', '')),
-        truncate(row.get('Authorized Person Zip', '')),
-        truncate(row.get('Authorized Person Zip Ext', '')),
-        truncate(row.get('Authorized Person Phone Number', '')),
-        truncate(row.get('Authorized Person Phone Number Ext', '')),
-        truncate(row.get('Authorized Person Email', '')),
-        truncate(row.get('Authorized Person Title', '')),
-        truncate(row.get('Authorized Person Employer', '')),
-        row.get('Category One Description', ''),     # TEXT — FULL
-        row.get('Category Two Description', ''),     # TEXT — FULL
-        truncate(row.get('Installment Type', '')),
+
+        # 32. contact_name
+        row.get('Contact Name', ''),
+
+        # 33. contact_address1
+        row.get('Contact Address 1', ''),
+
+        # 34. contact_address2
+        row.get('Contact Address 2', ''),
+
+        # 35. contact_city
+        row.get('Contact City', ''),
+
+        # 36. contact_state
+        row.get('Contact State', ''),
+
+        # 37. contact_zip
+        row.get('Contact Zip', ''),
+
+        # 38. contact_zip_ext
+        row.get('Contact Zip Ext', ''),
+
+        # 39. contact_phone
+        row.get('Contact Phone', ''),
+
+        # 40. contact_phone_ext
+        row.get('Contact Phone Ext', ''),
+
+        # 41. contact_email
+        row.get('Contact Email', ''),
+
+        # 42. tech_name
+        row.get('Technical Contact Name', ''),
+
+        # 43. tech_title
+        row.get('Technical Contact Title', ''),
+
+        # 44. tech_phone
+        row.get('Technical Contact Phone', ''),
+
+        # 45. tech_phone_ext
+        row.get('Technical Contact Phone Ext', ''),
+
+        # 46. tech_email
+        row.get('Technical Contact Email', ''),
+
+        # 47. auth_name
+        row.get('Authorized Person Name', ''),
+
+        # 48. auth_address
+        row.get('Authorized Person Address', ''),
+
+        # 49. auth_city
+        row.get('Authorized Person City', ''),
+
+        # 50. auth_state
+        row.get('Authorized Person State', ''),
+
+        # 51. auth_zip
+        row.get('Authorized Person Zip', ''),
+
+        # 52. auth_zip_ext
+        row.get('Authorized Person Zip Ext', ''),
+
+        # 53. auth_phone
+        row.get('Authorized Person Phone Number', ''),
+
+        # 54. auth_phone_ext
+        row.get('Authorized Person Phone Number Ext', ''),
+
+        # 55. auth_email
+        row.get('Authorized Person Email', ''),
+
+        # 56. auth_title
+        row.get('Authorized Person Title', ''),
+
+        # 57. auth_employer
+        row.get('Authorized Person Employer', ''),
+
+        # 58. cat1_desc
+        row.get('Category One Description', ''),
+
+        # 59. cat2_desc
+        row.get('Category Two Description', ''),
+
+        # 60. installment_type
+        row.get('Installment Type', ''),
+
+        # 61. installment_min
         int(row.get('Installment Min Range Years') or 0),
+
+        # 62. installment_max
         int(row.get('Installment Max Range Years') or 0),
-        truncate(row.get('Request for Proposal Identifier', '')),
-        truncate(row.get('State or Local Restrictions', '')),
-        row.get('State or Local Restrictions Description', ''),  # TEXT — FULL
-        truncate(row.get('Statewide State', '')),
-        truncate(row.get('All Public Schools Districts', '')),
-        truncate(row.get('All Non-Public schools', '')),
-        truncate(row.get('All Libraries', '')),
-        truncate(row.get('Form Version', ''))
+
+        # 63. rfp_id
+        row.get('Request for Proposal Identifier', ''),
+
+        # 64. state_restrictions
+        row.get('State or Local Restrictions', ''),
+
+        # 65. restriction_desc
+        row.get('State or Local Restrictions Description', ''),
+
+        # 66. statewide
+        row.get('Statewide State', ''),
+
+        # 67. all_public
+        row.get('All Public Schools Districts', ''),
+
+        # 68. all_nonpublic
+        row.get('All Non-Public schools', ''),
+
+        # 69. all_libraries
+        row.get('All Libraries', ''),
+
+        # 70. form_version
+        row.get('Form Version', '')
     )
 
 # === FULL BLUEBIRD POP LIST (223) ===
@@ -495,14 +634,10 @@ def details(app_number):
                 return jsonify({"error": "Applicant not found"}), 404
 
             def fmt_date(dt):
-                if isinstance(dt, datetime):
-                    return dt.strftime('%m/%d/%Y')
-                return str(dt) if dt else ''
+                return dt.strftime('%m/%d/%Y') if dt else ''
 
             def fmt_datetime(dt):
-                if isinstance(dt, datetime):
-                    return dt.strftime('%m/%d/%Y %I:%M %p')
-                return str(dt) if dt else ''
+                return dt.strftime('%m/%d/%Y %I:%M %p') if dt else ''
 
             data = {
                 "form_nickname": row[1],
