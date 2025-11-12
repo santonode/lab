@@ -1,4 +1,4 @@
-# erate.py — FINAL (DEBUG LOGS + CSV-SAFE + EXACT models.py ORDER + FULL DATA)
+# erate.py — FINAL (SKIP id + PDF FIX + DEBUG + EXACT models.py ORDER)
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -96,7 +96,6 @@ def parse_datetime(value):
         return None
     value = str(value).strip()
 
-    # Skip if no digits (e.g. "Certified", "Tamera Burke")
     if not any(c.isdigit() for c in value):
         return None
 
@@ -115,11 +114,11 @@ def parse_datetime(value):
             return datetime.strptime(value, fmt)
         except ValueError:
             continue
-    return None  # Silent fail
+    return None
 
 # === DEBUG: Track CSV headers and sample rows ===
 CSV_HEADERS_LOGGED = False
-ROW_DEBUG_COUNT = 0  # Reset on import
+ROW_DEBUG_COUNT = 0
 
 def _row_to_tuple(row):
     global CSV_HEADERS_LOGGED, ROW_DEBUG_COUNT
@@ -127,7 +126,6 @@ def _row_to_tuple(row):
         log("CSV HEADERS: %s", list(row.keys()))
         CSV_HEADERS_LOGGED = True
 
-    # === DEBUG: Log first 3 rows fully ===
     if ROW_DEBUG_COUNT < 3:
         log("DEBUG ROW %s: %s", ROW_DEBUG_COUNT + 1, dict(row))
         ROW_DEBUG_COUNT += 1
@@ -141,98 +139,82 @@ def _row_to_tuple(row):
         ''
     ).strip()
 
-    # Fix double domain
     if form_pdf_raw.startswith('http://publicdata.usac.org/http://'):
         form_pdf_raw = form_pdf_raw.replace('http://publicdata.usac.org/', '', 1)
 
     form_pdf = f"http://publicdata.usac.org/{form_pdf_raw.lstrip('/')}" if form_pdf_raw else ''
 
     return (
-        # === PRIMARY KEY ===
-        row.get('Application Number', ''),                     # app_number
-
-        # === BASIC INFO ===
-        row.get('Form Nickname', ''),                          # form_nickname
-        form_pdf,                                              # form_pdf
-        row.get('Funding Year', ''),                           # funding_year
-        row.get('FCC Form 470 Status', ''),                    # fcc_status
-        parse_datetime(row.get('Allowable Contract Date')),    # allowable_contract_date
-        parse_datetime(row.get('Created Date/Time')),          # created_datetime
-        row.get('Created By', ''),                             # created_by
-        parse_datetime(row.get('Certified Date/Time')),        # certified_datetime
-        row.get('Certified By', ''),                           # certified_by
-        parse_datetime(row.get('Last Modified Date/Time')),    # last_modified_datetime
-        row.get('Last Modified By', ''),                       # last_modified_by
-
-        # === BILLED ENTITY ===
-        row.get('Billed Entity Number', ''),                   # ben
-        row.get('Billed Entity Name', ''),                     # entity_name
-        row.get('Organization Status', ''),                    # org_status
-        row.get('Organization Type', ''),                      # org_type
-        row.get('Applicant Type', ''),                         # applicant_type
-        row.get('Website URL', ''),                            # website
-        float(row.get('Latitude') or 0),                       # latitude
-        float(row.get('Longitude') or 0),                      # longitude
-        row.get('Billed Entity FCC Registration Number', ''),  # fcc_reg_num
-        row.get('Billed Entity Address 1', ''),                # address1
-        row.get('Billed Entity Address 2', ''),                # address2
-        row.get('Billed Entity City', ''),                     # city
-        row.get('Billed Entity State', ''),                    # state
-        row.get('Billed Entity Zip Code', ''),                 # zip_code
-        row.get('Billed Entity Zip Code Ext', ''),             # zip_ext
-        row.get('Billed Entity Email', ''),                    # email
-        row.get('Billed Entity Phone', ''),                    # phone
-        row.get('Billed Entity Phone Ext', ''),                # phone_ext
-
-        # === ELIGIBLE ENTITIES (GROUPED WITH BILLED) ===
-        int(row.get('Number of Eligible Entities') or 0),      # num_eligible
-
-        # === CONTACT ===
-        row.get('Contact Name', ''),                           # contact_name
-        row.get('Contact Address 1', ''),                      # contact_address1
-        row.get('Contact Address 2', ''),                      # contact_address2
-        row.get('Contact City', ''),                           # contact_city
-        row.get('Contact State', ''),                          # contact_state
-        row.get('Contact Zip', ''),                            # contact_zip
-        row.get('Contact Zip Ext', ''),                        # contact_zip_ext
-        row.get('Contact Phone', ''),                          # contact_phone
-        row.get('Contact Phone Ext', ''),                      # contact_phone_ext
-        row.get('Contact Email', ''),                          # contact_email
-
-        # === TECHNICAL CONTACT ===
-        row.get('Technical Contact Name', ''),                 # tech_name
-        row.get('Technical Contact Title', ''),                # tech_title
-        row.get('Technical Contact Phone', ''),                # tech_phone
-        row.get('Technical Contact Phone Ext', ''),            # tech_phone_ext
-        row.get('Technical Contact Email', ''),                # tech_email
-
-        # === AUTHORIZED PERSON ===
-        row.get('Authorized Person Name', ''),                 # auth_name
-        row.get('Authorized Person Address', ''),              # auth_address
-        row.get('Authorized Person City', ''),                 # auth_city
-        row.get('Authorized Person State', ''),                # auth_state
-        row.get('Authorized Person Zip', ''),                  # auth_zip
-        row.get('Authorized Person Zip Ext', ''),              # auth_zip_ext
-        row.get('Authorized Person Phone Number', ''),         # auth_phone
-        row.get('Authorized Person Phone Number Ext', ''),     # auth_phone_ext
-        row.get('Authorized Person Email', ''),                # auth_email
-        row.get('Authorized Person Title', ''),                # auth_title
-        row.get('Authorized Person Employer', ''),             # auth_employer
-
-        # === SERVICES ===
-        row.get('Category One Description', ''),               # cat1_desc
-        row.get('Category Two Description', ''),               # cat2_desc
-        row.get('Installment Type', ''),                       # installment_type
-        int(row.get('Installment Min Range Years') or 0),      # installment_min
-        int(row.get('Installment Max Range Years') or 0),      # installment_max
-        row.get('Request for Proposal Identifier', ''),        # rfp_id
-        row.get('State or Local Restrictions', ''),            # state_restrictions
-        row.get('State or Local Restrictions Description', ''),# restriction_desc
-        row.get('Statewide State', ''),                        # statewide
-        row.get('All Public Schools Districts', ''),           # all_public
-        row.get('All Non-Public schools', ''),                 # all_nonpublic
-        row.get('All Libraries', ''),                          # all_libraries
-        row.get('Form Version', '')                            # form_version
+        row.get('Application Number', ''),
+        row.get('Form Nickname', ''),
+        form_pdf,
+        row.get('Funding Year', ''),
+        row.get('FCC Form 470 Status', ''),
+        parse_datetime(row.get('Allowable Contract Date')),
+        parse_datetime(row.get('Created Date/Time')),
+        row.get('Created By', ''),
+        parse_datetime(row.get('Certified Date/Time')),
+        row.get('Certified By', ''),
+        parse_datetime(row.get('Last Modified Date/Time')),
+        row.get('Last Modified By', ''),
+        row.get('Billed Entity Number', ''),
+        row.get('Billed Entity Name', ''),
+        row.get('Organization Status', ''),
+        row.get('Organization Type', ''),
+        row.get('Applicant Type', ''),
+        row.get('Website URL', ''),
+        float(row.get('Latitude') or 0),
+        float(row.get('Longitude') or 0),
+        row.get('Billed Entity FCC Registration Number', ''),
+        row.get('Billed Entity Address 1', ''),
+        row.get('Billed Entity Address 2', ''),
+        row.get('Billed Entity City', ''),
+        row.get('Billed Entity State', ''),
+        row.get('Billed Entity Zip Code', ''),
+        row.get('Billed Entity Zip Code Ext', ''),
+        row.get('Billed Entity Email', ''),
+        row.get('Billed Entity Phone', ''),
+        row.get('Billed Entity Phone Ext', ''),
+        int(row.get('Number of Eligible Entities') or 0),
+        row.get('Contact Name', ''),
+        row.get('Contact Address 1', ''),
+        row.get('Contact Address 2', ''),
+        row.get('Contact City', ''),
+        row.get('Contact State', ''),
+        row.get('Contact Zip', ''),
+        row.get('Contact Zip Ext', ''),
+        row.get('Contact Phone', ''),
+        row.get('Contact Phone Ext', ''),
+        row.get('Contact Email', ''),
+        row.get('Technical Contact Name', ''),
+        row.get('Technical Contact Title', ''),
+        row.get('Technical Contact Phone', ''),
+        row.get('Technical Contact Phone Ext', ''),
+        row.get('Technical Contact Email', ''),
+        row.get('Authorized Person Name', ''),
+        row.get('Authorized Person Address', ''),
+        row.get('Authorized Person City', ''),
+        row.get('Authorized Person State', ''),
+        row.get('Authorized Person Zip', ''),
+        row.get('Authorized Person Zip Ext', ''),
+        row.get('Authorized Person Phone Number', ''),
+        row.get('Authorized Person Phone Number Ext', ''),
+        row.get('Authorized Person Email', ''),
+        row.get('Authorized Person Title', ''),
+        row.get('Authorized Person Employer', ''),
+        row.get('Category One Description', ''),
+        row.get('Category Two Description', ''),
+        row.get('Installment Type', ''),
+        int(row.get('Installment Min Range Years') or 0),
+        int(row.get('Installment Max Range Years') or 0),
+        row.get('Request for Proposal Identifier', ''),
+        row.get('State or Local Restrictions', ''),
+        row.get('State or Local Restrictions Description', ''),
+        row.get('Statewide State', ''),
+        row.get('All Public Schools Districts', ''),
+        row.get('All Non-Public schools', ''),
+        row.get('All Libraries', ''),
+        row.get('Form Version', '')
     )
 
 # === FULL BLUEBIRD POP LIST (223) ===
@@ -508,7 +490,7 @@ def bbmap(app_number):
     finally:
         conn.close()
 
-# === APPLICANT DETAILS API — FULL DATA + SAFE DATES + DEBUG ===
+# === APPLICANT DETAILS API — SKIP id + SAFE DATES + DEBUG ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -519,8 +501,10 @@ def details(app_number):
             if not row:
                 return jsonify({"error": "Applicant not found"}), 404
 
-            # === DEBUG: Log row values ===
-            log("DETAILS ROW for %s: %s", app_number, row[:10])  # First 10 fields
+            # === SKIP id (row[0]) ===
+            row = row[1:]
+
+            log("DETAILS ROW for %s (after skip id): %s", app_number, row[:10])
 
             def fmt_date(dt):
                 if isinstance(dt, datetime):
@@ -533,75 +517,75 @@ def details(app_number):
                 return '—'
 
             data = {
-                "form_nickname": row[1] or '—',
-                "form_pdf": Markup(f'<a href="{row[2]}" target="_blank">View PDF</a>') if row[2] else '—',
-                "funding_year": row[3] or '—',
-                "fcc_status": row[4] or '—',
-                "allowable_contract_date": fmt_date(row[5]),
-                "created_datetime": fmt_datetime(row[6]),
-                "created_by": row[7] or '—',
-                "certified_datetime": fmt_datetime(row[8]),
-                "certified_by": row[9] or '—',
-                "last_modified_datetime": fmt_datetime(row[10]),
-                "last_modified_by": row[11] or '—',
-                "ben": row[12] or '—',
-                "entity_name": row[13] or '—',
-                "org_status": row[14] or '—',
-                "org_type": row[15] or '—',
-                "applicant_type": row[16] or '—',
-                "website": row[17] or '—',
-                "latitude": row[18],
-                "longitude": row[19],
-                "fcc_reg_num": row[20] or '—',
-                "address1": row[21] or '',
-                "address2": row[22] or '',
-                "city": row[23] or '',
-                "state": row[24] or '',
-                "zip_code": row[25] or '',
-                "zip_ext": row[26] or '',
-                "email": row[27] or '—',
-                "phone": row[28] or '',
-                "phone_ext": row[29] or '',
-                "num_eligible": row[30] if row[30] is not None else 0,
-                "contact_name": row[31] or '—',
-                "contact_address1": row[32] or '',
-                "contact_address2": row[33] or '',
-                "contact_city": row[34] or '',
-                "contact_state": row[35] or '',
-                "contact_zip": row[36] or '',
-                "contact_zip_ext": row[37] or '',
-                "contact_phone": row[38] or '',
-                "contact_phone_ext": row[39] or '',
-                "contact_email": row[40] or '—',
-                "tech_name": row[41] or '—',
-                "tech_title": row[42] or '—',
-                "tech_phone": row[43] or '',
-                "tech_phone_ext": row[44] or '',
-                "tech_email": row[45] or '—',
-                "auth_name": row[46] or '—',
-                "auth_address": row[47] or '—',
-                "auth_city": row[48] or '',
-                "auth_state": row[49] or '',
-                "auth_zip": row[50] or '',
-                "auth_zip_ext": row[51] or '',
-                "auth_phone": row[52] or '',
-                "auth_phone_ext": row[53] or '',
-                "auth_email": row[54] or '—',
-                "auth_title": row[55] or '—',
-                "auth_employer": row[56] or '—',
-                "cat1_desc": row[57] or '—',
-                "cat2_desc": row[58] or '—',
-                "installment_type": row[59] or '—',
-                "installment_min": row[60] if row[60] is not None else 0,
-                "installment_max": row[61] if row[61] is not None else 0,
-                "rfp_id": row[62] or '—',
-                "state_restrictions": row[63] or '—',
-                "restriction_desc": row[64] or '—',
-                "statewide": row[65] or '—',
-                "all_public": row[66] or '—',
-                "all_nonpublic": row[67] or '—',
-                "all_libraries": row[68] or '—',
-                "form_version": row[69] or '—'
+                "form_nickname": row[0] or '—',
+                "form_pdf": Markup(f'<a href="{row[1]}" target="_blank">View PDF</a>') if row[1] else '—',
+                "funding_year": row[2] or '—',
+                "fcc_status": row[3] or '—',
+                "allowable_contract_date": fmt_date(row[4]),
+                "created_datetime": fmt_datetime(row[5]),
+                "created_by": row[6] or '—',
+                "certified_datetime": fmt_datetime(row[7]),
+                "certified_by": row[8] or '—',
+                "last_modified_datetime": fmt_datetime(row[9]),
+                "last_modified_by": row[10] or '—',
+                "ben": row[11] or '—',
+                "entity_name": row[12] or '—',
+                "org_status": row[13] or '—',
+                "org_type": row[14] or '—',
+                "applicant_type": row[15] or '—',
+                "website": row[16] or '—',
+                "latitude": row[17],
+                "longitude": row[18],
+                "fcc_reg_num": row[19] or '—',
+                "address1": row[20] or '',
+                "address2": row[21] or '',
+                "city": row[22] or '',
+                "state": row[23] or '',
+                "zip_code": row[24] or '',
+                "zip_ext": row[25] or '',
+                "email": row[26] or '—',
+                "phone": row[27] or '',
+                "phone_ext": row[28] or '',
+                "num_eligible": row[29] if row[29] is not None else 0,
+                "contact_name": row[30] or '—',
+                "contact_address1": row[31] or '',
+                "contact_address2": row[32] or '',
+                "contact_city": row[33] or '',
+                "contact_state": row[34] or '',
+                "contact_zip": row[35] or '',
+                "contact_zip_ext": row[36] or '',
+                "contact_phone": row[37] or '',
+                "contact_phone_ext": row[38] or '',
+                "contact_email": row[39] or '—',
+                "tech_name": row[40] or '—',
+                "tech_title": row[41] or '—',
+                "tech_phone": row[42] or '',
+                "tech_phone_ext": row[43] or '',
+                "tech_email": row[44] or '—',
+                "auth_name": row[45] or '—',
+                "auth_address": row[46] or '—',
+                "auth_city": row[47] or '',
+                "auth_state": row[48] or '',
+                "auth_zip": row[49] or '',
+                "auth_zip_ext": row[50] or '',
+                "auth_phone": row[51] or '',
+                "auth_phone_ext": row[52] or '',
+                "auth_email": row[53] or '—',
+                "auth_title": row[54] or '—',
+                "auth_employer": row[55] or '—',
+                "cat1_desc": row[56] or '—',
+                "cat2_desc": row[57] or '—',
+                "installment_type": row[58] or '—',
+                "installment_min": row[59] if row[59] is not None else 0,
+                "installment_max": row[60] if row[60] is not None else 0,
+                "rfp_id": row[61] or '—',
+                "state_restrictions": row[62] or '—',
+                "restriction_desc": row[63] or '—',
+                "statewide": row[64] or '—',
+                "all_public": row[65] or '—',
+                "all_nonpublic": row[66] or '—',
+                "all_libraries": row[67] or '—',
+                "form_version": row[68] or '—'
             }
 
             return jsonify(data)
@@ -728,7 +712,6 @@ def _import_all_background(app):
         conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
         cur = conn.cursor()
 
-        # === CSV-SAFE: Use excel dialect ===
         with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
             reader = csv.DictReader(f, dialect='excel')
             log("CSV reader created with excel dialect")
