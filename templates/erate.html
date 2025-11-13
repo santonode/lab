@@ -384,14 +384,6 @@
                 <button class="modal-close" onclick="closeModal('bbmap')">x</button>
             </div>
             <div class="modal-body" id="bbmap-body">Loading...</div>
-            <div style="margin-top:15px; text-align:center;">
-                <a href="#" id="bbmap-link" target="_blank" style="color:#007bff; font-weight:600; text-decoration:underline; display:block; margin:5px 0;">
-                    View on Bluebird Fiber Map
-                </a>
-                <a href="#" onclick="autoZoomMap()" style="color:#666; text-decoration:none; font-size:0.8rem;">
-                    [Auto-Zoom to Address]
-                </a>
-            </div>
         </div>
     </div>
 
@@ -546,7 +538,6 @@
                 const resp = await fetch(`/erate/bbmap/${appNumber}`);
                 const data = await resp.json();
 
-                // Build full address
                 const fullAddress = [
                     data.address1,
                     data.address2,
@@ -561,19 +552,23 @@
                 const encodedAddress = encodeURIComponent(fullAddress);
                 const mapUrl = `https://bluebirdfiber.com/network/?search=${encodedAddress}`;
 
-                document.getElementById('bbmap-link').href = mapUrl;
-
                 bbmapBody.innerHTML = `
                     <strong>Applicant:</strong> ${data.entity_name || 'N/A'}<br>
                     <strong>Address:</strong> ${data.address || 'N/A'}<br>
                     <strong>Nearest PoP:</strong> ${data.pop_city || 'Unknown'}<br>
                     <strong>Distance:</strong> ${data.distance || 'N/A'}<br>
                     <strong>Coverage:</strong> ${data.coverage || 'Unknown'}
+                    <div style="margin-top:15px; text-align:center;">
+                        <a href="${mapUrl}" target="_blank" style="color:#007bff; font-weight:600; text-decoration:underline; display:block; margin:5px 0;">
+                            View on Bluebird Fiber Map
+                        </a>
+                        <a href="#" onclick="autoZoomMap()" style="color:#27ae60; font-weight:600; font-size:0.9rem; text-decoration:underline;">
+                            Auto-Zoom to Address
+                        </a>
+                    </div>
                 `;
             } catch {
                 bbmapBody.innerHTML = '<strong>Error:</strong> Could not fetch data.';
-                document.getElementById('bbmap-link').href = 'https://bluebirdfiber.com/network/';
-                currentFullAddress = '';
             } finally {
                 body.classList.remove('loading');
                 overlay.classList.remove('show');
@@ -583,68 +578,34 @@
         function autoZoomMap() {
             if (!currentFullAddress) return;
 
-            const encodedAddress = encodeURIComponent(currentFullAddress);
-            const mapUrl = `https://bluebirdfiber.com/network/?search=${encodedAddress}`;
-            const win = window.open(mapUrl, '_blank');
+            const encoded = encodeURIComponent(currentFullAddress);
+            const url = `https://bluebirdfiber.com/network/?search=${encoded}`;
 
+            const win = window.open('', '_blank');
             if (win) {
-                win.onload = function() {
-                    setTimeout(() => {
-                        // Try multiple selectors
-                        const selectors = [
-                            'input[type="search"]',
-                            'input[placeholder*="address"]',
-                            'input[placeholder*="Address"]',
-                            '.search-input input',
-                            'input[id*="search"]',
-                            'input[name="search"]'
-                        ];
-
-                        let searchInput = null;
-                        for (const sel of selectors) {
-                            searchInput = win.document.querySelector(sel);
-                            if (searchInput) break;
-                        }
-
-                        const buttonSelectors = [
-                            'button[type="submit"]',
-                            'button[onclick*="search"]',
-                            '.search-button',
-                            'button:has(svg)',
-                            'button'
-                        ];
-
-                        let searchButton = null;
-                        for (const sel of buttonSelectors) {
-                            const btn = win.document.querySelector(sel);
-                            if (btn && (btn.textContent.toLowerCase().includes('search') || btn.querySelector('svg'))) {
-                                searchButton = btn;
-                                break;
-                            }
-                        }
-
-                        if (searchInput) {
-                            searchInput.value = decodeURIComponent(encodedAddress);
-                            searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-                            searchInput.dispatchEvent(new Event('change', { bubbles: true }));
-                        }
-
-                        if (searchButton) {
-                            searchButton.click();
-                        } else {
-                            // Fallback: press Enter
-                            if (searchInput) {
-                                const enterEvent = new KeyboardEvent('keydown', {
-                                    key: 'Enter',
-                                    code: 'Enter',
-                                    keyCode: 13,
-                                    bubbles: true
-                                });
-                                searchInput.dispatchEvent(enterEvent);
-                            }
-                        }
-                    }, 2500);
-                };
+                win.document.write(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head><title>Bluebird Map - ${currentFullAddress}</title></head>
+                    <body style="margin:0;">
+                        <iframe src="${url}" style="width:100%; height:100vh; border:0;" onload="
+                            setTimeout(() => {
+                                const iframeDoc = this.contentDocument || this.contentWindow.document;
+                                const input = iframeDoc.querySelector('input[placeholder*=\'address\']') || 
+                                             iframeDoc.querySelector('input[type=\'search\']') || 
+                                             iframeDoc.querySelector('input');
+                                const button = iframeDoc.querySelector('button[type=\'submit\']') || 
+                                              iframeDoc.querySelector('button');
+                                if (input) {
+                                    input.value = decodeURIComponent('${encoded}');
+                                    input.dispatchEvent(new Event('input', {bubbles: true}));
+                                }
+                                if (button) button.click();
+                            }, 3000);
+                        "></iframe>
+                    </body>
+                    </html>
+                `);
             }
         }
 
