@@ -82,8 +82,7 @@
             align-items: center;
             padding: 12px;
             background: #f8f9fa;
-            border-radius: 8px从事
-
+            border-radius: 8px;
             border: 1px solid #e9ecef;
         }
         .filters label {
@@ -141,7 +140,7 @@
             border: 1px solid var(--border);
             padding: 10px 8px;
             text-align: left;
-           并不是 vertical-align: middle;
+            vertical-align: middle;
         }
         th {
             background: var(--primary);
@@ -451,7 +450,57 @@
         const bbmapBody = document.getElementById('bbmap-body');
         let currentAppNumber = null;
 
-        // Open Map Modal
+        // === ORIGINAL: showDetails() ===
+        async function showDetails(appNumber) {
+            currentAppNumber = appNumber;
+            body.classList.add('loading');
+            overlay.classList.add('show');
+            detailBody.innerHTML = 'Loading...';
+            detailModal.classList.add('show');
+            try {
+                const resp = await fetch(`/erate/details/${appNumber}`);
+                const data = await resp.json();
+                renderSection('basic', data);
+                activateTab('basic');
+            } catch (err) {
+                detailBody.innerHTML = '<strong>Error:</strong> Could not load details.';
+            } finally {
+                body.classList.remove('loading');
+                overlay.classList.remove('show');
+            }
+        }
+
+        // === ORIGINAL: checkBluebird() ===
+        async function checkBluebird(appNumber) {
+            body.classList.add('loading');
+            overlay.classList.add('show');
+            bbmapBody.innerHTML = 'Searching Bluebird Fiber...';
+            bbmapModal.classList.add('show');
+            try {
+                const resp = await fetch(`/erate/bbmap/${appNumber}`);
+                const data = await resp.json();
+                const fullAddress = [
+                    data.address1, data.address2, data.city, data.state,
+                    data.zip_code, data.zip_ext ? data.zip_ext : '', data.entity_name
+                ].filter(Boolean).join(', ');
+                document.getElementById('address-text').textContent = fullAddress;
+                bbmapBody.innerHTML = `
+                    <strong>Applicant:</strong> ${data.entity_name || 'N/A'}<br>
+                    <strong>Address:</strong> ${data.address || 'N/A'}<br>
+                    <strong>Nearest PoP:</strong> ${data.pop_city || 'Unknown'}<br>
+                    <strong>Distance:</strong> ${data.distance || 'N/A'}<br>
+                    <strong>Coverage:</strong> ${data.coverage || 'Unknown'}
+                `;
+            } catch {
+                bbmapBody.innerHTML = '<strong>Error:</strong> Could not fetch data.';
+                document.getElementById('address-text').textContent = 'Error loading address';
+            } finally {
+                body.classList.remove('loading');
+                overlay.classList.remove('show');
+            }
+        }
+
+        // === NEW: openMapModal() ===
         async function openMapModal(appNumber, dbLat, dbLon) {
             currentAppNumber = appNumber;
             body.classList.add('loading');
@@ -517,8 +566,114 @@
             }
         }
 
-        // [Rest of your original JS: showDetails, renderSection, checkBluebird, copyAddress, closeModal — UNCHANGED]
-        // ... (keep all your existing functions)
+        // === ORIGINAL: renderSection(), activateTab(), copyAddress(), closeModal() ===
+        function renderSection(section, data) {
+            let html = '';
+            if (section === 'basic') {
+                html = `
+                    <strong>Form Nickname:</strong> ${data.form_nickname || ''}<br>
+                    <strong>Form PDF:</strong> ${data.form_pdf || ''}<br>
+                    <strong>Funding Year:</strong> ${data.funding_year || ''}<br>
+                    <strong>FCC Status:</strong> ${data.fcc_status || ''}<br>
+                    <strong>Allowable Contract Date:</strong> ${data.allowable_contract_date || ''}<br>
+                    <strong>Created:</strong> ${data.created_datetime || ''} by ${data.created_by || ''}<br>
+                    <strong>Certified:</strong> ${data.certified_datetime || ''} by ${data.certified_by || ''}<br>
+                    <strong>Last Modified:</strong> ${data.last_modified_datetime || ''} by ${data.last_modified_by || ''}
+                `;
+            } else if (section === 'billed') {
+                html = `
+                    <strong>Billed Entity #:</strong> ${data.ben || ''}<br>
+                    <strong>Entity Name:</strong> ${data.entity_name || ''}<br>
+                    <strong># of Eligible Entities:</strong> ${data.num_eligible || ''}<br>
+                    <strong>Org Status:</strong> ${data.org_status || ''}<br>
+                    <strong>Org Type:</strong> ${data.org_type || ''}<br>
+                    <strong>Applicant Type:</strong> ${data.applicant_type || ''}<br>
+                    <strong>Website:</strong> ${data.website ? `<a href="${data.website}" target="_blank">${data.website}</a>` : ''}<br>
+                    <strong>FCC Reg #:</strong> ${data.fcc_reg_num || ''}<br>
+                    <strong>Address:</strong> ${data.address1 || ''} ${data.address2 || ''}<br>
+                    <strong>City/State/ZIP:</strong> ${data.city || ''}, ${data.state || ''} ${data.zip_code || ''}${data.zip_ext ? '-' + data.zip_ext : ''}<br>
+                    <strong>Email:</strong> ${data.email || ''}<br>
+                    <strong>Phone:</strong> ${data.phone || ''}${data.phone_ext ? ' x' + data.phone_ext : ''}
+                `;
+            } else if (section === 'contact') {
+                html = `
+                    <strong>Contact Name:</strong> ${data.contact_name || ''}<br>
+                    <strong>Address:</strong> ${data.contact_address1 || ''} ${data.contact_address2 || ''}<br>
+                    <strong>City/State/ZIP:</strong> ${data.contact_city || ''}, ${data.contact_state || ''} ${data.contact_zip || ''}${data.contact_zip_ext ? '-' + data.contact_zip_ext : ''}<br>
+                    <strong>Phone:</strong> ${data.contact_phone || ''}${data.contact_phone_ext ? ' x' + data.contact_phone_ext : ''}<br>
+                    <strong>Email:</strong> ${data.contact_email || ''}
+                `;
+            } else if (section === 'tech') {
+                html = `
+                    <strong>Name:</strong> ${data.tech_name || ''}<br>
+                    <strong>Title:</strong> ${data.tech_title || ''}<br>
+                    <strong>Phone:</strong> ${data.tech_phone || ''}${data.tech_phone_ext ? ' x' + data.tech_phone_ext : ''}<br>
+                    <strong>Email:</strong> ${data.tech_email || ''}
+                `;
+            } else if (section === 'auth') {
+                html = `
+                    <strong>Name:</strong> ${data.auth_name || ''}<br>
+                    <strong>Title:</strong> ${data.auth_title || ''}<br>
+                    <strong>Employer:</strong> ${data.auth_employer || ''}<br>
+                    <strong>Address:</strong> ${data.auth_address || ''}<br>
+                    <strong>City/State/ZIP:</strong> ${data.auth_city || ''}, ${data.auth_state || ''} ${data.auth_zip || ''}${data.auth_zip_ext ? '-' + data.auth_zip_ext : ''}<br>
+                    <strong>Phone:</strong> ${data.auth_phone || ''}${data.auth_phone_ext ? ' x' + data.auth_phone_ext : ''}<br>
+                    <strong>Email:</strong> ${data.auth_email || ''}
+                `;
+            } else if (section === 'services') {
+                html = `
+                    <strong>Category 1:</strong> ${data.cat1_desc || ''}<br>
+                    <strong>Category 2:</strong> ${data.cat2_desc || ''}<br>
+                    <strong>Installment Type:</strong> ${data.installment_type || ''}<br>
+                    <strong>Min/Max Years:</strong> ${data.installment_min || ''} / ${data.installment_max || ''}<br>
+                    <strong>RFP ID:</strong> ${data.rfp_id || ''}<br>
+                    <strong>State Restrictions:</strong> ${data.state_restrictions || ''}<br>
+                    <strong>Restriction Desc:</strong> ${data.restriction_desc || ''}<br>
+                    <strong>Statewide:</strong> ${data.statewide || ''}<br>
+                    <strong>All Public:</strong> ${data.all_public || ''}<br>
+                    <strong>All Non-Public:</strong> ${data.all_nonpublic || ''}<br>
+                    <strong>All Libraries:</strong> ${data.all_libraries || ''}<br>
+                    <strong>Form Version:</strong> ${data.form_version || ''}
+                `;
+            }
+            detailBody.innerHTML = html;
+        }
+
+        function activateTab(section) {
+            document.querySelectorAll('.tab-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.dataset.section === section) link.classList.add('active');
+            });
+        }
+
+        document.querySelectorAll('.tab-link').forEach(link => {
+            link.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const section = link.dataset.section;
+                activateTab(section);
+                if (currentAppNumber) {
+                    body.classList.add('loading');
+                    overlay.classList.add('show');
+                    try {
+                        const resp = await fetch(`/erate/details/${currentAppNumber}`);
+                        const data = await resp.json();
+                        renderSection(section, data);
+                    } catch {}
+                    body.classList.remove('loading');
+                    overlay.classList.remove('show');
+                }
+            });
+        });
+
+        function copyAddress() {
+            const address = document.getElementById('address-text').textContent;
+            navigator.clipboard.writeText(address).then(() => {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = originalText, 1500);
+            });
+        }
 
         function closeModal(type) {
             if (type === 'detail') detailModal.classList.remove('show');
@@ -529,6 +684,19 @@
         [detailModal, bbmapModal, mapModal].forEach(modal => {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) modal.classList.remove('show');
+            });
+        });
+
+        // Loading overlay on form submit / pagination
+        form.addEventListener('submit', () => { body.classList.add('loading'); overlay.classList.add('show'); });
+        window.addEventListener('load', () => { body.classList.remove('loading'); overlay.classList.remove('show'); });
+        document.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', (e) => {
+                const href = link.getAttribute('href');
+                if (href && href.includes('?')) {
+                    body.classList.add('loading');
+                    overlay.classList.add('show');
+                }
             });
         });
     </script>
