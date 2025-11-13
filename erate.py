@@ -620,8 +620,9 @@ def extract_csv():
 def _download_csv_background(app):
     time.sleep(1)
     try:
-        log("Starting CSV download...")
-        response = requests.get("https://opendata.usac.org/api/views/jp7a-89nd/rows.csv?accessType=DOWNLOAD", stream=True, timeout=600)
+        log("Starting FULL CSV download...")
+        url = "https://opendata.usac.org/api/views/jp7a-89nd/rows.csv?accessType=DOWNLOAD&funding_year=ALL"
+        response = requests.get(url, stream=True, timeout=600)
         response.raise_for_status()
         downloaded = 0
         with open(CSV_FILE, 'wb') as f:
@@ -631,10 +632,11 @@ def _download_csv_background(app):
                     downloaded += len(chunk)
                     if downloaded % (10*1024*1024) == 0:
                         log("Downloaded %.1f MB", downloaded/(1024*1024))
-        log("CSV downloaded: %.1f MB", os.path.getsize(CSV_FILE)/(1024*1024))
+        log("FULL CSV downloaded: %.1f MB", os.path.getsize(CSV_FILE)/(1024*1024))
     except Exception as e:
         log("Download failed: %s", e)
-        if os.path.exists(CSV_FILE): os.remove(CSV_FILE)
+        if os.path.exists(CSV_FILE):
+            os.remove(CSV_FILE)
     finally:
         with app.app_context():
             app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
