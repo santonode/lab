@@ -27,6 +27,8 @@
             color: var(--text);
             line-height: 1.6;
             min-height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
         .overlay {
             display: none;
@@ -58,6 +60,7 @@
             padding: 20px;
             border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            flex: 1;
         }
         h1 {
             text-align: center;
@@ -106,14 +109,12 @@
             font-weight: 600;
             font-size: 0.85rem;
             transition: all 0.2s;
-            text-align: center; /* ← ADDED */
-            display: block;     /* ← ADDED */
-            width: 100%;        /* ← ADDED */
-            margin: 4px 0;      /* ← ADDED */
+            text-align: center;
+            display: block;
+            width: 100%;
+            margin: 4px 0;
         }
         .btn-primary { background: var(--accent); color: white; }
-        .btn-success { background: var(--success); color: white; }
-        .btn-warning { background: var(--warning); color: #212529; }
         .btn-secondary { background: #6c757d; color: white; }
         .btn:hover { opacity: 0.9; transform: translateY(-1px); }
         .summary {
@@ -264,6 +265,20 @@
             background: var(--accent);
             color: white;
         }
+        .footer-links {
+            text-align: center;
+            padding: 20px;
+            font-size: 0.9rem;
+        }
+        .footer-links a {
+            color: var(--accent);
+            text-decoration: underline;
+            margin: 0 15px;
+            font-weight: 500;
+        }
+        .footer-links a:hover {
+            color: #0056b3;
+        }
         @media (max-width: 768px) {
             .container { margin: 10px; padding: 15px; }
             .filters { flex-direction: column; align-items: stretch; gap: 8px; }
@@ -272,6 +287,8 @@
             th, td { padding: 6px 4px; }
             .btn { width: 100%; margin: 4px 0; font-size: 0.8rem; }
             .load-more { padding: 8px 20px; font-size: 0.85rem; }
+            .footer-links { padding: 15px; }
+            .footer-links a { display: block; margin: 8px 0; }
         }
     </style>
 </head>
@@ -297,8 +314,6 @@
                 <button type="submit" class="btn btn-primary">Filter</button>
                 <a href="{{ url_for('erate.dashboard') }}" class="btn btn-secondary">Reset</a>
             </form>
-            <a href="{{ url_for('erate.extract_csv') }}" class="btn btn-warning">Extract CSV</a>
-            <a href="{{ url_for('erate.import_interactive') }}" class="btn btn-success">Resume Import</a>
         </div>
         <p class="summary">Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</p>
         <table>
@@ -334,6 +349,12 @@
             <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&offset={{ next_offset|default(0) }}" class="load-more">Load More (+)</a>
         </div>
         {% endif %}
+    </div>
+
+    <!-- FOOTER LINKS — CENTERED AT BOTTOM -->
+    <div class="footer-links">
+        <a href="{{ url_for('erate.extract_csv') }}">Extract CSV</a>
+        <a href="{{ url_for('erate.import_interactive') }}">Resume Import</a>
     </div>
 
     <!-- DETAILS MODAL -->
@@ -426,7 +447,7 @@
                     <strong>Entity Name:</strong> ${data.entity_name || ''}<br>
                     <strong># of Eligible Entities:</strong> ${data.num_eligible || ''}<br>
                     <strong>Org Status:</strong> ${data.org_status || ''}<br>
-                    <strong>Org Type:</stringstream> ${data.org_type || ''}<br>
+                    <strong>Org Type:</strong> ${data.org_type || ''}<br>
                     <strong>Applicant Type:</strong> ${data.applicant_type || ''}<br>
                     <strong>Website:</strong> ${data.website ? `<a href="${data.website}" target="_blank">${data.website}</a>` : ''}<br>
                     <strong>FCC Reg #:</strong> ${data.fcc_reg_num || ''}<br>
