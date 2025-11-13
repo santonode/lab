@@ -1,4 +1,4 @@
-# erate.py — FINAL + KMZ MAP INTEGRATION
+# erate.py — FINAL: Bluebird Fiber Routes + Applicant Proximity
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -14,9 +14,7 @@ import traceback
 from datetime import datetime
 from math import radians, cos, sin, sqrt, atan2
 
-# --------------------------------------------------------------
-# NEW: KMZ PARSING
-# --------------------------------------------------------------
+# === KMZ PARSING ===
 from fastkml import kml
 import zipfile
 
@@ -125,7 +123,6 @@ def _row_to_tuple(row):
     if ROW_DEBUG_COUNT < 3:
         log("DEBUG ROW %s: %s", ROW_DEBUG_COUNT + 1, dict(row))
         ROW_DEBUG_COUNT += 1
-
     form_pdf_raw = (
         row.get('Form PDF', '') or row.get('Form PDF Link', '') or
         row.get('PDF', '') or row.get('Form PDF Path', '') or ''
@@ -134,7 +131,6 @@ def _row_to_tuple(row):
     while form_pdf_raw.startswith(base):
         form_pdf_raw = form_pdf_raw[len(base):]
     form_pdf = f"http://publicdata.usac.org{form_pdf_raw}" if form_pdf_raw else ''
-
     return (
         row.get('Application Number', ''),
         row.get('Form Nickname', ''),
@@ -354,7 +350,6 @@ def get_bluebird_distance(address):
         lon = float(geocode_data[0]['lon'])
     except:
         return {"distance": float('inf'), "pop_city": "N/A", "coverage": "Unknown"}
-
     def haversine(lat1, lon1, lat2, lon2):
         R = 3958.8
         dlat = radians(lat2 - lat1)
@@ -362,7 +357,6 @@ def get_bluebird_distance(address):
         a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
         c = 2 * atan2(sqrt(a), sqrt(1-a))
         return R * c
-
     min_dist = float('inf')
     nearest_pop = None
     for city, (pop_lat, pop_lon) in pop_data.items():
@@ -373,13 +367,14 @@ def get_bluebird_distance(address):
     coverage = "Full fiber" if min_dist <= 5 else "Nearby" if min_dist <= 50 else "Extended reach"
     return {"distance": min_dist, "pop_city": nearest_pop, "coverage": coverage}
 
-# === KMZ LOADER (runs once at import) ===
+# === KMZ LOADER: Routes + PoPs ===
 KMZ_PATH = os.path.join(os.path.dirname(__file__), "BBN Map KMZ 122023.kmz")
-KMZ_FEATURES = []
+KMZ_FEATURES = []  # PoPs
+KMZ_ROUTES = []    # Fiber lines
 KMZ_LOADED = False
 
 def _load_kmz():
-    global KMZ_FEATURES, KMZ_LOADED
+    global KMZ_FEATURES, KMZ_ROUTES, KMZ_LOADED
     if KMZ_LOADED:
         return
     if not os.path.exists(KMZ_PATH):
@@ -394,38 +389,88 @@ def _load_kmz():
                 KMZ_LOADED = True
                 return
             kml_data = kmz.read(kml_files[0])
-
         doc = kml.KML()
         doc.from_string(kml_data)
-
         for feature in doc.features():
             if hasattr(feature, "features"):
                 for pm in feature.features():
                     geom = pm.geometry
                     if geom and hasattr(geom, "coords") and geom.coords:
-                        # For Point: coords = [[lon, lat]]
-                        lon, lat = geom.coords[0]  # First (and only) point
-                        KMZ_FEATURES.append({
-                            "name": pm.name or "Unnamed",
-                            "lon": lon,
-                            "lat": lat,
-                        })
-        log("KMZ loaded – %d placemarks", len(KMZ_FEATURES))
+                        if len(geom.coords[0]) == 2:  # Point
+                            lon, lat = geom.coords[0]
+                            KMZ_FEATURES.append({"name": pm.name or "Unnamed PoP", "lon": lon, "lat": lat})
+                        elif len(geom.coords) > 1:  # LineString
+                            coords = [[c[0], c[1]] for c in geom.coords]
+                            KMZ_ROUTES.append({"name": pm.name or "Fiber Route", "coords": coords})
+        log("KMZ loaded – %d PoPs, %d routes", len(KMZ_FEATURES), len(KMZ_ROUTES))
     except Exception as e:
         log("KMZ parsing error: %s", e)
-        import traceback
         log("Traceback: %s", traceback.format_exc())
     finally:
         KMZ_LOADED = True
 
 _load_kmz()
 
-# === NEW: KMZ API ===
-@erate_bp.route('/kmz-features')
-def kmz_features():
-    return jsonify(KMZ_FEATURES), 200, {'Cache-Control': 'public, max-age=3600'}
+# === ENHANCED BBMap API ===
+@erate_bp.route('/bbmap/<app_number>')
+def bbmap(app_number):
+    conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT entity_name, address1, address2, city, state, zip_code, latitude, longitude
+                FROM erate WHERE app_number = %s
+            """, (app_number,))
+            row = cur.fetchone()
+        if not row:
+            return jsonify({"error": "Applicant not found"}), 404
 
-# === DASHBOARD (includes lat/lng) ===
+        entity_name, address1, address2, city, state, zip_code, db_lat, db_lon = row
+        full_address = f"{address1 or ''} {address2 or ''}, {city or ''}, {state or ''} {zip_code or ''}".strip()
+
+        lat = float(db_lat) if db_lat else None
+        lon = float(db_lon) if db_lon else None
+
+        # Nearest PoP from KMZ
+        min_dist = float('inf')
+        nearest_pop = None
+        nearest_coords = None
+        def haversine(lat1, lon1, lat2, lon2):
+            R = 3958.8
+            dlat = radians(lat2 - lat1)
+            dlon = radians(lon2 - lon1)
+            a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+            c = 2 * atan2(sqrt(a), sqrt(1-a))
+            return R * c
+
+        if lat and lon:
+            for pop in KMZ_FEATURES:
+                dist = haversine(lat, lon, pop['lat'], pop['lon'])
+                if dist < min_dist:
+                    min_dist = dist
+                    nearest_pop = pop['name']
+                    nearest_coords = [pop['lon'], pop['lat']]
+
+        coverage = "Full fiber" if min_dist <= 5 else "Nearby" if min_dist <= 50 else "Extended reach"
+
+        return jsonify({
+            "entity_name": entity_name,
+            "address": full_address,
+            "applicant_coords": [lon, lat] if lat and lon else None,
+            "nearest_pop": nearest_pop,
+            "nearest_coords": nearest_coords,
+            "distance": f"{min_dist:.1f} miles" if min_dist != float('inf') else "N/A",
+            "coverage": coverage,
+            "routes": KMZ_ROUTES,
+            "pops": KMZ_FEATURES,
+        }), 200, {'Content-Type': 'application/json'}
+    except Exception as e:
+        log("Bluebird API error: %s", e)
+        return jsonify({"error": "Service unavailable"}), 500
+    finally:
+        conn.close()
+
+# === DASHBOARD (include lat/lng) ===
 @erate_bp.route('/')
 def dashboard():
     log("Dashboard accessed")
@@ -491,35 +536,6 @@ def dashboard():
     except Exception as e:
         log("Dashboard error: %s", e)
         return f"<pre>ERROR: {e}</pre>", 500
-    finally:
-        conn.close()
-
-# === BLUEBIRD API ===
-@erate_bp.route('/bbmap/<app_number>')
-def bbmap(app_number):
-    conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
-    try:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT entity_name, address1, city, state, zip_code
-                FROM erate WHERE app_number = %s
-            """, (app_number,))
-            row = cur.fetchone()
-        if not row:
-            return jsonify({"error": "Applicant not found"}), 404
-        entity_name, address1, city, state, zip_code = row
-        full_address = f"{address1}, {city}, {state} {zip_code}".strip()
-        dist_info = get_bluebird_distance(full_address)
-        return jsonify({
-            "entity_name": entity_name,
-            "address": full_address,
-            "pop_city": dist_info['pop_city'],
-            "distance": f"{dist_info['distance']:.1f} miles" if dist_info['distance'] != float('inf') else "N/A",
-            "coverage": dist_info['coverage']
-        }), 200, {'Content-Type': 'application/json'}
-    except Exception as e:
-        log("Bluebird API error: %s", e)
-        return jsonify({"error": "Service unavailable"}), 500
     finally:
         conn.close()
 
