@@ -115,7 +115,8 @@
             margin: 4px 0;
         }
         .btn-primary { background: var(--accent); color: white; }
-        .btn-secondary { background: #6c757d; color: white; }
+        .btn-secondary { background: #6c757d; color: white ...
+
         .btn:hover { opacity: 0.9; transform: translateY(-1px); }
         .summary {
             font-weight: 600;
@@ -384,6 +385,19 @@
                 <button class="modal-close" onclick="closeModal('bbmap')">x</button>
             </div>
             <div class="modal-body" id="bbmap-body">Loading...</div>
+            <div style="margin-top:15px; text-align:center; font-size:0.9rem;">
+                <a href="https://bluebirdfiber.com/network/" target="_blank" style="color:#007bff; font-weight:600; text-decoration:underline; display:block; margin:5px 0;">
+                    View on Bluebird Fiber Map
+                </a>
+                <div id="copy-address" style="background:#f0f0f0; padding:8px; border-radius:4px; margin:10px 0; font-family:monospace; word-break:break-all; font-size:0.8rem;">
+                    <strong>Address for Map:</strong><br>
+                    <span id="address-text"></span>
+                    <button onclick="copyAddress()" style="margin-top:5px; padding:4px 8px; background:#27ae60; color:white; border:none; border-radius:3px; cursor:pointer; font-size:0.8rem;">Copy</button>
+                </div>
+                <small style="color:#666;">
+                    <em>Paste into Bluebird search bar → Click search → Zoom to location</em>
+                </small>
+            </div>
         </div>
     </div>
 
@@ -396,7 +410,6 @@
         const detailBody = document.getElementById('detail-body');
         const bbmapBody = document.getElementById('bbmap-body');
         let currentAppNumber = null;
-        let currentFullAddress = '';
 
         form.addEventListener('submit', () => { body.classList.add('loading'); overlay.classList.add('show'); });
         window.addEventListener('load', () => { body.classList.remove('loading'); overlay.classList.remove('show'); });
@@ -538,6 +551,7 @@
                 const resp = await fetch(`/erate/bbmap/${appNumber}`);
                 const data = await resp.json();
 
+                // Full address
                 const fullAddress = [
                     data.address1,
                     data.address2,
@@ -548,9 +562,8 @@
                     data.entity_name
                 ].filter(Boolean).join(', ');
 
-                currentFullAddress = fullAddress;
-                const encodedAddress = encodeURIComponent(fullAddress);
-                const mapUrl = `https://bluebirdfiber.com/network/?search=${encodedAddress}`;
+                // Update address text
+                document.getElementById('address-text').textContent = fullAddress;
 
                 bbmapBody.innerHTML = `
                     <strong>Applicant:</strong> ${data.entity_name || 'N/A'}<br>
@@ -558,55 +571,24 @@
                     <strong>Nearest PoP:</strong> ${data.pop_city || 'Unknown'}<br>
                     <strong>Distance:</strong> ${data.distance || 'N/A'}<br>
                     <strong>Coverage:</strong> ${data.coverage || 'Unknown'}
-                    <div style="margin-top:15px; text-align:center;">
-                        <a href="${mapUrl}" target="_blank" style="color:#007bff; font-weight:600; text-decoration:underline; display:block; margin:5px 0;">
-                            View on Bluebird Fiber Map
-                        </a>
-                        <a href="#" onclick="autoZoomMap()" style="color:#27ae60; font-weight:600; font-size:0.9rem; text-decoration:underline;">
-                            Auto-Zoom to Address
-                        </a>
-                    </div>
                 `;
             } catch {
                 bbmapBody.innerHTML = '<strong>Error:</strong> Could not fetch data.';
+                document.getElementById('address-text').textContent = 'Error loading address';
             } finally {
                 body.classList.remove('loading');
                 overlay.classList.remove('show');
             }
         }
 
-        function autoZoomMap() {
-            if (!currentFullAddress) return;
-
-            const encoded = encodeURIComponent(currentFullAddress);
-            const url = `https://bluebirdfiber.com/network/?search=${encoded}`;
-
-            const win = window.open('', '_blank');
-            if (win) {
-                win.document.write(`
-                    <!DOCTYPE html>
-                    <html>
-                    <head><title>Bluebird Map - ${currentFullAddress}</title></head>
-                    <body style="margin:0;">
-                        <iframe src="${url}" style="width:100%; height:100vh; border:0;" onload="
-                            setTimeout(() => {
-                                const iframeDoc = this.contentDocument || this.contentWindow.document;
-                                const input = iframeDoc.querySelector('input[placeholder*=\'address\']') || 
-                                             iframeDoc.querySelector('input[type=\'search\']') || 
-                                             iframeDoc.querySelector('input');
-                                const button = iframeDoc.querySelector('button[type=\'submit\']') || 
-                                              iframeDoc.querySelector('button');
-                                if (input) {
-                                    input.value = decodeURIComponent('${encoded}');
-                                    input.dispatchEvent(new Event('input', {bubbles: true}));
-                                }
-                                if (button) button.click();
-                            }, 3000);
-                        "></iframe>
-                    </body>
-                    </html>
-                `);
-            }
+        function copyAddress() {
+            const address = document.getElementById('address-text').textContent;
+            navigator.clipboard.writeText(address).then(() => {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = originalText, 1500);
+            });
         }
 
         function closeModal(type) {
