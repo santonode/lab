@@ -115,8 +115,7 @@
             margin: 4px 0;
         }
         .btn-primary { background: var(--accent); color: white; }
-        .btn-secondary { background: #6c757d; color: white ...
-
+        .btn-secondary { background: #6c757d; color: white; }
         .btn:hover { opacity: 0.9; transform: translateY(-1px); }
         .summary {
             font-weight: 600;
@@ -551,7 +550,6 @@
                 const resp = await fetch(`/erate/bbmap/${appNumber}`);
                 const data = await resp.json();
 
-                // Full address
                 const fullAddress = [
                     data.address1,
                     data.address2,
@@ -562,7 +560,6 @@
                     data.entity_name
                 ].filter(Boolean).join(', ');
 
-                // Update address text
                 document.getElementById('address-text').textContent = fullAddress;
 
                 bbmapBody.innerHTML = `
