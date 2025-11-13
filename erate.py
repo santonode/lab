@@ -388,6 +388,7 @@ def get_bluebird_distance(address):
     return {"distance": min_dist, "pop_city": nearest_pop, "coverage": coverage}
 
 # === DASHBOARD ===
+# === LINES 120–160: 4-COLUMN DASHBOARD QUERY ===
 @erate_bp.route('/')
 def dashboard():
     log("Dashboard accessed")
@@ -399,6 +400,7 @@ def dashboard():
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10, autocommit=True)
     try:
         with conn.cursor() as cur:
+            # COUNT
             count_sql = 'SELECT COUNT(*) FROM erate'
             count_params = []
             where_clauses = []
@@ -413,25 +415,26 @@ def dashboard():
             cur.execute(count_sql, count_params)
             total_count = cur.fetchone()[0]
 
+            # FETCH ONLY 4 COLUMNS
             sql = '''
-                SELECT app_number, entity_name, state, funding_year,
-                       fcc_status, last_modified_datetime
+                SELECT app_number, entity_name, state, last_modified_datetime
                 FROM erate
             '''
             params = []
             if where_clauses:
                 sql += ' WHERE ' + ' AND '.join(where_clauses)
                 params.extend(count_params)
-            sql += ' ORDER BY app_number LIMIT %s OFFSET %s'
+            sql += ' ORDER BY last_modified_datetime DESC, app_number LIMIT %s OFFSET %s'
             params.extend([limit + 1, offset])
             cur.execute(sql, params)
             rows = cur.fetchall()
 
             table_data = [
                 {
-                    'app_number': r[0], 'entity_name': r[1], 'state': r[2],
-                    'funding_year': r[3], 'fcc_status': r[4],
-                    'last_modified_datetime': r[5]
+                    'app_number': r[0],
+                    'entity_name': r[1],
+                    'state': r[2],
+                    'last_modified_datetime': r[3]
                 }
                 for r in rows
             ]
@@ -441,7 +444,6 @@ def dashboard():
             next_offset = offset + limit
             total_filtered = offset + len(table_data)
 
-        log("Dashboard rendered: %s records", len(table_data))
         return render_template(
             'erate.html',
             table_data=table_data,
