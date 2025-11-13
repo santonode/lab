@@ -26,7 +26,6 @@
             background: var(--bg);
             color: var(--text);
             line-height: 1.6;
-            position: relative;
             min-height: 100vh;
         }
         .overlay {
@@ -53,29 +52,27 @@
             100% { transform: rotate(360deg); }
         }
         .container {
-            max-width: 1200px;
-            margin: 40px auto;
+            max-width: 1000px;
+            margin: 20px auto;
             background: var(--card);
-            padding: 30px;
+            padding: 20px;
             border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-            position: relative;
-            z-index: 1;
         }
         h1 {
             text-align: center;
             color: var(--primary);
-            margin: 0 0 10px;
+            margin: 0 0 15px;
             font-weight: 600;
-            font-size: 2.2rem;
+            font-size: 1.8rem;
         }
         .filters {
             display: flex;
-            gap: 12px;
-            margin: 25px 0;
+            gap: 10px;
+            margin: 20px 0;
             flex-wrap: wrap;
             align-items: center;
-            padding: 15px;
+            padding: 12px;
             background: #f8f9fa;
             border-radius: 8px;
             border: 1px solid #e9ecef;
@@ -87,53 +84,50 @@
             align-items: center;
             gap: 6px;
             white-space: nowrap;
+            font-size: 0.9rem;
         }
         .filters input[type="text"],
         .filters input[type="date"] {
-            padding: 8px 12px;
+            padding: 8px 10px;
             border: 1px solid var(--border);
             border-radius: 6px;
-            font-size: 0.95rem;
-            min-width: 100px;
+            font-size: 0.9rem;
+            min-width: 80px;
         }
         .filters input[type="text"] {
-            width: 60px;
+            width: 50px;
             text-transform: uppercase;
         }
         .btn {
-            padding: 10px 20px;
+            padding: 8px 16px;
             border: none;
             border-radius: 6px;
             cursor: pointer;
             font-weight: 600;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 0.95rem;
+            font-size: 0.85rem;
             transition: all 0.2s;
-            text-align: center;
         }
         .btn-primary { background: var(--accent); color: white; }
         .btn-success { background: var(--success); color: white; }
-        .btn-warning { background: var(--warning); color: #212529; }
+        .btn-warning { background: var(--calculator); color: #212529; }
         .btn-secondary { background: #6c757d; color: white; }
         .btn:hover { opacity: 0.9; transform: translateY(-1px); }
-        .btn:active { transform: translateY(0); }
         .summary {
             font-weight: 600;
             color: var(--primary);
-            margin: 20px 0;
-            font-size: 1.1rem;
+            margin: 15px 0;
+            font-size: 1rem;
             text-align: center;
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
-            font-size: 0.95rem;
+            margin-top: 15px;
+            font-size: 0.9rem;
         }
         th, td {
             border: 1px solid var(--border);
-            padding: 12px 10px;
+            padding: 10px 8px;
             text-align: left;
             vertical-align: middle;
         }
@@ -144,151 +138,69 @@
             position: sticky;
             top: 0;
             z-index: 10;
+            font-size: 0.85rem;
         }
         tr:nth-child(even) { background-color: #f9f9f9; }
         tr:hover { background-color: var(--hover); }
-        td { word-wrap: break-word; }
         .app-number {
             font-family: monospace;
             font-weight: 600;
             color: var(--accent);
             text-decoration: underline;
             cursor: pointer;
+            font-size: 0.9rem;
         }
         .app-number:hover { color: #0056b3; }
-        .bbmap-link {
+        .entity-name {
+            cursor: pointer;
             color: var(--accent);
             text-decoration: underline;
-            cursor: pointer;
+            font-size: 0.9rem;
         }
-        .bbmap-link:hover { color: #0056b3; }
-        .modified { font-size: 0.9rem; color: #666; }
+        .entity-name:hover { color: #0056b3; }
+        .modified { font-size: 0.8rem; color: #666; }
         .pagination {
             text-align: center;
-            margin: 30px 0;
+            margin: 25px 0;
         }
         .load-more {
             display: inline-block;
-            padding: 12px 30px;
+            padding: 10px 25px;
             background: var(--accent);
             color: white;
             border-radius: 8px;
             font-weight: 600;
             text-decoration: none;
-            box-shadow: 0 2px 8px rgba(0,123,255,0.3);
+            font-size: 0.9rem;
         }
         .load-more:hover {
             background: #0056b3;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,123,255,0.4);
         }
         .flash {
-            padding: 15px;
-            margin: 20px 0;
+            padding: 12px;
+            margin: 15px 0;
             border-radius: 6px;
             text-align: center;
             font-weight: 600;
+            font-size: 0.9rem;
         }
         .flash.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .flash.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-
-        /* MODAL */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.6);
-            z-index: 10000;
-            justify-content: center;
-            align-items: center;
-            backdrop-filter: blur(5px);
-        }
-        .modal.show { display: flex; }
-        .modal-content {
-            background: white;
-            padding: 25px;
-            border-radius: 12px;
-            max-width: 600px;
-            width: 90%;
-            max-height: 85vh;
-            overflow-y: auto;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-        }
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 10px;
-        }
-        .modal-title {
-            font-weight: 600;
-            color: var(--primary);
-            font-size: 1.3rem;
-        }
-        .modal-close {
-            background: none;
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: #999;
-        }
-        .modal-close:hover { color: #333; }
-        .modal-body {
-            font-size: 0.95rem;
-            line-height: 1.6;
-            margin-bottom: 15px;
-        }
-        .modal-body strong { color: var(--primary); }
-        .modal-body a { color: var(--accent); text-decoration: underline; }
-
-        /* MINI FOOTER */
-        .modal-footer {
-            display: flex;
-            gap: 12px;
-            justify-content: center;
-            border-top: 1px solid #eee;
-            padding-top: 12px;
-            font-size: 0.9rem;
-            flex-wrap: wrap;
-        }
-        .modal-footer a {
-            color: var(--accent);
-            text-decoration: none;
-            font-weight: 500;
-            padding: 4px 8px;
-            border-radius: 4px;
-            transition: all 0.2s;
-        }
-        .modal-footer a:hover {
-            background: var(--hover);
-            color: #0056b3;
-        }
-        .modal-footer a.active {
-            background: var(--accent);
-            color: white;
-        }
-
         @media (max-width: 768px) {
-            .container { margin: 20px; padding: 20px; }
-            .filters { flex-direction: column; align-items: stretch; }
-            .filters label { justify-content: center; }
-            table { font-size: 0.85rem; }
-            th, td { padding: 8px 6px; }
-            .btn { width: 100%; margin: 5px 0; }
-            .modal-content { max-width: 95%; }
-            .modal-footer { gap: 6px; }
+            .container { margin: 10px; padding: 15px; }
+            .filters { flex-direction: column; align-items: stretch; gap: 8px; }
+            .filters label { justify-content: center; font-size: 0.85rem; }
+            table { font-size: 0.8rem; }
+            th, td { padding: 6px 4px; }
+            .btn { width: 100%; margin: 4px 0; font-size: 0.8rem; }
+            .load-more { padding: 8px 20px; font-size: 0.85rem; }
         }
     </style>
 </head>
 <body>
-    <!-- LOADING OVERLAY -->
     <div class="overlay" id="loading">
         <div class="spinner"></div>
     </div>
-
-    <!-- DETAILS MODAL -->
     <div class="modal" id="detail-modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -296,18 +208,8 @@
                 <button class="modal-close" onclick="closeModal('detail')">x</button>
             </div>
             <div class="modal-body" id="detail-body">Loading...</div>
-            <div class="modal-footer">
-                <a href="#" class="tab-link active" data-section="basic">basic info</a>
-                <a href="#" class="tab-link" data-section="billed">billed entity</a>
-                <a href="#" class="tab-link" data-section="contact">contact</a>
-                <a href="#" class="tab-link" data-section="tech">technical contact</a>
-                <a href="#" class="tab-link" data-section="auth">authorized persons</a>
-                <a href="#" class="tab-link" data-section="services">services</a>
-            </div>
         </div>
     </div>
-
-    <!-- BLUEBIRD MODAL -->
     <div class="modal" id="bbmap-modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -317,11 +219,8 @@
             <div class="modal-body" id="bbmap-body">Loading...</div>
         </div>
     </div>
-
     <div class="container">
         <h1>E-Rate Dashboard</h1>
-
-        <!-- FLASH MESSAGES -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -329,7 +228,6 @@
                 {% endfor %}
             {% endif %}
         {% endwith %}
-
         <div class="filters">
             <form method="get" style="display: contents;" id="filter-form">
                 <label>State: <input type="text" name="state" value="{{ filters.state|default('') }}" maxlength="2" placeholder="KS"></label>
@@ -340,17 +238,13 @@
             <a href="{{ url_for('erate.extract_csv') }}" class="btn btn-warning">Extract CSV</a>
             <a href="{{ url_for('erate.import_interactive') }}" class="btn btn-success">Resume Import</a>
         </div>
-
-        <p class="summary"><strong szczegółów>Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</strong></p>
-
+        <p class="summary">Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</p>
         <table>
             <thead>
                 <tr>
-                    <th>Application #</th>
+                    <th>Applicant #</th>
                     <th>Entity Name</th>
                     <th>State</th>
-                    <th>Funding Year</th>
-                    <th>FCC Status</th>
                     <th>Modified</th>
                 </tr>
             </thead>
@@ -359,30 +253,26 @@
                     {% for row in table_data %}
                     <tr>
                         <td><span class="app-number" onclick="showDetails('{{ row.app_number }}')">{{ row.app_number|default('—') }}</span></td>
-                        <td><span class="bbmap-link" onclick="checkBluebird('{{ row.app_number }}')">{{ row.entity_name|default('—') }}</span></td>
+                        <td><span class="entity-name" onclick="checkBluebird('{{ row.app_number }}')">{{ row.entity_name|default('—') }}</span></td>
                         <td>{{ row.state|default('—') }}</td>
-                        <td>{{ row.funding_year|default('—') }}</td>
-                        <td>{{ row.fcc_status|default('—') }}</td>
                         <td class="modified">{{ row.last_modified_datetime|strftime('%m/%d/%Y') if row.last_modified_datetime else '—' }}</td>
                     </tr>
                     {% endfor %}
                 {% else %}
                 <tr>
-                    <td colspan="6" style="text-align:center; color:#999; padding:30px;">
+                    <td colspan="4" style="text-align:center; color:#999; padding:30px;">
                         No records found. Try adjusting filters or <a href="{{ url_for('erate.import_interactive') }}">import data</a>.
                     </td>
                 </tr>
                 {% endif %}
             </tbody>
         </table>
-
         {% if has_more|default(false) %}
         <div class="pagination">
             <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&offset={{ next_offset|default(0) }}" class="load-more">Load More (+)</a>
         </div>
         {% endif %}
     </div>
-
     <script>
         const form = document.getElementById('filter-form');
         const overlay = document.getElementById('loading');
@@ -393,7 +283,6 @@
         const bbmapBody = document.getElementById('bbmap-body');
         let currentAppNumber = null;
 
-        // Loading
         form.addEventListener('submit', () => { body.classList.add('loading'); overlay.classList.add('show'); });
         window.addEventListener('load', () => { body.classList.remove('loading'); overlay.classList.remove('show'); });
         document.querySelectorAll('a').forEach(link => {
@@ -406,20 +295,26 @@
             });
         });
 
-        // === APPLICANT DETAILS MODAL ===
         async function showDetails(appNumber) {
             currentAppNumber = appNumber;
             body.classList.add('loading');
             overlay.classList.add('show');
             detailBody.innerHTML = 'Loading...';
             detailModal.classList.add('show');
-
             try {
                 const resp = await fetch(`/erate/details/${appNumber}`);
                 const data = await resp.json();
-
-                renderSection('basic', data);
-                activateTab('basic');
+                detailBody.innerHTML = `
+                    <strong>Applicant #:</strong> ${data.app_number || ''}<br>
+                    <strong>Entity:</strong> ${data.entity_name || ''}<br>
+                    <strong>State:</strong> ${data.state || ''}<br>
+                    <strong>Modified:</strong> ${data.last_modified_datetime || ''}<br>
+                    <strong>Status:</strong> ${data.fcc_status || ''}<br>
+                    <strong>Funding Year:</strong> ${data.funding_year || ''}<br>
+                    <hr>
+                    <strong>PDF:</strong> ${data.form_pdf || 'None'}<br>
+                    <strong>Website:</strong> ${data.website ? `<a href="${data.website}" target="_blank">${data.website}</a>` : 'None'}
+                `;
             } catch (err) {
                 detailBody.innerHTML = '<strong>Error:</strong> Could not load details.';
             } finally {
@@ -428,110 +323,6 @@
             }
         }
 
-        function renderSection(section, data) {
-            let html = '';
-
-            if (section === 'basic') {
-                html = `
-                    <strong>Form Nickname:</strong> ${data.form_nickname || ''}<br>
-                    <strong>Form PDF:</strong> ${data.form_pdf || ''}<br>
-                    <strong>Funding Year:</strong> ${data.funding_year || ''}<br>
-                    <strong>FCC Status:</strong> ${data.fcc_status || ''}<br>
-                    <strong>Allowable Contract Date:</strong> ${data.allowable_contract_date || ''}<br>
-                    <strong>Created:</strong> ${data.created_datetime || ''} by ${data.created_by || ''}<br>
-                    <strong>Certified:</strong> ${data.certified_datetime || ''} by ${data.certified_by || ''}<br>
-                    <strong>Last Modified:</strong> ${data.last_modified_datetime || ''} by ${data.last_modified_by || ''}
-                `;
-            } else if (section === 'billed') {
-                html = `
-                    <strong>Billed Entity #:</strong> ${data.ben || ''}<br>
-                    <strong>Entity Name:</strong> ${data.entity_name || ''}<br>
-                    <strong># of Eligible Entities:</strong> ${data.num_eligible || ''}<br>
-                    <strong>Org Status:</strong> ${data.org_status || ''}<br>
-                    <strong>Org Type:</strong> ${data.org_type || ''}<br>
-                    <strong>Applicant Type:</strong> ${data.applicant_type || ''}<br>
-                    <strong>Website:</strong> ${data.website ? `<a href="${data.website}" target="_blank">${data.website}</a>` : ''}<br>
-                    <strong>FCC Reg #:</strong> ${data.fcc_reg_num || ''}<br>
-                    <strong>Address:</strong> ${data.address1 || ''} ${data.address2 || ''}<br>
-                    <strong>City/State/ZIP:</strong> ${data.city || ''}, ${data.state || ''} ${data.zip_code || ''}${data.zip_ext ? '-' + data.zip_ext : ''}<br>
-                    <strong>Email:</strong> ${data.email || ''}<br>
-                    <strong>Phone:</strong> ${data.phone || ''}${data.phone_ext ? ' x' + data.phone_ext : ''}
-                `;
-            } else if (section === 'contact') {
-                html = `
-                    <strong>Contact Name:</strong> ${data.contact_name || ''}<br>
-                    <strong>Address:</strong> ${data.contact_address1 || ''} ${data.contact_address2 || ''}<br>
-                    <strong>City/State/ZIP:</strong> ${data.contact_city || ''}, ${data.contact_state || ''} ${data.contact_zip || ''}${data.contact_zip_ext ? '-' + data.contact_zip_ext : ''}<br>
-                    <strong>Phone:</strong> ${data.contact_phone || ''}${data.contact_phone_ext ? ' x' + data.contact_phone_ext : ''}<br>
-                    <strong>Email:</strong> ${data.contact_email || ''}
-                `;
-            } else if (section === 'tech') {
-                html = `
-                    <strong>Name:</strong> ${data.tech_name || ''}<br>
-                    <strong>Title:</strong> ${data.tech_title || ''}<br>
-                    <strong>Phone:</strong> ${data.tech_phone || ''}${data.tech_phone_ext ? ' x' + data.tech_phone_ext : ''}<br>
-                    <strong>Email:</strong> ${data.tech_email || ''}
-                `;
-            } else if (section === 'auth') {
-                html = `
-                    <strong>Name:</strong> ${data.auth_name || ''}<br>
-                    <strong>Title:</strong> ${data.auth_title || ''}<br>
-                    <strong>Employer:</strong> ${data.auth_employer || ''}<br>
-                    <strong>Address:</strong> ${data.auth_address || ''}<br>
-                    <strong>City/State/ZIP:</strong> ${data.auth_city || ''}, ${data.auth_state || ''} ${data.auth_zip || ''}${data.auth_zip_ext ? '-' + data.auth_zip_ext : ''}<br>
-                    <strong>Phone:</strong> ${data.auth_phone || ''}${data.auth_phone_ext ? ' x' + data.auth_phone_ext : ''}<br>
-                    <strong>Email:</strong> ${data.auth_email || ''}
-                `;
-            } else if (section === 'services') {
-                html = `
-                    <strong>Category 1:</strong> ${data.cat1_desc || ''}<br>
-                    <strong>Category 2:</strong> ${data.cat2_desc || ''}<br>
-                    <strong>Installment Type:</strong> ${data.installment_type || ''}<br>
-                    <strong>Min/Max Years:</strong> ${data.installment_min || ''} / ${data.installment_max || ''}<br>
-                    <strong>RFP ID:</strong> ${data.rfp_id || ''}<br>
-                    <strong>State Restrictions:</strong> ${data.state_restrictions || ''}<br>
-                    <strong>Restriction Desc:</strong> ${data.restriction_desc || ''}<br>
-                    <strong>Statewide:</strong> ${data.statewide || ''}<br>
-                    <strong>All Public:</strong> ${data.all_public || ''}<br>
-                    <strong>All Non-Public:</strong> ${data.all_nonpublic || ''}<br>
-                    <strong>All Libraries:</strong> ${data.all_libraries || ''}<br>
-                    <strong>Form Version:</strong> ${data.form_version || ''}
-                `;
-            }
-
-            detailBody.innerHTML = html;
-        }
-
-        function activateTab(section) {
-            document.querySelectorAll('.tab-link').forEach(link => {
-                link.classList.remove('active');
-                if (link.dataset.section === section) {
-                    link.classList.add('active');
-                }
-            });
-        }
-
-        // Tab click
-        document.querySelectorAll('.tab-link').forEach(link => {
-            link.addEventListener('click', async (e) => {
-                e.preventDefault();
-                const section = link.dataset.section;
-                activateTab(section);
-                if (currentAppNumber) {
-                    body.classList.add('loading');
-                    overlay.classList.add('show');
-                    try {
-                        const resp = await fetch(`/erate/details/${currentAppNumber}`);
-                        const data = await resp.json();
-                        renderSection(section, data);
-                    } catch {}
-                    body.classList.remove('loading');
-                    overlay.classList.remove('show');
-                }
-            });
-        });
-
-        // === BLUEBIRD MODAL ===
         async function checkBluebird(appNumber) {
             body.classList.add('loading');
             overlay.classList.add('show');
@@ -555,13 +346,11 @@
             }
         }
 
-        // Close modal
         function closeModal(type) {
             if (type === 'detail') detailModal.classList.remove('show');
             if (type === 'bbmap') bbmapModal.classList.remove('show');
         }
 
-        // Close on outside click
         [detailModal, bbmapModal].forEach(modal => {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) modal.classList.remove('show');
