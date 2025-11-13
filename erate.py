@@ -394,21 +394,27 @@ def _load_kmz():
                 KMZ_LOADED = True
                 return
             kml_data = kmz.read(kml_files[0])
+
         doc = kml.KML()
         doc.from_string(kml_data)
+
         for feature in doc.features():
             if hasattr(feature, "features"):
                 for pm in feature.features():
-                    if pm.geometry and hasattr(pm.geometry, "coords"):
-                        coords = pm.geometry.coords[0]
+                    geom = pm.geometry
+                    if geom and hasattr(geom, "coords") and geom.coords:
+                        # For Point: coords = [[lon, lat]]
+                        lon, lat = geom.coords[0]  # First (and only) point
                         KMZ_FEATURES.append({
                             "name": pm.name or "Unnamed",
-                            "lon": coords[0],
-                            "lat": coords[1],
+                            "lon": lon,
+                            "lat": lat,
                         })
         log("KMZ loaded – %d placemarks", len(KMZ_FEATURES))
     except Exception as e:
         log("KMZ parsing error: %s", e)
+        import traceback
+        log("Traceback: %s", traceback.format_exc())
     finally:
         KMZ_LOADED = True
 
