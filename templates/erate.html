@@ -384,6 +384,11 @@
                 <button class="modal-close" onclick="closeModal('bbmap')">x</button>
             </div>
             <div class="modal-body" id="bbmap-body">Loading...</div>
+            <div style="margin-top:15px; text-align:center;">
+                <a href="#" id="bbmap-link" target="_blank" style="color:#007bff; font-weight:600; text-decoration:underline;">
+                    View on Bluebird Fiber Map
+                </a>
+            </div>
         </div>
     </div>
 
@@ -459,7 +464,7 @@
             } else if (section === 'contact') {
                 html = `
                     <strong>Contact Name:</strong> ${data.contact_name || ''}<br>
-                    <strong>Address:</strong> ${data.contact_address1 || ''} ${data.contact_address2 || ''}<br>
+                    <strong>Address:</strong> ${data.contact_address1 || ''} ${data.contact_address22 || ''}<br>
                     <strong>City/State/ZIP:</strong> ${data.contact_city || ''}, ${data.contact_state || ''} ${data.contact_zip || ''}${data.contact_zip_ext ? '-' + data.contact_zip_ext : ''}<br>
                     <strong>Phone:</strong> ${data.contact_phone || ''}${data.contact_phone_ext ? ' x' + data.contact_phone_ext : ''}<br>
                     <strong>Email:</strong> ${data.contact_email || ''}
@@ -536,6 +541,14 @@
             try {
                 const resp = await fetch(`/erate/bbmap/${appNumber}`);
                 const data = await resp.json();
+
+                // Build full address for map link
+                const address = `${data.address || ''}, ${data.entity_name || ''}`;
+                const mapUrl = `https://bluebirdfiber.com/network/?search=${encodeURIComponent(address)}`;
+
+                // Update link
+                document.getElementById('bbmap-link').href = mapUrl;
+
                 bbmapBody.innerHTML = `
                     <strong>Applicant:</strong> ${data.entity_name || 'N/A'}<br>
                     <strong>Address:</strong> ${data.address || 'N/A'}<br>
@@ -545,6 +558,7 @@
                 `;
             } catch {
                 bbmapBody.innerHTML = '<strong>Error:</strong> Could not fetch data.';
+                document.getElementById('bbmap-link').href = 'https://bluebirdfiber.com/network/';
             } finally {
                 body.classList.remove('loading');
                 overlay.classList.remove('show');
