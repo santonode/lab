@@ -385,15 +385,12 @@
             </div>
             <div class="modal-body" id="bbmap-body">Loading...</div>
             <div style="margin-top:15px; text-align:center;">
-                <a href="#" id="bbmap-link" target="_blank" style="color:#007bff; font-weight:600; text-decoration:underline;">
-                    View on Bluebird Fiber Map →
+                <a href="#" id="bbmap-link" target="_blank" style="color:#007bff; font-weight:600; text-decoration:underline; display:block; margin:5px 0;">
+                    View on Bluebird Fiber Map
                 </a>
-                <br>
-                <small style="color:#666;">
-                    <a href="#" onclick="autoZoomMap()" style="color:#666; text-decoration:none;">
-                        [Auto-Zoom to Address]
-                    </a>
-                </small>
+                <a href="#" onclick="autoZoomMap()" style="color:#666; text-decoration:none; font-size:0.8rem;">
+                    [Auto-Zoom to Address]
+                </a>
             </div>
         </div>
     </div>
@@ -407,6 +404,7 @@
         const detailBody = document.getElementById('detail-body');
         const bbmapBody = document.getElementById('bbmap-body');
         let currentAppNumber = null;
+        let currentFullAddress = '';
 
         form.addEventListener('submit', () => { body.classList.add('loading'); overlay.classList.add('show'); });
         window.addEventListener('load', () => { body.classList.remove('loading'); overlay.classList.remove('show'); });
@@ -548,7 +546,7 @@
                 const resp = await fetch(`/erate/bbmap/${appNumber}`);
                 const data = await resp.json();
 
-                // Full address
+                // Build full address
                 const fullAddress = [
                     data.address1,
                     data.address2,
@@ -559,6 +557,7 @@
                     data.entity_name
                 ].filter(Boolean).join(', ');
 
+                currentFullAddress = fullAddress;
                 const encodedAddress = encodeURIComponent(fullAddress);
                 const mapUrl = `https://bluebirdfiber.com/network/?search=${encodedAddress}`;
 
@@ -574,6 +573,7 @@
             } catch {
                 bbmapBody.innerHTML = '<strong>Error:</strong> Could not fetch data.';
                 document.getElementById('bbmap-link').href = 'https://bluebirdfiber.com/network/';
+                currentFullAddress = '';
             } finally {
                 body.classList.remove('loading');
                 overlay.classList.remove('show');
@@ -581,21 +581,70 @@
         }
 
         function autoZoomMap() {
-            const mapUrl = document.getElementById('bbmap-link').href;
-            if (mapUrl && mapUrl.includes('search=')) {
-                const win = window.open(mapUrl, '_blank');
-                if (win) {
-                    win.onload = function() {
-                        setTimeout(() => {
-                            const input = win.document.querySelector('input[placeholder*="address"]');
-                            const button = win.document.querySelector('button[type="submit"]');
-                            if (input && button) {
-                                input.value = decodeURIComponent(mapUrl.split('search=')[1]);
-                                button.click();
+            if (!currentFullAddress) return;
+
+            const encodedAddress = encodeURIComponent(currentFullAddress);
+            const mapUrl = `https://bluebirdfiber.com/network/?search=${encodedAddress}`;
+            const win = window.open(mapUrl, '_blank');
+
+            if (win) {
+                win.onload = function() {
+                    setTimeout(() => {
+                        // Try multiple selectors
+                        const selectors = [
+                            'input[type="search"]',
+                            'input[placeholder*="address"]',
+                            'input[placeholder*="Address"]',
+                            '.search-input input',
+                            'input[id*="search"]',
+                            'input[name="search"]'
+                        ];
+
+                        let searchInput = null;
+                        for (const sel of selectors) {
+                            searchInput = win.document.querySelector(sel);
+                            if (searchInput) break;
+                        }
+
+                        const buttonSelectors = [
+                            'button[type="submit"]',
+                            'button[onclick*="search"]',
+                            '.search-button',
+                            'button:has(svg)',
+                            'button'
+                        ];
+
+                        let searchButton = null;
+                        for (const sel of buttonSelectors) {
+                            const btn = win.document.querySelector(sel);
+                            if (btn && (btn.textContent.toLowerCase().includes('search') || btn.querySelector('svg'))) {
+                                searchButton = btn;
+                                break;
                             }
-                        }, 1500);
-                    };
-                }
+                        }
+
+                        if (searchInput) {
+                            searchInput.value = decodeURIComponent(encodedAddress);
+                            searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                            searchInput.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+
+                        if (searchButton) {
+                            searchButton.click();
+                        } else {
+                            // Fallback: press Enter
+                            if (searchInput) {
+                                const enterEvent = new KeyboardEvent('keydown', {
+                                    key: 'Enter',
+                                    code: 'Enter',
+                                    keyCode: 13,
+                                    bubbles: true
+                                });
+                                searchInput.dispatchEvent(enterEvent);
+                            }
+                        }
+                    }, 2500);
+                };
             }
         }
 
