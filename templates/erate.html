@@ -595,4 +595,74 @@
                     <strong>Category 1:</strong> ${data.cat1_desc || ''}<br>
                     <strong>Category 2:</strong> ${data.cat2_desc || ''}<br>
                     <strong>Installment Type:</strong> ${data.installment_type || ''}<br>
-                    <strong>Min/Max Years:</strong> ${data.installment_min || ''} / ${data.install
+                    <strong>Min/Max Years:</strong> ${data.installment_min || ''} / ${data.installment_max || ''}<br>
+                    <strong>RFP ID:</strong> ${data.rfp_id || ''}<br>
+                    <strong>State Restrictions:</strong> ${data.state_restrictions || ''}<br>
+                    <strong>Restriction Desc:</strong> ${data.restriction_desc || ''}<br>
+                    <strong>Statewide:</strong> ${data.statewide || ''}<br>
+                    <strong>All Public:</strong> ${data.all_public || ''}<br>
+                    <strong>All Non-Public:</strong> ${data.all_nonpublic || ''}<br>
+                    <strong>All Libraries:</strong> ${data.all_libraries || ''}<br>
+                    <strong>Form Version:</strong> ${data.form_version || ''}
+                `;
+            }
+            detailBody.innerHTML = html;
+        }
+        function activateTab(section) {
+            document.querySelectorAll('.tab-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.dataset.section === section) link.classList.add('active');
+            });
+        }
+        document.querySelectorAll('.tab-link').forEach(link => {
+            link.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const section = link.dataset.section;
+                activateTab(section);
+                if (currentAppNumber) {
+                    body.classList.add('loading');
+                    overlay.classList.add('show');
+                    try {
+                        const resp = await fetch(`/erate/details/${currentAppNumber}`);
+                        const data = await resp.json();
+                        renderSection(section, data);
+                    } catch {}
+                    body.classList.remove('loading');
+                    overlay.classList.remove('show');
+                }
+            });
+        });
+        function copyAddress() {
+            const address = document.getElementById('address-text').textContent;
+            navigator.clipboard.writeText(address).then(() => {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = originalText, 1500);
+            });
+        }
+        function closeModal(type) {
+            if (type === 'detail') detailModal.classList.remove('show');
+            if (type === 'bbmap') bbmapModal.classList.remove('show');
+            if (type === 'map') mapModal.classList.remove('show');
+        }
+        [detailModal, bbmapModal, mapModal].forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.classList.remove('show');
+            });
+        });
+        // Loading overlay on form submit / pagination
+        form.addEventListener('submit', () => { body.classList.add('loading'); overlay.classList.add('show'); });
+        window.addEventListener('load', () => { body.classList.remove('loading'); overlay.classList.remove('show'); });
+        document.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', (e) => {
+                const href = link.getAttribute('href');
+                if (href && href.includes('?')) {
+                    body.classList.add('loading');
+                    overlay.classList.add('show');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
