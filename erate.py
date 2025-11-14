@@ -304,7 +304,7 @@ pop_data = {
 }
 
 # === GEOCODE + DISTANCE (223 PoPs) ===
-def get_blue buffered_distance(address):
+def get_bluebird_distance(address):
     if not address:
         return {"distance": float('inf'), "pop_city": "N/A", "coverage": "Unknown"}
     geocode_url = "https://nominatim.openstreetmap.org/search"
@@ -457,7 +457,7 @@ def bbmap(app_number):
     finally:
         conn.close()
 
-# === DASHBOARD ===
+# === DASHBOARD, DETAILS, IMPORT, LOG, RESET ===
 @erate_bp.route('/')
 def dashboard():
     state_filter = request.args.get('state', '').strip().upper()
@@ -524,7 +524,6 @@ def dashboard():
     finally:
         conn.close()
 
-# === DETAILS ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -621,7 +620,6 @@ def details(app_number):
     finally:
         conn.close()
 
-# === EXTRACT, IMPORT, LOG, RESET ===
 @erate_bp.route('/extract-csv')
 def extract_csv():
     if current_app.config.get('CSV_DOWNLOAD_IN_PROGRESS'):
