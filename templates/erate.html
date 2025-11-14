@@ -450,7 +450,7 @@
         const bbmapBody = document.getElementById('bbmap-body');
         let currentAppNumber = null;
 
-        // === ORIGINAL: showDetails() ===
+        // === showDetails() ===
         async function showDetails(appNumber) {
             currentAppNumber = appNumber;
             body.classList.add('loading');
@@ -470,7 +470,7 @@
             }
         }
 
-        // === ORIGINAL: checkBluebird() ===
+        // === checkBluebird() — uses 223 PoPs ===
         async function checkBluebird(appNumber) {
             body.classList.add('loading');
             overlay.classList.add('show');
@@ -479,15 +479,11 @@
             try {
                 const resp = await fetch(`/erate/bbmap/${appNumber}`);
                 const data = await resp.json();
-                const fullAddress = [
-                    data.address1, data.address2, data.city, data.state,
-                    data.zip_code, data.zip_ext ? data.zip_ext : '', data.entity_name
-                ].filter(Boolean).join(', ');
-                document.getElementById('address-text').textContent = fullAddress;
+                document.getElementById('address-text').textContent = data.address || 'N/A';
                 bbmapBody.innerHTML = `
                     <strong>Applicant:</strong> ${data.entity_name || 'N/A'}<br>
                     <strong>Address:</strong> ${data.address || 'N/A'}<br>
-                    <strong>Nearest PoP:</strong> ${data.pop_city || 'Unknown'}<br>
+                    <strong>Nearest PoP (223):</strong> ${data.pop_city || 'Unknown'}<br>
                     <strong>Distance:</strong> ${data.distance || 'N/A'}<br>
                     <strong>Coverage:</strong> ${data.coverage || 'Unknown'}
                 `;
@@ -500,7 +496,7 @@
             }
         }
 
-        // === NEW: openMapModal() ===
+        // === openMapModal() — uses KMZ for routes/PoPs ===
         async function openMapModal(appNumber, dbLat, dbLon) {
             currentAppNumber = appNumber;
             body.classList.add('loading');
@@ -544,11 +540,11 @@
                     map.setView(data.applicant_coords, 10);
                 }
 
-                // Distance Line
-                if (data.nearest_coords) {
-                    L.polyline([data.applicant_coords, data.nearest_coords], {
+                // Distance Line to nearest KMZ PoP
+                if (data.nearest_kmz_coords) {
+                    L.polyline([data.applicant_coords, data.nearest_kmz_coords], {
                         color: '#dc3545', weight: 4, dashArray: '10, 10', opacity: 0.8
-                    }).bindPopup(`<strong>${data.distance}</strong> to ${data.nearest_pop}`).addTo(map);
+                    }).bindPopup(`<strong>${data.distance}</strong> to ${data.nearest_kmz_pop}`).addTo(map);
                 }
 
                 // Fit bounds
@@ -566,7 +562,7 @@
             }
         }
 
-        // === ORIGINAL: renderSection(), activateTab(), copyAddress(), closeModal() ===
+        // === renderSection(), activateTab(), copyAddress(), closeModal() ===
         function renderSection(section, data) {
             let html = '';
             if (section === 'basic') {
