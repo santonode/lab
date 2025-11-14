@@ -461,18 +461,6 @@ log("KMZ load status: %s | PoPs: %d | Routes: %d",
     "SUCCESS" if KMZ_LOADED and KMZ_FEATURES else "FAILED", 
     len(KMZ_FEATURES), len(KMZ_ROUTES))
 
-    except Exception as e:
-        log("KMZ LOAD FAILED: %s", str(e))
-        log("Traceback: %s", traceback.format_exc())
-    finally:
-        KMZ_LOADED = True
-
-# === FORCE LOAD ON IMPORT ===
-log("Forcing KMZ load at import time...")
-_load_kmz()
-log("KMZ load status: %s | PoPs: %d | Routes: %d", 
-    "SUCCESS" if KMZ_LOADED and KMZ_FEATURES else "FAILED", 
-    len(KMZ_FEATURES), len(KMZ_ROUTES))
 # === bbmap: 223 PoPs for distance, KMZ for map ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
