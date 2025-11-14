@@ -1,4 +1,4 @@
-# erate.py — FINAL: Bluebird Fiber Routes + Applicant Proximity
+# erate.py — FINAL: Bluebird Fiber Routes + 223 PoP Distance + KMZ Map
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -329,7 +329,7 @@ pop_data = {
     "Tulsa, OK": (36.1539, -95.9928)
 }
 
-# === GEOCODE + DISTANCE ===
+# === GEOCODE + DISTANCE (223 PoPs) ===
 def get_bluebird_distance(address):
     if not address:
         return {"distance": float('inf'), "pop_city": "N/A", "coverage": "Unknown"}
@@ -350,6 +350,7 @@ def get_bluebird_distance(address):
         lon = float(geocode_data[0]['lon'])
     except:
         return {"distance": float('inf'), "pop_city": "N/A", "coverage": "Unknown"}
+
     def haversine(lat1, lon1, lat2, lon2):
         R = 3958.8
         dlat = radians(lat2 - lat1)
@@ -357,6 +358,7 @@ def get_bluebird_distance(address):
         a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
         c = 2 * atan2(sqrt(a), sqrt(1-a))
         return R * c
+
     min_dist = float('inf')
     nearest_pop = None
     for city, (pop_lat, pop_lon) in pop_data.items():
@@ -367,7 +369,7 @@ def get_bluebird_distance(address):
     coverage = "Full fiber" if min_dist <= 5 else "Nearby" if min_dist <= 50 else "Extended reach"
     return {"distance": min_dist, "pop_city": nearest_pop, "coverage": coverage}
 
-# === KMZ LOADER: Routes + PoPs ===
+# === KMZ LOADER: Routes + PoPs (for map only) ===
 KMZ_PATH = os.path.join(os.path.dirname(__file__), "BBN Map KMZ 122023.kmz")
 KMZ_FEATURES = []  # PoPs
 KMZ_ROUTES = []    # Fiber lines
@@ -391,15 +393,16 @@ def _load_kmz():
             kml_data = kmz.read(kml_files[0])
         doc = kml.KML()
         doc.from_string(kml_data)
-        for feature in doc.features():
+
+        for feature in doc.features:
             if hasattr(feature, "features"):
-                for pm in feature.features():
+                for pm in feature.features:
                     geom = pm.geometry
                     if geom and hasattr(geom, "coords") and geom.coords:
-                        if len(geom.coords[0]) == 2:  # Point
+                        if len(geom.coords[0]) == 2:
                             lon, lat = geom.coords[0]
                             KMZ_FEATURES.append({"name": pm.name or "Unnamed PoP", "lon": lon, "lat": lat})
-                        elif len(geom.coords) > 1:  # LineString
+                        elif len(geom.coords) > 1:
                             coords = [[c[0], c[1]] for c in geom.coords]
                             KMZ_ROUTES.append({"name": pm.name or "Fiber Route", "coords": coords})
         log("KMZ loaded – %d PoPs, %d routes", len(KMZ_FEATURES), len(KMZ_ROUTES))
@@ -411,7 +414,7 @@ def _load_kmz():
 
 _load_kmz()
 
-# === ENHANCED BBMap API ===
+# === ENHANCED BBMap API: 223 PoP distance + KMZ map ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -431,36 +434,52 @@ def bbmap(app_number):
         lat = float(db_lat) if db_lat else None
         lon = float(db_lon) if db_lon else None
 
-        # Nearest PoP from KMZ
-        min_dist = float('inf')
-        nearest_pop = None
-        nearest_coords = None
-        def haversine(lat1, lon1, lat2, lon2):
-            R = 3958.8
-            dlat = radians(lat2 - lat1)
-            dlon = radians(lon2 - lon1)
-            a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
-            c = 2 * atan2(sqrt(a), sqrt(1-a))
-            return R * c
+        # Use 223 PoPs for distance
+        dist_info = get_bluebird_distance(full_address)
 
+        # Geocode fallback if no DB coords
+        if not (lat and lon):
+            try:
+                geocode_resp = requests.get(
+                    "https://nominatim.openstreetmap.org/search",
+                    params={'q': full_address, 'format': 'json', 'limit': 1},
+                    headers={'User-Agent': 'E-Rate Dashboard/1.0'},
+                    timeout=10
+                )
+                geo = geocode_resp.json()
+                if geo:
+                    lat, lon = float(geo[0]['lat']), float(geo[0]['lon'])
+            except:
+                lat, lon = None, None
+
+        # Nearest KMZ PoP for map line
+        min_dist_kmz = float('inf')
+        nearest_kmz_pop = None
+        nearest_kmz_coords = None
         if lat and lon:
+            def haversine(lat1, lon1, lat2, lon2):
+                R = 3958.8
+                dlat = radians(lat2 - lat1)
+                dlon = radians(lon2 - lon1)
+                a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+                c = 2 * atan2(sqrt(a), sqrt(1-a))
+                return R * c
             for pop in KMZ_FEATURES:
                 dist = haversine(lat, lon, pop['lat'], pop['lon'])
-                if dist < min_dist:
-                    min_dist = dist
-                    nearest_pop = pop['name']
-                    nearest_coords = [pop['lon'], pop['lat']]
-
-        coverage = "Full fiber" if min_dist <= 5 else "Nearby" if min_dist <= 50 else "Extended reach"
+                if dist < min_dist_kmz:
+                    min_dist_kmz = dist
+                    nearest_kmz_pop = pop['name']
+                    nearest_kmz_coords = [pop['lon'], pop['lat']]
 
         return jsonify({
             "entity_name": entity_name,
             "address": full_address,
             "applicant_coords": [lon, lat] if lat and lon else None,
-            "nearest_pop": nearest_pop,
-            "nearest_coords": nearest_coords,
-            "distance": f"{min_dist:.1f} miles" if min_dist != float('inf') else "N/A",
-            "coverage": coverage,
+            "pop_city": dist_info['pop_city'],
+            "distance": f"{dist_info['distance']:.1f} miles" if dist_info['distance'] != float('inf') else "N/A",
+            "coverage": dist_info['coverage'],
+            "nearest_kmz_pop": nearest_kmz_pop,
+            "nearest_kmz_coords": nearest_kmz_coords,
             "routes": KMZ_ROUTES,
             "pops": KMZ_FEATURES,
         }), 200, {'Content-Type': 'application/json'}
