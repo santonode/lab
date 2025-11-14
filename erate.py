@@ -1,4 +1,4 @@
-# erate.py — FINAL: Mobile-friendly UI + Bluebird Fiber + Applicant + Zoom
+# erate.py — FINAL: Bluebird Fiber Routes + 223 PoP Distance + KMZ Map
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -13,24 +13,37 @@ import psycopg
 import traceback
 from datetime import datetime
 from math import radians, cos, sin, sqrt, atan2
-import zipfile
-import xml.etree.ElementTree as ET
 
-# === LOGGING (ERRORS ONLY) ===
+# === KMZ PARSING ===
+from fastkml import kml
+import zipfile
+
+# === LOGGING ===
 LOG_FILE = os.path.join(os.path.dirname(__file__), "import.log")
 open(LOG_FILE, 'a').close()
 handler = logging.FileHandler(LOG_FILE, mode='a', encoding='utf-8')
 handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
 logger = logging.getLogger('erate')
-logger.setLevel(logging.ERROR)
+logger.setLevel(logging.INFO)
 for h in logger.handlers[:]: logger.removeHandler(h)
 logger.addHandler(handler)
 
 def log(msg, *args):
-    logger.error(msg % args if args else msg)
+    formatted = msg % args if args else msg
+    logger.info(formatted)
+    handler.flush()
+    print(formatted, flush=True)
 
-# === CONFIG ===
+# === STARTUP DEBUG ===
+log("=== ERATE MODULE LOADED ===")
+log("Python version: %s", __import__('sys').version.split()[0])
+log("Flask version: %s", __import__('flask').__version__)
+log("psycopg version: %s", psycopg.__version__)
+log("DATABASE_URL: %s", os.getenv('DATABASE_URL', 'NOT SET')[:50] + '...')
+
 CSV_FILE = os.path.join(os.path.dirname(__file__), "470schema.csv")
+log("CSV_FILE: %s", CSV_FILE)
+log("CSV exists: %s, size: %s", os.path.exists(CSV_FILE), os.path.getsize(CSV_FILE) if os.path.exists(CSV_FILE) else 0)
 
 # === BLUEPRINT ===
 erate_bp = Blueprint('erate', __name__, url_prefix='/erate', template_folder='templates')
@@ -42,13 +55,17 @@ if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
 if 'sslmode' not in DATABASE_URL.lower():
     base, dbname = DATABASE_URL.rsplit('/', 1)
     DATABASE_URL = f"{base}/{dbname}?sslmode=require"
+log("Final DATABASE_URL: %s", DATABASE_URL[:50] + '...')
 
 # === TEST DB CONNECTION ===
 try:
     test_conn = psycopg.connect(DATABASE_URL, connect_timeout=5)
+    with test_conn.cursor() as cur:
+        cur.execute('SELECT 1')
+        log("DB connection test: SUCCESS")
     test_conn.close()
 except Exception as e:
-    log("DB connection test failed: %s", e)
+    log("DB connection test: FAILED to %s", e)
 
 # === SQL INSERT (70 columns) ===
 INSERT_SQL = '''
@@ -95,8 +112,17 @@ def parse_datetime(value):
             continue
     return None
 
-# === CSV ROW TO TUPLE ===
+# === CSV ROW → TUPLE ===
+CSV_HEADERS_LOGGED = False
+ROW_DEBUG_COUNT = 0
 def _row_to_tuple(row):
+    global CSV_HEADERS_LOGGED, ROW_DEBUG_COUNT
+    if not CSV_HEADERS_LOGGED:
+        log("CSV HEADERS: %s", list(row.keys()))
+        CSV_HEADERS_LOGGED = True
+    if ROW_DEBUG_COUNT < 3:
+        log("DEBUG ROW %s: %s", ROW_DEBUG_COUNT + 1, dict(row))
+        ROW_DEBUG_COUNT += 1
     form_pdf_raw = (
         row.get('Form PDF', '') or row.get('Form PDF Link', '') or
         row.get('PDF', '') or row.get('Form PDF Path', '') or ''
@@ -303,7 +329,7 @@ pop_data = {
     "Tulsa, OK": (36.1539, -95.9928)
 }
 
-# === GEOCODE + DISTANCE ===
+# === GEOCODE + DISTANCE (223 PoPs) ===
 def get_bluebird_distance(address):
     if not address:
         return {"distance": float('inf'), "pop_city": "N/A", "coverage": "Unknown"}
@@ -324,6 +350,7 @@ def get_bluebird_distance(address):
         lon = float(geocode_data[0]['lon'])
     except:
         return {"distance": float('inf'), "pop_city": "N/A", "coverage": "Unknown"}
+
     def haversine(lat1, lon1, lat2, lon2):
         R = 3958.8
         dlat = radians(lat2 - lat1)
@@ -331,6 +358,7 @@ def get_bluebird_distance(address):
         a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
         c = 2 * atan2(sqrt(a), sqrt(1-a))
         return R * c
+
     min_dist = float('inf')
     nearest_pop = None
     for city, (pop_lat, pop_lon) in pop_data.items():
@@ -341,10 +369,10 @@ def get_bluebird_distance(address):
     coverage = "Full fiber" if min_dist <= 5 else "Nearby" if min_dist <= 50 else "Extended reach"
     return {"distance": min_dist, "pop_city": nearest_pop, "coverage": coverage}
 
-# === KMZ LOADER: BULLETPROOF ===
+# === KMZ LOADER: Routes + PoPs (for map only) ===
 KMZ_PATH = os.path.join(os.path.dirname(__file__), "BBN Map KMZ 122023.kmz")
-KMZ_FEATURES = []
-KMZ_ROUTES = []
+KMZ_FEATURES = []  # PoPs
+KMZ_ROUTES = []    # Fiber lines
 KMZ_LOADED = False
 
 def _load_kmz():
@@ -359,49 +387,34 @@ def _load_kmz():
         with zipfile.ZipFile(KMZ_PATH, 'r') as kmz:
             kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
             if not kml_files:
+                log("No .kml inside KMZ")
                 KMZ_LOADED = True
                 return
             kml_data = kmz.read(kml_files[0])
-        root = ET.fromstring(kml_data)
-        ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+        doc = kml.KML()
+        doc.from_string(kml_data)
 
-        for placemark in root.findall('.//kml:Placemark', ns):
-            name_elem = placemark.find('kml:name', ns)
-            name = name_elem.text.strip() if name_elem is not None and name_elem.text else "Unnamed"
-
-            point_coords = placemark.find('.//kml:Point/kml:coordinates', ns)
-            if point_coords is not None and point_coords.text:
-                parts = point_coords.text.strip().split(',')
-                if len(parts) >= 2:
-                    try:
-                        lon, lat = float(parts[0]), float(parts[1])
-                        KMZ_FEATURES.append({"name": name, "lon": lon, "lat": lat})
-                    except ValueError:
-                        continue
-
-            line_coords = placemark.find('.//kml:LineString/kml:coordinates', ns)
-            if line_coords is not None and line_coords.text:
-                coords = []
-                for pair in line_coords.text.strip().split():
-                    parts = pair.split(',')
-                    if len(parts) >= 2:
-                        try:
-                            lon, lat = float(parts[0]), float(parts[1])
-                            coords.append([lat, lon])  # [LAT, LNG]
-                        except ValueError:
-                            continue
-                if len(coords) > 1:
-                    KMZ_ROUTES.append({"name": name, "coords": coords})
-
+        for feature in doc.features:
+            if hasattr(feature, "features"):
+                for pm in feature.features:
+                    geom = pm.geometry
+                    if geom and hasattr(geom, "coords") and geom.coords:
+                        if len(geom.coords[0]) == 2:
+                            lon, lat = geom.coords[0]
+                            KMZ_FEATURES.append({"name": pm.name or "Unnamed PoP", "lon": lon, "lat": lat})
+                        elif len(geom.coords) > 1:
+                            coords = [[c[0], c[1]] for c in geom.coords]
+                            KMZ_ROUTES.append({"name": pm.name or "Fiber Route", "coords": coords})
+        log("KMZ loaded – %d PoPs, %d routes", len(KMZ_FEATURES), len(KMZ_ROUTES))
     except Exception as e:
-        log("KMZ load failed: %s", e)
+        log("KMZ parsing error: %s", e)
+        log("Traceback: %s", traceback.format_exc())
     finally:
         KMZ_LOADED = True
 
 _load_kmz()
 
-# === bbmap ===
-
+# === ENHANCED BBMap API: 223 PoP distance + KMZ map ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -414,28 +427,36 @@ def bbmap(app_number):
             row = cur.fetchone()
         if not row:
             return jsonify({"error": "Applicant not found"}), 404
+
         entity_name, address1, address2, city, state, zip_code, db_lat, db_lon = row
         full_address = f"{address1 or ''} {address2 or ''}, {city or ''}, {state or ''} {zip_code or ''}".strip()
+
         lat = float(db_lat) if db_lat else None
         lon = float(db_lon) if db_lon else None
+
+        # Use 223 PoPs for distance
         dist_info = get_bluebird_distance(full_address)
+
+        # Geocode fallback if no DB coords
         if not (lat and lon):
             try:
-                resp = requests.get(
+                geocode_resp = requests.get(
                     "https://nominatim.openstreetmap.org/search",
                     params={'q': full_address, 'format': 'json', 'limit': 1},
                     headers={'User-Agent': 'E-Rate Dashboard/1.0'},
                     timeout=10
                 )
-                geo = resp.json()
+                geo = geocode_resp.json()
                 if geo:
                     lat, lon = float(geo[0]['lat']), float(geo[0]['lon'])
             except:
                 lat, lon = None, None
+
+        # Nearest KMZ PoP for map line
         min_dist_kmz = float('inf')
         nearest_kmz_pop = None
         nearest_kmz_coords = None
-        if lat and lon and KMZ_FEATURES:
+        if lat and lon:
             def haversine(lat1, lon1, lat2, lon2):
                 R = 3958.8
                 dlat = radians(lat2 - lat1)
@@ -448,11 +469,12 @@ def bbmap(app_number):
                 if dist < min_dist_kmz:
                     min_dist_kmz = dist
                     nearest_kmz_pop = pop['name']
-                    nearest_kmz_coords = [pop['lat'], pop['lon']]
+                    nearest_kmz_coords = [pop['lon'], pop['lat']]
+
         return jsonify({
             "entity_name": entity_name,
             "address": full_address,
-            "applicant_coords": [lat, lon] if lat and lon else None,
+            "applicant_coords": [lon, lat] if lat and lon else None,
             "pop_city": dist_info['pop_city'],
             "distance": f"{dist_info['distance']:.1f} miles" if dist_info['distance'] != float('inf') else "N/A",
             "coverage": dist_info['coverage'],
@@ -460,19 +482,17 @@ def bbmap(app_number):
             "nearest_kmz_coords": nearest_kmz_coords,
             "routes": KMZ_ROUTES,
             "pops": KMZ_FEATURES,
-        }), 200, {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-        }
+        }), 200, {'Content-Type': 'application/json'}
     except Exception as e:
         log("Bluebird API error: %s", e)
         return jsonify({"error": "Service unavailable"}), 500
     finally:
         conn.close()
 
-# === DASHBOARD ===
+# === DASHBOARD (include lat/lng) ===
 @erate_bp.route('/')
 def dashboard():
+    log("Dashboard accessed")
     state_filter = request.args.get('state', '').strip().upper()
     modified_after_str = request.args.get('modified_after', '').strip()
     offset = max(int(request.args.get('offset', 0)), 0)
@@ -493,6 +513,7 @@ def dashboard():
                 count_sql += ' WHERE ' + ' AND '.join(where_clauses)
             cur.execute(count_sql, count_params)
             total_count = cur.fetchone()[0]
+
             sql = '''
                 SELECT app_number, entity_name, state, last_modified_datetime,
                        latitude, longitude
@@ -537,7 +558,7 @@ def dashboard():
     finally:
         conn.close()
 
-# === DETAILS ===
+# === APPLICANT DETAILS API ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -548,6 +569,7 @@ def details(app_number):
             if not row:
                 return jsonify({"error": "Applicant not found"}), 404
             row = row[1:]
+            log("DETAILS ROW for %s: %s", app_number, row[:10])
             def fmt_date(dt):
                 if isinstance(dt, datetime):
                     return dt.strftime('%m/%d/%Y')
@@ -634,9 +656,10 @@ def details(app_number):
     finally:
         conn.close()
 
-# === EXTRACT, IMPORT, LOG, RESET ===
+# === EXTRACT CSV, IMPORT, LOG, RESET (unchanged) ===
 @erate_bp.route('/extract-csv')
 def extract_csv():
+    log("Extract CSV requested")
     if current_app.config.get('CSV_DOWNLOAD_IN_PROGRESS'):
         flash("CSV download already in progress.", "info")
         return redirect(url_for('erate.dashboard'))
@@ -653,13 +676,19 @@ def extract_csv():
 def _download_csv_background(app):
     time.sleep(1)
     try:
+        log("Starting FULL CSV download...")
         url = "https://opendata.usac.org/api/views/jp7a-89nd/rows.csv?accessType=DOWNLOAD&funding_year=ALL"
         response = requests.get(url, stream=True, timeout=600)
         response.raise_for_status()
+        downloaded = 0
         with open(CSV_FILE, 'wb') as f:
             for chunk in response.iter_content(8192):
                 if chunk:
                     f.write(chunk)
+                    downloaded += len(chunk)
+                    if downloaded % (10*1024*1024) == 0:
+                        log("Downloaded %.1f MB", downloaded/(1024*1024))
+        log("FULL CSV downloaded: %.1f MB", os.path.getsize(CSV_FILE)/(1024*1024))
     except Exception as e:
         log("Download failed: %s", e)
         if os.path.exists(CSV_FILE):
@@ -670,11 +699,20 @@ def _download_csv_background(app):
 
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
+    log("Import interactive page accessed")
     if not os.path.exists(CSV_FILE):
+        log("CSV not found")
         return "<h2>CSV not found: 470schema.csv</h2>", 404
     with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
         total = sum(1 for _ in csv.reader(f)) - 1
+    log("CSV has %s rows (excluding header)", total)
     if 'import_total' not in current_app.config:
+        current_app.config['import_total'] = total
+        current_app.config['import_index'] = 1
+        current_app.config['import_success'] = 0
+        current_app.config['import_error'] = 0
+    elif current_app.config['import_total'] != total:
+        log("CSV changed, resetting progress")
         current_app.config.update({
             'import_total': total,
             'import_index': 1,
@@ -689,6 +727,7 @@ def import_interactive():
     }
     is_importing = current_app.config.get('BULK_IMPORT_IN_PROGRESS', False)
     if is_importing or progress['index'] > progress['total']:
+        log("Import complete page shown")
         return render_template('erate_import_complete.html', progress=progress)
     if request.method == 'POST' and request.form.get('action') == 'import_all':
         if is_importing:
@@ -709,8 +748,13 @@ def import_interactive():
     return render_template('erate_import.html', progress=progress, is_importing=is_importing)
 
 def _import_all_background(app):
+    global CSV_HEADERS_LOGGED, ROW_DEBUG_COUNT
+    CSV_HEADERS_LOGGED = False
+    ROW_DEBUG_COUNT = 0
     seen_in_csv = set()
+    log("=== IMPORT STARTED — DEBUG ENABLED ===")
     try:
+        log("Bulk import started")
         with app.app_context():
             total = app.config['import_total']
             start_index = app.config['import_index']
@@ -718,16 +762,26 @@ def _import_all_background(app):
         cur = conn.cursor()
         with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
             reader = csv.DictReader(f, dialect='excel')
+            log("CSV reader created with excel dialect")
             for _ in range(start_index - 1):
                 try: next(reader)
                 except StopIteration: break
+            log("Skipped to record %s", start_index)
             batch = []
+            imported = 0
+            last_heartbeat = time.time()
             for row in reader:
+                if time.time() - last_heartbeat > 5:
+                    log("HEARTBEAT: %s rows processed", imported)
+                    last_heartbeat = time.time()
                 app_number = row.get('Application Number', '').strip()
-                if not app_number or app_number in seen_in_csv:
+                if not app_number: continue
+                if app_number in seen_in_csv:
+                    log("SKIPPED CSV DUPLICATE: %s", app_number)
                     continue
                 batch.append(row)
                 seen_in_csv.add(app_number)
+                imported += 1
                 if len(batch) >= 1000:
                     cur.execute(
                         "SELECT app_number FROM erate WHERE app_number = ANY(%s)",
@@ -736,11 +790,22 @@ def _import_all_background(app):
                     existing = {row[0] for row in cur.fetchall()}
                     filtered_batch = [r for r in batch if r['Application Number'] not in existing]
                     if filtered_batch:
-                        cur.executemany(INSERT_SQL, [_row_to_tuple(r) for r in filtered_batch])
-                        conn.commit()
+                        try:
+                            cur.executemany(INSERT_SQL, [_row_to_tuple(r) for r in filtered_batch])
+                            conn.commit()
+                            log("COMMITTED BATCH OF %s", len(filtered_batch))
+                            cur.execute("SELECT COUNT(*) FROM erate WHERE app_number = ANY(%s)",
+                                        ([r['Application Number'] for r in filtered_batch],))
+                            actual = cur.fetchone()[0]
+                            log("VERIFIED: %s rows", actual)
+                        except Exception as e:
+                            log("COMMIT FAILED: %s", e)
+                            conn.rollback()
+                            raise
                     with app.app_context():
                         app.config['import_index'] += len(batch)
                         app.config['import_success'] += len(filtered_batch)
+                        log("Progress: %s / %s", app.config['import_index'], total)
                     batch = []
             if batch:
                 cur.execute(
@@ -750,27 +815,42 @@ def _import_all_background(app):
                 existing = {row[0] for row in cur.fetchall()}
                 filtered_batch = [r for r in batch if r['Application Number'] not in existing]
                 if filtered_batch:
-                    cur.executemany(INSERT_SQL, [_row_to_tuple(r) for r in filtered_batch])
-                    conn.commit()
+                    try:
+                        cur.executemany(INSERT_SQL, [_row_to_tuple(r) for r in filtered_batch])
+                        conn.commit()
+                        log("FINAL BATCH COMMITTED: %s", len(filtered_batch))
+                        cur.execute("SELECT COUNT(*) FROM erate WHERE app_number = ANY(%s)",
+                                    ([r['Application Number'] for r in filtered_batch],))
+                        actual = cur.fetchone()[0]
+                        log("FINAL VERIFIED: %s rows", actual)
+                    except Exception as e:
+                        log("FINAL COMMIT FAILED: %s", e)
+                        conn.rollback()
+                        raise
                 with app.app_context():
                     app.config['import_index'] = total + 1
                     app.config['import_success'] += len(filtered_batch)
+        log("Bulk import complete: %s imported", app.config['import_success'])
     except Exception as e:
         log("IMPORT thread CRASHED: %s", e)
+        log("Traceback: %s", traceback.format_exc())
     finally:
         try: conn.close()
         except: pass
         with app.app_context():
             app.config['BULK_IMPORT_IN_PROGRESS'] = False
+        log("Import thread finished")
 
 @erate_bp.route('/view-log')
 def view_log():
+    log("View log requested")
     if os.path.exists(LOG_FILE):
         return send_file(LOG_FILE, mimetype='text/plain')
     return "No log file.", 404
 
 @erate_bp.route('/reset-import', methods=['POST'])
 def reset_import():
+    log("Import reset requested")
     current_app.config.update({
         'import_index': 1,
         'import_success': 0,
