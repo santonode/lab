@@ -383,8 +383,6 @@ def _load_kmz():
     log("Expected path: %s", KMZ_PATH)
     log("File exists: %s", os.path.exists(KMZ_PATH))
     log("File size: %s bytes", os.path.getsize(KMZ_PATH) if os.path.exists(KMZ_PATH) else "N/A")
-    log("Current working directory: %s", os.getcwd())
-    log("Files in module directory: %s", os.listdir(os.path.dirname(__file__)))
 
     if not os.path.exists(KMZ_PATH):
         log("CRITICAL ERROR: KMZ FILE NOT FOUND")
@@ -408,25 +406,40 @@ def _load_kmz():
         log("Parsing KML with fastkml...")
         k = kml.KML()
         k.from_string(kml_data)
-        features = list(k.features)
-        log("Root features: %d", len(features))
 
-        for i, feature in enumerate(features):
-            log("Feature %d: %s", i, feature.__class__.__name__)
-            if hasattr(feature, "features"):
-                sub = list(feature.features)
-                log("  Sub-features: %d", len(sub))
-                for j, pm in enumerate(sub):
-                    geom = pm.geometry
-                    if geom and hasattr(geom, "coords") and geom.coords:
-                        if len(geom.coords[0]) == 2:
-                            lon, lat = geom.coords[0]
-                            KMZ_FEATURES.append({"name": pm.name or "PoP", "lon": lon, "lat": lat})
-                            log("  PoP %d: %s (%s, %s)", j, pm.name or "Unnamed", lon, lat)
-                        elif len(geom.coords) > 1:
-                            coords = [[c[0], c[1]] for c in geom.coords]
-                            KMZ_ROUTES.append({"name": pm.name or "Route", "coords": coords})
-                            log("  Route %d: %s (%d points)", j, pm.name or "Unnamed", len(coords))
+        # === FIX: Handle <Document> and nested <Folder>s ===
+        root_features = list(k.features)
+        log("Root features (should be 1 Document): %d", len(root_features))
+
+        all_placemarks = []
+
+        if root_features and hasattr(root_features[0], 'features'):
+            document = root_features[0]
+            log("Found Document, sub-features: %d", len(list(document.features)))
+            for folder in document.features():
+                if hasattr(folder, 'features'):
+                    log("Processing Folder: %s (%d items)", getattr(folder, 'name', 'Unnamed'), len(list(folder.features())))
+                    all_placemarks.extend(folder.features())
+        else:
+            log("No Document found, trying root folders...")
+            for feature in root_features:
+                if hasattr(feature, 'features'):
+                    all_placemarks.extend(feature.features())
+
+        log("Total Placemarks found: %d", len(all_placemarks))
+
+        # === Process all Placemarks ===
+        for j, pm in enumerate(all_placemarks):
+            geom = pm.geometry
+            if geom and hasattr(geom, "coords") and geom.coords:
+                if len(geom.coords[0]) == 2:
+                    lon, lat = geom.coords[0]
+                    KMZ_FEATURES.append({"name": pm.name or "PoP", "lon": lon, "lat": lat})
+                    log("  PoP %d: %s (%s, %s)", j, pm.name or "Unnamed", lon, lat)
+                elif len(geom.coords) > 1:
+                    coords = [[c[0], c[1]] for c in geom.coords]
+                    KMZ_ROUTES.append({"name": pm.name or "Route", "coords": coords})
+                    log("  Route %d: %s (%d points)", j, pm.name or "Unnamed", len(coords))
 
         log("=== KMZ LOAD SUCCESS ===")
         log("PoPs: %d", len(KMZ_FEATURES))
@@ -444,7 +457,6 @@ _load_kmz()
 log("KMZ load status: %s | PoPs: %d | Routes: %d", 
     "SUCCESS" if KMZ_LOADED and KMZ_FEATURES else "FAILED", 
     len(KMZ_FEATURES), len(KMZ_ROUTES))
-
 # === bbmap: 223 PoPs for distance, KMZ for map ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
