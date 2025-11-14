@@ -7,64 +7,51 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet"/>
     <style>
-        body { padding: 20px; }
-        .table th { font-weight: 600; }
-        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.875rem; }
+        body { padding: 15px; font-size: 0.9rem; }
+        .table th { font-weight: 600; font-size: 0.85rem; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
         .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 9999; display: none; }
         .loading-overlay.show { display: flex; }
-        .loading-spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
+        .loading-spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius:: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        #map-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 1000px; height: 80vh; background: white; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); z-index: 10000; display: none; flex-direction: column; }
+        #map-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 95%; max-width: 900px; height: 85vh; background: white; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); z-index: 10000; display: none; flex-direction: column; }
         #map-modal.show { display: flex; }
-        #map-modal .modal-header { padding: 1rem; border-bottom: 1px solid #dee2e6; display: flex; justify-content: space-between; align-items: center; }
+        #map-modal .modal-header { padding: 0.75rem 1rem; border-bottom: 1px solid #dee2e6; font-size: 1rem; }
         #map-modal .modal-body { flex: 1; padding: 0; }
         #map-container { height: 100%; width: 100%; }
         .applicant-pin { background: transparent !important; border: none !important; }
-        .leaflet-popup-content { margin: 0; }
-        .leaflet-popup-content-wrapper { padding: 1px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1 class="mb-4">E-Rate 470 Dashboard</h1>
+    <div class="container-fluid">
+        <h1 class="h4 mb-3">E-Rate 470 Dashboard</h1>
 
-        <div class="card mb-4">
-            <div class="card-body">
-                <form method="GET" class="row g-3">
-                    <div class="col-md-3">
-                        <label class="form-label">State</label>
-                        <input type="text" name="state" class="form-control" value="{{ filters.state }}" placeholder="e.g. MO">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Modified After</label>
-                        <input type="date" name="modified_after" class="form-control" value="{{ filters.modified_after }}">
-                    </div>
-                    <div class="col-md-2 d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary w-100">Filter</button>
-                    </div>
-                    <div class="col-md-3 d-flex align-items-end">
-                        <a href="{{ url_for('erate.dashboard') }}" class="btn btn-secondary w-100">Clear</a>
-                    </div>
-                </form>
+        <form method="GET" class="row g-2 mb-3">
+            <div class="col-6 col-md-3">
+                <input type="text" name="state" class="form-control form-control-sm" placeholder="State" value="{{ filters.state }}">
             </div>
-        </div>
+            <div class="col-6 col-md-3">
+                <input type="date" name="modified_after" class="form-control form-control-sm" value="{{ filters.modified_after }}">
+            </div>
+            <div class="col-6 col-md-2">
+                <button type="submit" class="btn btn-primary btn-sm w-100">Filter</button>
+            </div>
+            <div class="col-6 col-md-2">
+                <a href="{{ url_for('erate.dashboard') }}" class="btn btn-secondary btn-sm w-100">Clear</a>
+            </div>
+        </form>
 
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <p class="mb-0">Showing {{ total_filtered }} of {{ total_count }} records</p>
-            {% if has_more %}
-                <a href="?offset={{ next_offset }}&state={{ filters.state }}&modified_after={{ filters.modified_after }}" class="btn btn-outline-primary btn-sm">Load More</a>
-            {% endif %}
-        </div>
+        <p class="small text-muted mb-2">Showing {{ total_filtered }} of {{ total_count }}</p>
 
         <div class="table-responsive">
-            <table class="table table-striped table-hover">
+            <table class="table table-sm table-striped">
                 <thead class="table-dark">
                     <tr>
                         <th>App #</th>
-                        <th>Entity Name</th>
+                        <th>Entity</th>
                         <th>State</th>
-                        <th>Last Modified</th>
-                        <th>Actions</th>
+                        <th>Modified</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -73,29 +60,31 @@
                         <td>{{ row.app_number }}</td>
                         <td>{{ row.entity_name }}</td>
                         <td>{{ row.state }}</td>
-                        <td>{{ row.last_modified_datetime.strftime('%m/%d/%Y') if row.last_modified_datetime else '—' }}</td>
+                        <td>{{ row.last_modified_datetime.strftime('%m/%d/%y') if row.last_modified_datetime else '—' }}</td>
                         <td>
                             <button class="btn btn-info btn-sm me-1" onclick="openDetails('{{ row.app_number }}')">Details</button>
-                            <button class="btn btn-primary btn-sm" onclick="openMapModal('{{ row.app_number }}', {{ row.latitude|default('null') }}, {{ row.longitude|default('null') }})">Map</button>
+                            <button class="btn btn-primary btn-sm" onclick="openMapModal('{{ row.app_number }}')">Map</button>
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+
+        {% if has_more %}
+            <a href="?offset={{ next_offset }}&state={{ filters.state }}&modified_after={{ filters.modified_after }}" class="btn btn-outline-primary btn-sm">Load More</a>
+        {% endif %}
     </div>
 
     <!-- Details Modal -->
-    <div id="details-modal" class="modal fade" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+    <div class="modal fade" id="detailsModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">Applicant Details</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body" id="details-content">
-                    Loading...
-                </div>
+                <div class="modal-body small" id="details-content">Loading...</div>
             </div>
         </div>
     </div>
@@ -121,14 +110,12 @@
         const body = document.body;
         const overlay = document.getElementById('loading-overlay');
         const mapModal = document.getElementById('map-modal');
-        let currentAppNumber = null;
 
         function openDetails(appNumber) {
             fetch(`/erate/details/${appNumber}`)
                 .then(r => r.json())
                 .then(data => {
-                    const content = document.getElementById('details-content');
-                    content.innerHTML = `
+                    document.getElementById('details-content').innerHTML = `
                         <table class="table table-sm">
                             <tr><th>Form Nickname</th><td>${data.form_nickname}</td></tr>
                             <tr><th>Form PDF</th><td>${data.form_pdf}</td></tr>
@@ -140,38 +127,18 @@
                             <tr><th>Last Modified</th><td>${data.last_modified_datetime} by ${data.last_modified_by}</td></tr>
                             <tr><th>BEN</th><td>${data.ben}</td></tr>
                             <tr><th>Entity Name</th><td>${data.entity_name}</td></tr>
-                            <tr><th>Org Status</th><td>${data.org_status}</td></tr>
-                            <tr><th>Org Type</th><td>${data.org_type}</td></tr>
-                            <tr><th>Applicant Type</th><td>${data.applicant_type}</td></tr>
-                            <tr><th>Website</th><td>${data.website}</td></tr>
-                            <tr><th>FCC Reg #</th><td>${data.fcc_reg_num}</td></tr>
                             <tr><th>Address</th><td>${data.address1}<br>${data.address2 ? data.address2 + '<br>' : ''}${data.city}, ${data.state} ${data.zip_code}${data.zip_ext ? '-' + data.zip_ext : ''}</td></tr>
-                            <tr><th>Email</th><td>${data.email}</td></tr>
-                            <tr><th>Phone</th><td>${data.phone}${data.phone_ext ? ' x' + data.phone_ext : ''}</td></tr>
-                            <tr><th>Eligible Entities</th><td>${data.num_eligible}</td></tr>
-                            <tr><th>Contact</th><td>${data.contact_name}<br>${data.contact_address1}<br>${data.contact_address2 ? data.contact_address2 + '<br>' : ''}${data.contact_city}, ${data.contact_state} ${data.contact_zip}${data.contact_zip_ext ? '-' + data.contact_zip_ext : ''}<br>${data.contact_phone}${data.contact_phone_ext ? ' x' + data.contact_phone_ext : ''}<br>${data.contact_email}</td></tr>
-                            <tr><th>Tech Contact</th><td>${data.tech_name} (${data.tech_title})<br>${data.tech_phone}${data.tech_phone_ext ? ' x' + data.tech_phone_ext : ''}<br>${data.tech_email}</td></tr>
-                            <tr><th>Authorized Person</th><td>${data.auth_name}<br>${data.auth_address}<br>${data.auth_city}, ${data.auth_state} ${data.auth_zip}${data.auth_zip_ext ? '-' + data.auth_zip_ext : ''}<br>${data.auth_phone}${data.auth_phone_ext ? ' x' + data.auth_phone_ext : ''}<br>${data.auth_email}<br>${data.auth_title}, ${data.auth_employer}</td></tr>
-                            <tr><th>Cat 1 Desc</th><td>${data.cat1_desc}</td></tr>
-                            <tr><th>Cat 2 Desc</th><td>${data.cat2_desc}</td></tr>
-                            <tr><th>Installment Type</th><td>${data.installment_type}</td></tr>
-                            <tr><th>Installment Range</th><td>${data.installment_min}–${data.installment_max} years</td></tr>
-                            <tr><th>RFP ID</th><td>${data.rfp_id}</td></tr>
-                            <tr><th>State Restrictions</th><td>${data.state_restrictions}</td></tr>
-                            <tr><th>Restriction Desc</th><td>${data.restriction_desc}</td></tr>
-                            <tr><th>Statewide</th><td>${data.statewide}</td></tr>
-                            <tr><th>All Public</th><td>${data.all_public}</td></tr>
-                            <tr><th>All Non-Public</th><td>${data.all_nonpublic}</td></tr>
-                            <tr><th>All Libraries</th><td>${data.all_libraries}</td></tr>
-                            <tr><th>Form Version</th><td>${data.form_version}</td></tr>
+                            <tr><th>Contact</th><td>${data.contact_name}<br>${data.contact_phone}<br>${data.contact_email}</td></tr>
+                            <tr><th>Tech Contact</th><td>${data.tech_name}<br>${data.tech_phone}<br>${data.tech_email}</td></tr>
+                            <tr><th>Cat 1</th><td>${data	cat1_desc}</td></tr>
+                            <tr><th>Cat 2</th><td>${data.cat2_desc}</td></tr>
                         </table>
                     `;
-                    new bootstrap.Modal(document.getElementById('details-modal')).show();
+                    new bootstrap.Modal(document.getElementById('detailsModal')).show();
                 });
         }
 
-        async function openMapModal(appNumber, dbLat, dbLon) {
-            currentAppNumber = appNumber;
+        async function openMapModal(appNumber) {
             body.classList.add('loading');
             overlay.classList.add('show');
             mapModal.classList.add('show');
@@ -190,25 +157,20 @@
 
                 const group = new L.featureGroup();
 
-                // Routes
                 data.routes.forEach(r => {
                     if (r.coords.length > 1) {
-                        const polyline = L.polyline(r.coords, { color: '#007bff', weight: 3, opacity: 0.7 })
-                            .bindPopup(`<strong>${r.name}</strong>`)
-                            .addTo(map);
+                        L.polyline(r.coords, { color: '#007bff', weight: 3, opacity: 0.7 })
+                            .bindPopup(r.name).addTo(map);
                         group.addLayer(polyline);
                     }
                 });
 
-                // PoPs
                 data.pops.forEach(p => {
-                    const marker = L.circleMarker([p.lat, p.lon], { radius: 6, color: '#28a745', fillOpacity: 0.8 })
-                        .bindPopup(`<strong>${p.name}</strong>`)
-                        .addTo(map);
+                    L.circleMarker([p.lat, p.lon], { radius: 6, color: '#28a745', fillOpacity: 0.8 })
+                        .bindPopup(p.name).addTo(map);
                     group.addLayer(marker);
                 });
 
-                // Applicant
                 if (data.applicant_coords) {
                     const [lat, lng] = data.applicant_coords;
                     const icon = L.divIcon({
@@ -216,24 +178,22 @@
                         html: '<div style="background:#007bff;border-radius:50%;width:12px;height:12px;border:3px solid white;"></div>',
                         iconSize: [18, 18]
                     });
-                    const applicantMarker = L.marker([lat, lng], { icon })
+                    L.marker([lat, lng], { icon })
                         .bindPopup(`<strong>${data.entity_name}</strong><br>${data.address}`)
                         .addTo(map);
                     group.addLayer(applicantMarker);
                 }
 
-                // Red line to nearest PoP
                 if (data.nearest_kmz_coords && data.applicant_coords) {
                     const [lat1, lng1] = data.applicant_coords;
                     const [lat2, lng2] = data.nearest_kmz_coords;
-                    const line = L.polyline([[lat1, lng1], [lat2, lng2]], {
+                    L.polyline([[lat1, lng1], [lat2, lng2]], {
                         color: '#dc3545', weight: 4, dashArray: '10, 10', opacity: 0.8
-                    }).bindPopup(`<strong>${data.distance}</strong> to ${data.nearest_kmz_pop}`)
+                    }).bindPopup(`${data.distance} to ${data.nearest_kmz_pop}`)
                       .addTo(map);
                     group.addLayer(line);
                 }
 
-                // FIT BOUNDS TO ALL FEATURES
                 if (group.getLayers().length > 0) {
                     map.fitBounds(group.getBounds().pad(0.3));
                 } else {
@@ -253,7 +213,6 @@
             document.getElementById('map-container').innerHTML = '';
         }
 
-        // Close modal on outside click
         overlay.addEventListener('click', closeMapModal);
     </script>
 </body>
