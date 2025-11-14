@@ -7,11 +7,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
-
     <!-- Leaflet (clean CDN) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
     <style>
         :root {
             --primary: #1a5d57;
@@ -311,10 +309,8 @@
     <div class="overlay" id="loading">
         <div class="spinner"></div>
     </div>
-
     <div class="container">
         <h1>E-Rate Dashboard</h1>
-
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -322,7 +318,6 @@
                 {% endfor %}
             {% endif %}
         {% endwith %}
-
         <div class="filters">
             <form method="get" style="display: contents;" id="filter-form">
                 <label>State: <input type="text" name="state" value="{{ filters.state|default('') }}" maxlength="2" placeholder="KS"></label>
@@ -331,9 +326,7 @@
                 <a href="{{ url_for('erate.dashboard') }}" class="btn btn-secondary">Reset</a>
             </form>
         </div>
-
         <p class="summary">Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</p>
-
         <table>
             <thead>
                 <tr>
@@ -369,20 +362,17 @@
                 {% endif %}
             </tbody>
         </table>
-
         {% if has_more|default(false) %}
         <div class="pagination">
             <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&offset={{ next_offset|default(0) }}" class="load-more">Load More (+)</a>
         </div>
         {% endif %}
     </div>
-
     <!-- FOOTER LINKS -->
     <div class="footer-links">
         <a href="{{ url_for('erate.extract_csv') }}">Extract CSV</a>
         <a href="{{ url_for('erate.import_interactive') }}">Resume Import</a>
     </div>
-
     <!-- DETAILS MODAL -->
     <div class="modal" id="detail-modal">
         <div class="modal-content">
@@ -401,7 +391,6 @@
             </div>
         </div>
     </div>
-
     <!-- BLUEBIRD MODAL -->
     <div class="modal" id="bbmap-modal">
         <div class="modal-content">
@@ -425,7 +414,6 @@
             </div>
         </div>
     </div>
-
     <!-- MAP MODAL -->
     <div class="modal" id="map-modal">
         <div class="modal-content">
@@ -438,7 +426,6 @@
             </div>
         </div>
     </div>
-
     <script>
         const form = document.getElementById('filter-form');
         const overlay = document.getElementById('loading');
@@ -470,7 +457,7 @@
             }
         }
 
-        // === checkBluebird() — uses 223 PoPs ===
+        // === checkBluebird() ===
         async function checkBluebird(appNumber) {
             body.classList.add('loading');
             overlay.classList.add('show');
@@ -496,13 +483,12 @@
             }
         }
 
-        // === openMapModal() — uses KMZ for routes/PoPs ===
+        // === openMapModal() — FIXED ZOOM ===
         async function openMapModal(appNumber, dbLat, dbLon) {
             currentAppNumber = appNumber;
             body.classList.add('loading');
             overlay.classList.add('show');
             mapModal.classList.add('show');
-
             try {
                 const resp = await fetch(`/erate/bbmap/${appNumber}`);
                 const data = await resp.json();
@@ -510,13 +496,13 @@
 
                 const mapDiv = document.getElementById('map-container');
                 mapDiv.innerHTML = '';
+                const map = L.map(mapDiv);
 
-                const map = L.map(mapDiv).setView([39.8, -98.5], 5);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     attribution: '&copy; OpenStreetMap | Bluebird Fiber'
                 }).addTo(map);
 
-                // Routes
+                // === ROUTES ===
                 data.routes.forEach(r => {
                     if (r.coords.length > 1) {
                         L.polyline(r.coords, { color: '#007bff', weight: 3, opacity: 0.7 })
@@ -525,34 +511,46 @@
                     }
                 });
 
-                // PoPs
+                // === POPS ===
                 data.pops.forEach(p => {
                     L.circleMarker([p.lat, p.lon], { radius: 6, color: '#28a745', fillOpacity: 0.8 })
                         .bindPopup(`<strong>${p.name}</strong>`)
                         .addTo(map);
                 });
 
-                // Applicant
+                // === APPLICANT ===
                 if (data.applicant_coords) {
-                    L.marker(data.applicant_coords, {
-                        icon: L.divIcon({ className: 'applicant-pin', html: '<div style="background:#007bff;border-radius:50%;width:12px;height:12px;border:3px solid white;"></div>', iconSize: [18, 18] })
-                    }).bindPopup(`<strong>${data.entity_name}</strong><br>${data.address}`).addTo(map);
-                    map.setView(data.applicant_coords, 10);
+                    const [lat, lng] = data.applicant_coords;
+                    const icon = L.divIcon({
+                        className: 'applicant-pin',
+                        html: '<div style="background:#007bff;border-radius:50%;width:12px;height:12px;border:3px solid white;"></div>',
+                        iconSize: [18, 18]
+                    });
+                    L.marker([lat, lng], { icon })
+                        .bindPopup(`<strong>${data.entity_name}</strong><br>${data.address}`)
+                        .addTo(map);
                 }
 
-                // Distance Line to nearest KMZ PoP
-                if (data.nearest_kmz_coords) {
-                    L.polyline([data.applicant_coords, data.nearest_kmz_coords], {
+                // === RED LINE TO NEAREST POP ===
+                if (data.nearest_kmz_coords && data.applicant_coords) {
+                    const [lat1, lng1] = data.applicant_coords;
+                    const [lat2, lng2] = data.nearest_kmz_coords;
+                    L.polyline([[lat1, lng1], [lat2, lng2]], {
                         color: '#dc3545', weight: 4, dashArray: '10, 10', opacity: 0.8
-                    }).bindPopup(`<strong>${data.distance}</strong> to ${data.nearest_kmz_pop}`).addTo(map);
+                    }).bindPopup(`<strong>${data.distance}</strong> to ${data.nearest_kmz_pop}`)
+                      .addTo(map);
                 }
 
-                // Fit bounds
+                // === ZOOM TO FIT ALL ===
                 const group = new L.featureGroup();
                 data.routes.forEach(r => L.polyline(r.coords).addTo(group));
                 data.pops.forEach(p => L.circleMarker([p.lat, p.lon]).addTo(group));
                 if (data.applicant_coords) L.marker(data.applicant_coords).addTo(group);
-                map.fitBounds(group.getBounds().pad(0.1));
+                if (group.getLayers().length > 0) {
+                    map.fitBounds(group.getBounds().pad(0.3));
+                } else {
+                    map.setView([39.8, -92.5], 7);
+                }
 
             } catch (err) {
                 document.getElementById('map-container').innerHTML = `<p style="color:#dc3545;">Map error: ${err.message}</p>`;
