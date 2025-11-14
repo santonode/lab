@@ -369,7 +369,7 @@ def get_bluebird_distance(address):
     coverage = "Full fiber" if min_dist <= 5 else "Nearby" if min_dist <= 50 else "Extended reach"
     return {"distance": min_dist, "pop_city": nearest_pop, "coverage": coverage}
 
-# === KMZ LOADER: Routes + PoPs (for map only) ===
+# === KMZ LOADER: Routes + PoPs (for MAP only) ===
 KMZ_PATH = os.path.join(os.path.dirname(__file__), "BBN Map KMZ 122023.kmz")
 KMZ_FEATURES = []  # PoPs
 KMZ_ROUTES = []    # Fiber lines
@@ -394,15 +394,16 @@ def _load_kmz():
         doc = kml.KML()
         doc.from_string(kml_data)
 
+        # FIXED: doc.features is a LIST
         for feature in doc.features:
             if hasattr(feature, "features"):
                 for pm in feature.features:
                     geom = pm.geometry
                     if geom and hasattr(geom, "coords") and geom.coords:
-                        if len(geom.coords[0]) == 2:
+                        if len(geom.coords[0]) == 2:  # Point → PoP
                             lon, lat = geom.coords[0]
                             KMZ_FEATURES.append({"name": pm.name or "Unnamed PoP", "lon": lon, "lat": lat})
-                        elif len(geom.coords) > 1:
+                        elif len(geom.coords) > 1:  # LineString → Route
                             coords = [[c[0], c[1]] for c in geom.coords]
                             KMZ_ROUTES.append({"name": pm.name or "Fiber Route", "coords": coords})
         log("KMZ loaded – %d PoPs, %d routes", len(KMZ_FEATURES), len(KMZ_ROUTES))
@@ -414,7 +415,7 @@ def _load_kmz():
 
 _load_kmz()
 
-# === ENHANCED BBMap API: 223 PoP distance + KMZ map ===
+# === bbmap: 223 PoPs for distance, KMZ for map ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -434,29 +435,29 @@ def bbmap(app_number):
         lat = float(db_lat) if db_lat else None
         lon = float(db_lon) if db_lon else None
 
-        # Use 223 PoPs for distance
+        # === 223 PoP Distance (for modal) ===
         dist_info = get_bluebird_distance(full_address)
 
-        # Geocode fallback if no DB coords
+        # === Geocode fallback for map ===
         if not (lat and lon):
             try:
-                geocode_resp = requests.get(
+                resp = requests.get(
                     "https://nominatim.openstreetmap.org/search",
                     params={'q': full_address, 'format': 'json', 'limit': 1},
                     headers={'User-Agent': 'E-Rate Dashboard/1.0'},
                     timeout=10
                 )
-                geo = geocode_resp.json()
+                geo = resp.json()
                 if geo:
                     lat, lon = float(geo[0]['lat']), float(geo[0]['lon'])
             except:
                 lat, lon = None, None
 
-        # Nearest KMZ PoP for map line
+        # === Nearest KMZ PoP (for red line on map) ===
         min_dist_kmz = float('inf')
         nearest_kmz_pop = None
         nearest_kmz_coords = None
-        if lat and lon:
+        if lat and lon and KMZ_FEATURES:
             def haversine(lat1, lon1, lat2, lon2):
                 R = 3958.8
                 dlat = radians(lat2 - lat1)
@@ -475,7 +476,7 @@ def bbmap(app_number):
             "entity_name": entity_name,
             "address": full_address,
             "applicant_coords": [lon, lat] if lat and lon else None,
-            "pop_city": dist_info['pop_city'],
+            "pop_city": dist_info['pop_city'],  # From 223
             "distance": f"{dist_info['distance']:.1f} miles" if dist_info['distance'] != float('inf') else "N/A",
             "coverage": dist_info['coverage'],
             "nearest_kmz_pop": nearest_kmz_pop,
