@@ -483,20 +483,28 @@
             }
         }
 
-        // === openMapModal() — ZOOM TO 25 MILES + AUTO-OPEN POPUP ===
+        // === openMapModal() — ZOOM TO 15 MILES + AUTO-OPEN + SAFE RESET ===
         async function openMapModal(appNumber, dbLat, dbLon) {
             currentAppNumber = appNumber;
             body.classList.add('loading');
             overlay.classList.add('show');
             mapModal.classList.add('show');
+
+            // === DESTROY OLD MAP IF EXISTS ===
+            const mapDiv = document.getElementById('map-container');
+            if (mapDiv._leaflet_map) {
+                mapDiv._leaflet_map.remove();
+                delete mapDiv._leaflet_map;
+            }
+            mapDiv.innerHTML = '';
+
             try {
                 const resp = await fetch(`/erate/bbmap/${appNumber}`);
                 const data = await resp.json();
                 if (data.error) throw new Error(data.error);
 
-                const mapDiv = document.getElementById('map-container');
-                mapDiv.innerHTML = '';
                 const map = L.map(mapDiv);
+                mapDiv._leaflet_map = map;  // Store for later cleanup
 
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     attribution: '&copy; OpenStreetMap | Bluebird Fiber'
@@ -543,10 +551,10 @@
                       .addTo(map);
                 }
 
-                // === ZOOM TO 25-MILE RADIUS AROUND APPLICANT ===
+                // === ZOOM TO 15-MILE RADIUS AROUND APPLICANT ===
                 if (data.applicant_coords) {
                     const [lat, lng] = data.applicant_coords;
-                    const radiusMiles = 25;
+                    const radiusMiles = 15;
                     const earthRadiusMiles = 3958.8;
                     const latDelta = (radiusMiles / earthRadiusMiles) * (180 / Math.PI);
                     const lngDelta = latDelta / Math.cos(lat * Math.PI / 180);
@@ -555,23 +563,38 @@
                         [lat + latDelta, lng + lngDelta]
                     );
                     map.fitBounds(bounds);
-                    // Auto-open popup
+                    // Auto-open popup after zoom
                     setTimeout(() => {
                         if (applicantMarker) applicantMarker.openPopup();
-                    }, 600);
+                    }, 800);
                 } else {
                     map.setView([39.8, -92.5], 7);
                 }
 
             } catch (err) {
-                document.getElementById('map-container').innerHTML = `<p style="color:#dc3545;">Map error: ${err.message}</p>`;
+                mapDiv.innerHTML = `<p style="color:#dc3545;">Map error: ${err.message}</p>`;
             } finally {
                 body.classList.remove('loading');
                 overlay.classList.remove('show');
             }
         }
 
-        // === renderSection(), activateTab(), copyAddress(), closeModal() ===
+        // === closeModal() — DESTROY MAP ON CLOSE ===
+        function closeModal(type) {
+            if (type === 'detail') detailModal.classList.remove('show');
+            if (type === 'bbmap') bbmapModal.classList.remove('show');
+            if (type === 'map') {
+                mapModal.classList.remove('show');
+                const mapDiv = document.getElementById('map-container');
+                if (mapDiv._leaflet_map) {
+                    mapDiv._leaflet_map.remove();
+                    delete mapDiv._leaflet_map;
+                }
+                mapDiv.innerHTML = '';
+            }
+        }
+
+        // === renderSection(), activateTab(), copyAddress() ===
         function renderSection(section, data) {
             let html = '';
             if (section === 'basic') {
@@ -678,12 +701,6 @@
                 btn.textContent = 'Copied!';
                 setTimeout(() => btn.textContent = originalText, 1500);
             });
-        }
-
-        function closeModal(type) {
-            if (type === 'detail') detailModal.classList.remove('show');
-            if (type === 'bbmap') bbmapModal.classList.remove('show');
-            if (type === 'map') mapModal.classList.remove('show');
         }
 
         [detailModal, bbmapModal, mapModal].forEach(modal => {
