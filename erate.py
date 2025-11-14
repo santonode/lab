@@ -1,4 +1,4 @@
-# erate.py — FINAL: Bluebird Fiber Routes + 223 PoP Distance + KMZ Map
+# erate.py — FINAL: Bluebird Fiber Routes + 223 PoP Distance + XML KML Parser
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -13,10 +13,8 @@ import psycopg
 import traceback
 from datetime import datetime
 from math import radians, cos, sin, sqrt, atan2
-
-# === KMZ PARSING ===
-from fastkml import kml
 import zipfile
+import xml.etree.ElementTree as ET
 
 # === LOGGING ===
 LOG_FILE = os.path.join(os.path.dirname(__file__), "import.log")
@@ -367,7 +365,7 @@ def get_bluebird_distance(address):
     coverage = "Full fiber" if min_dist <= 5 else "Nearby" if min_dist <= 50 else "Extended reach"
     return {"distance": min_dist, "pop_city": nearest_pop, "coverage": coverage}
 
-# === KMZ LOADER: Routes + PoPs (for MAP only) ===
+# === KMZ LOADER: XML PARSING (NO fastkml) ===
 KMZ_PATH = os.path.join(os.path.dirname(__file__), "BBN Map KMZ 122023.kmz")
 KMZ_FEATURES = []  # PoPs
 KMZ_ROUTES = []    # Fiber lines
@@ -382,7 +380,6 @@ def _load_kmz():
     log("=== KMZ LOAD STARTED ===")
     log("Expected path: %s", KMZ_PATH)
     log("File exists: %s", os.path.exists(KMZ_PATH))
-    log("File size: %s bytes", os.path.getsize(KMZ_PATH) if os.path.exists(KMZ_PATH) else "N/A")
 
     if not os.path.exists(KMZ_PATH):
         log("CRITICAL ERROR: KMZ FILE NOT FOUND")
@@ -395,7 +392,6 @@ def _load_kmz():
             namelist = kmz.namelist()
             log("KMZ contains %d files: %s", len(namelist), namelist)
             kml_files = [f for f in namelist if f.lower().endswith('.kml')]
-            log("KML files found: %s", kml_files)
             if not kml_files:
                 log("ERROR: No .kml file in KMZ")
                 KMZ_LOADED = True
@@ -403,46 +399,37 @@ def _load_kmz():
             kml_data = kmz.read(kml_files[0])
             log("KML loaded: %d bytes", len(kml_data))
 
-            # === DUMP KML HEAD ===
-            log("=== FIRST 1000 CHARS OF KML ===")
-            log(kml_data[:1000].decode('utf-8', errors='replace'))
-            log("=== END KML SAMPLE ===")
+        log("Parsing KML with xml.etree...")
+        root = ET.fromstring(kml_data)
 
-        log("Parsing KML with fastkml...")
-        k = kml.KML()
-        k.from_string(kml_data)
+        ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+        placemarks = root.findall('.//kml:Placemark', ns)
+        log("Total Placemarks found: %d", len(placemarks))
 
-        root_features = list(k.features)
-        log("Root features: %d", len(root_features))
+        for j, pm in enumerate(placemarks):
+            name_elem = pm.find('kml:name', ns)
+            name = name_elem.text.strip() if name_elem is not None else "Unnamed"
 
-        all_placemarks = []
+            point = pm.find('kml:Point/kml:coordinates', ns)
+            line = pm.find('kml:LineString/kml:coordinates', ns)
 
-        if root_features and hasattr(root_features[0], 'features'):
-            document = root_features[0]
-            log("Found Document, sub-features: %d", len(list(document.features)))
-            for folder in document.features():
-                if hasattr(folder, 'features'):
-                    log("Processing Folder: %s (%d items)", getattr(folder, 'name', 'Unnamed'), len(list(folder.features())))
-                    all_placemarks.extend(folder.features())
-        else:
-            log("No Document found, trying root folders...")
-            for feature in root_features:
-                if hasattr(feature, 'features'):
-                    all_placemarks.extend(feature.features())
-
-        log("Total Placemarks found: %d", len(all_placemarks))
-
-        for j, pm in enumerate(all_placemarks):
-            geom = pm.geometry
-            if geom and hasattr(geom, "coords") and geom.coords:
-                if len(geom.coords[0]) == 2:
-                    lon, lat = geom.coords[0]
-                    KMZ_FEATURES.append({"name": pm.name or "PoP", "lon": lon, "lat": lat})
-                    log("  PoP %d: %s (%s, %s)", j, pm.name or "Unnamed", lon, lat)
-                elif len(geom.coords) > 1:
-                    coords = [[c[0], c[1]] for c in geom.coords]
-                    KMZ_ROUTES.append({"name": pm.name or "Route", "coords": coords})
-                    log("  Route %d: %s (%d points)", j, pm.name or "Unnamed", len(coords))
+            if point is not None:
+                coords = point.text.strip()
+                lon, lat = map(float, coords.split(',')[:2])
+                KMZ_FEATURES.append({"name": name, "lon": lon, "lat": lat})
+                log("  PoP %d: %s (%s, %s)", j, name, lon, lat)
+            elif line is not None:
+                coords_text = line.text.strip()
+                coord_pairs = coords_text.split()
+                coords = []
+                for pair in coord_pairs:
+                    parts = pair.split(',')
+                    if len(parts) >= 2:
+                        lon, lat = float(parts[0]), float(parts[1])
+                        coords.append([lon, lat])
+                if len(coords) > 1:
+                    KMZ_ROUTES.append({"name": name, "coords": coords})
+                    log("  Route %d: %s (%d points)", j, name, len(coords))
 
         log("=== KMZ LOAD SUCCESS ===")
         log("PoPs: %d", len(KMZ_FEATURES))
@@ -461,7 +448,7 @@ log("KMZ load status: %s | PoPs: %d | Routes: %d",
     "SUCCESS" if KMZ_LOADED and KMZ_FEATURES else "FAILED", 
     len(KMZ_FEATURES), len(KMZ_ROUTES))
 
-# === bbmap: 223 PoPs for distance, KMZ for map ===
+# === bbmap: 223 PoPs for distance, XML KMZ for map ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -522,8 +509,7 @@ def bbmap(app_number):
             "pops": KMZ_FEATURES,
         }), 200, {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Headers': 'Content-Type'
+            'Access-Control-Allow-Origin': '*'
         }
     except Exception as e:
         log("Bluebird API error: %s", e)
