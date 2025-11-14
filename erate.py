@@ -138,11 +138,11 @@ def _row_to_tuple(row):
         row.get('Funding Year', ''),
         row.get('FCC Form 470 Status', ''),
         parse_datetime(row.get('Allowable Contract Date')),
-        row.get('Created Date/Time') and parse_datetime(row.get('Created Date/Time')),
+        parse_datetime(row.get('Created Date/Time')),
         row.get('Created By', ''),
-        row.get('Certified Date/Time') and parse_datetime(row.get('Certified Date/Time')),
+        parse_datetime(row.get('Certified Date/Time')),
         row.get('Certified By', ''),
-        row.get('Last Modified Date/Time') and parse_datetime(row.get('Last Modified Date/Time')),
+        parse_datetime(row.get('Last Modified Date/Time')),
         row.get('Last Modified By', ''),
         row.get('Billed Entity Number', ''),
         row.get('Billed Entity Name', ''),
@@ -199,7 +199,7 @@ def _row_to_tuple(row):
         row.get('State or Local Restrictions Description', ''),
         row.get('Statewide State', ''),
         row.get('All Public Schools Districts', ''),
-        row.get('All Non-Public' in row and row.get('All Non-Public') or ''),
+        row.get('All Non-Public schools', ''),
         row.get('All Libraries', ''),
         row.get('Form Version', '')
     )
@@ -403,7 +403,7 @@ def _load_kmz():
             kml_data = kmz.read(kml_files[0])
             log("KML loaded: %d bytes", len(kml_data))
 
-            # === DUMP FIRST 1000 CHARS ===
+            # === DUMP KML HEAD ===
             log("=== FIRST 1000 CHARS OF KML ===")
             log(kml_data[:1000].decode('utf-8', errors='replace'))
             log("=== END KML SAMPLE ===")
@@ -478,9 +478,7 @@ def bbmap(app_number):
         full_address = f"{address1 or ''} {address2 or ''}, {city or ''}, {state or ''} {zip_code or ''}".strip()
         lat = float(db_lat) if db_lat else None
         lon = float(db_lon) if db_lon else None
-        # === 223 PoP Distance (for modal) ===
         dist_info = get_bluebird_distance(full_address)
-        # === Geocode fallback for map ===
         if not (lat and lon):
             try:
                 resp = requests.get(
@@ -494,7 +492,6 @@ def bbmap(app_number):
                     lat, lon = float(geo[0]['lat']), float(geo[0]['lon'])
             except:
                 lat, lon = None, None
-        # === Nearest KMZ PoP (for red line on map) ===
         min_dist_kmz = float('inf')
         nearest_kmz_pop = None
         nearest_kmz_coords = None
@@ -512,8 +509,6 @@ def bbmap(app_number):
                     min_dist_kmz = dist
                     nearest_kmz_pop = pop['name']
                     nearest_kmz_coords = [pop['lon'], pop['lat']]
-
-        # === THIS IS THE RETURN (LINE ~410) ===
         return jsonify({
             "entity_name": entity_name,
             "address": full_address,
