@@ -1,4 +1,4 @@
-# erate.py — FINAL: Bluebird Fiber Routes + 223 PoP Distance + XML KML Parser
+# erate.py — FINAL: Mobile-friendly UI + Bluebird Fiber + Applicant + Zoom
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup
@@ -303,7 +303,7 @@ pop_data = {
     "Tulsa, OK": (36.1539, -95.9928)
 }
 
-# === GEOCODE + DISTANCE (223 PoPs) ===
+# === GEOCODE + DISTANCE ===
 def get_bluebird_distance(address):
     if not address:
         return {"distance": float('inf'), "pop_city": "N/A", "coverage": "Unknown"}
@@ -341,7 +341,7 @@ def get_bluebird_distance(address):
     coverage = "Full fiber" if min_dist <= 5 else "Nearby" if min_dist <= 50 else "Extended reach"
     return {"distance": min_dist, "pop_city": nearest_pop, "coverage": coverage}
 
-# === KMZ LOADER: BULLETPROOF XML PARSING ===
+# === KMZ LOADER: BULLETPROOF ===
 KMZ_PATH = os.path.join(os.path.dirname(__file__), "BBN Map KMZ 122023.kmz")
 KMZ_FEATURES = []
 KMZ_ROUTES = []
@@ -366,11 +366,9 @@ def _load_kmz():
         ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
         for placemark in root.findall('.//kml:Placemark', ns):
-            # Name
             name_elem = placemark.find('kml:name', ns)
             name = name_elem.text.strip() if name_elem is not None and name_elem.text else "Unnamed"
 
-            # Point
             point_coords = placemark.find('.//kml:Point/kml:coordinates', ns)
             if point_coords is not None and point_coords.text:
                 parts = point_coords.text.strip().split(',')
@@ -381,7 +379,6 @@ def _load_kmz():
                     except ValueError:
                         continue
 
-            # LineString
             line_coords = placemark.find('.//kml:LineString/kml:coordinates', ns)
             if line_coords is not None and line_coords.text:
                 coords = []
@@ -468,7 +465,7 @@ def bbmap(app_number):
         }
     except Exception as e:
         log("Bluebird API error: %s", e)
-        return jsonify({"error": "Service unavailable"}), 500
+         return jsonify({"error": "Service unavailable"}), 500
     finally:
         conn.close()
 
