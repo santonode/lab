@@ -401,7 +401,7 @@ def _load_kmz():
 _load_kmz()
 
 # === bbmap ===
-@erate_bp.route('/bbmap/<app_number>')
+
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -466,7 +466,7 @@ def bbmap(app_number):
         }
     except Exception as e:
         log("Bluebird API error: %s", e)
-    return jsonify({"error": "Service unavailable"}), 500  # ← UNINDENTED
+        return jsonify({"error": "Service unavailable"}), 500
     finally:
         conn.close()
 
