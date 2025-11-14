@@ -341,7 +341,7 @@ def get_bluebird_distance(address):
     coverage = "Full fiber" if min_dist <= 5 else "Nearby" if min_dist <= 50 else "Extended reach"
     return {"distance": min_dist, "pop_city": nearest_pop, "coverage": coverage}
 
-# === KMZ LOADER: XML PARSING (NO DEBUG) ===
+# === KMZ LOADER: BULLETPROOF XML PARSING ===
 KMZ_PATH = os.path.join(os.path.dirname(__file__), "BBN Map KMZ 122023.kmz")
 KMZ_FEATURES = []
 KMZ_ROUTES = []
@@ -364,23 +364,38 @@ def _load_kmz():
             kml_data = kmz.read(kml_files[0])
         root = ET.fromstring(kml_data)
         ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-        placemarks = root.findall('.//kml:Placemark', ns)
-        for pm in placemarks:
-            name = (pm.find('kml:name', ns).text or "Unnamed").strip()
-            point = pm.find('kml:Point/kml:coordinates', ns)
-            line = pm.find('kml:LineString/kml:coordinates', ns)
-            if point is not None:
-                lon, lat = map(float, point.text.strip().split(',')[:2])
-                KMZ_FEATURES.append({"name": name, "lon": lon, "lat": lat})
-            elif line is not None:
+
+        for placemark in root.findall('.//kml:Placemark', ns):
+            # Name
+            name_elem = placemark.find('kml:name', ns)
+            name = name_elem.text.strip() if name_elem is not None and name_elem.text else "Unnamed"
+
+            # Point
+            point_coords = placemark.find('.//kml:Point/kml:coordinates', ns)
+            if point_coords is not None and point_coords.text:
+                parts = point_coords.text.strip().split(',')
+                if len(parts) >= 2:
+                    try:
+                        lon, lat = float(parts[0]), float(parts[1])
+                        KMZ_FEATURES.append({"name": name, "lon": lon, "lat": lat})
+                    except ValueError:
+                        continue
+
+            # LineString
+            line_coords = placemark.find('.//kml:LineString/kml:coordinates', ns)
+            if line_coords is not None and line_coords.text:
                 coords = []
-                for pair in line.text.strip().split():
+                for pair in line_coords.text.strip().split():
                     parts = pair.split(',')
                     if len(parts) >= 2:
-                        lon, lat = float(parts[0]), float(parts[1])
-                        coords.append([lat, lon])  # [LAT, LNG]
+                        try:
+                            lon, lat = float(parts[0]), float(parts[1])
+                            coords.append([lat, lon])  # [LAT, LNG]
+                        except ValueError:
+                            continue
                 if len(coords) > 1:
                     KMZ_ROUTES.append({"name": name, "coords": coords})
+
     except Exception as e:
         log("KMZ load failed: %s", e)
     finally:
@@ -435,11 +450,11 @@ def bbmap(app_number):
                 if dist < min_dist_kmz:
                     min_dist_kmz = dist
                     nearest_kmz_pop = pop['name']
-                    nearest_kmz_coords = [pop['lat'], pop['lon']]  # [LAT, LNG]
+                    nearest_kmz_coords = [pop['lat'], pop['lon']]
         return jsonify({
             "entity_name": entity_name,
             "address": full_address,
-            "applicant_coords": [lat, lon] if lat and lon else None,  # [LAT, LNG]
+            "applicant_coords": [lat, lon] if lat and lon else None,
             "pop_city": dist_info['pop_city'],
             "distance": f"{dist_info['distance']:.1f} miles" if dist_info['distance'] != float('inf') else "N/A",
             "coverage": dist_info['coverage'],
@@ -457,7 +472,7 @@ def bbmap(app_number):
     finally:
         conn.close()
 
-# === DASHBOARD, DETAILS, IMPORT, LOG, RESET ===
+# === DASHBOARD ===
 @erate_bp.route('/')
 def dashboard():
     state_filter = request.args.get('state', '').strip().upper()
@@ -524,6 +539,7 @@ def dashboard():
     finally:
         conn.close()
 
+# === DETAILS ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -620,6 +636,7 @@ def details(app_number):
     finally:
         conn.close()
 
+# === EXTRACT, IMPORT, LOG, RESET ===
 @erate_bp.route('/extract-csv')
 def extract_csv():
     if current_app.config.get('CSV_DOWNLOAD_IN_PROGRESS'):
