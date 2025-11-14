@@ -483,7 +483,7 @@
             }
         }
 
-        // === openMapModal() — FIXED ZOOM ===
+        // === openMapModal() — ZOOM TO 25 MILES + AUTO-OPEN POPUP ===
         async function openMapModal(appNumber, dbLat, dbLon) {
             currentAppNumber = appNumber;
             body.classList.add('loading');
@@ -501,6 +501,8 @@
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     attribution: '&copy; OpenStreetMap | Bluebird Fiber'
                 }).addTo(map);
+
+                let applicantMarker = null;
 
                 // === ROUTES ===
                 data.routes.forEach(r => {
@@ -526,7 +528,7 @@
                         html: '<div style="background:#007bff;border-radius:50%;width:12px;height:12px;border:3px solid white;"></div>',
                         iconSize: [18, 18]
                     });
-                    L.marker([lat, lng], { icon })
+                    applicantMarker = L.marker([lat, lng], { icon })
                         .bindPopup(`<strong>${data.entity_name}</strong><br>${data.address}`)
                         .addTo(map);
                 }
@@ -541,13 +543,22 @@
                       .addTo(map);
                 }
 
-                // === ZOOM TO FIT ALL ===
-                const group = new L.featureGroup();
-                data.routes.forEach(r => L.polyline(r.coords).addTo(group));
-                data.pops.forEach(p => L.circleMarker([p.lat, p.lon]).addTo(group));
-                if (data.applicant_coords) L.marker(data.applicant_coords).addTo(group);
-                if (group.getLayers().length > 0) {
-                    map.fitBounds(group.getBounds().pad(0.3));
+                // === ZOOM TO 25-MILE RADIUS AROUND APPLICANT ===
+                if (data.applicant_coords) {
+                    const [lat, lng] = data.applicant_coords;
+                    const radiusMiles = 25;
+                    const earthRadiusMiles = 3958.8;
+                    const latDelta = (radiusMiles / earthRadiusMiles) * (180 / Math.PI);
+                    const lngDelta = latDelta / Math.cos(lat * Math.PI / 180);
+                    const bounds = L.latLngBounds(
+                        [lat - latDelta, lng - lngDelta],
+                        [lat + latDelta, lng + lngDelta]
+                    );
+                    map.fitBounds(bounds);
+                    // Auto-open popup
+                    setTimeout(() => {
+                        if (applicantMarker) applicantMarker.openPopup();
+                    }, 600);
                 } else {
                     map.setView([39.8, -92.5], 7);
                 }
