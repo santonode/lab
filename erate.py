@@ -378,11 +378,16 @@ def _load_kmz():
     if KMZ_LOADED:
         log("KMZ already loaded, skipping")
         return
-    log("=== STARTING KMZ LOAD ===")
-    log("KMZ_PATH: %s", KMZ_PATH)
+
+    log("=== KMZ LOAD STARTED ===")
+    log("Expected path: %s", KMZ_PATH)
     log("File exists: %s", os.path.exists(KMZ_PATH))
+    log("File size: %s bytes", os.path.getsize(KMZ_PATH) if os.path.exists(KMZ_PATH) else "N/A")
+    log("Current working directory: %s", os.getcwd())
+    log("Files in module directory: %s", os.listdir(os.path.dirname(__file__)))
+
     if not os.path.exists(KMZ_PATH):
-        log("ERROR: KMZ file NOT FOUND at %s", KMZ_PATH)
+        log("CRITICAL ERROR: KMZ FILE NOT FOUND")
         KMZ_LOADED = True
         return
 
@@ -390,70 +395,55 @@ def _load_kmz():
         log("Opening KMZ file...")
         with zipfile.ZipFile(KMZ_PATH, 'r') as kmz:
             namelist = kmz.namelist()
-            log("KMZ contents: %s", namelist)
+            log("KMZ contains %d files: %s", len(namelist), namelist)
             kml_files = [f for f in namelist if f.lower().endswith('.kml')]
             log("KML files found: %s", kml_files)
             if not kml_files:
-                log("ERROR: No .kml file inside KMZ")
+                log("ERROR: No .kml file in KMZ")
                 KMZ_LOADED = True
                 return
-            kml_path = kml_files[0]
-            log("Reading KML: %s", kml_path)
-            kml_data = kmz.read(kml_path)
-            log("KML size: %d bytes", len(kml_data))
-            if len(kml_data) < 100:
-                log("ERROR: KML data too small — likely corrupted")
-                KMZ_LOADED = True
-                return
+            kml_data = kmz.read(kml_files[0])
+            log("KML loaded: %d bytes", len(kml_data))
 
         log("Parsing KML with fastkml...")
         k = kml.KML()
         k.from_string(kml_data)
         features = list(k.features())
-        log("KML root features: %d", len(features))
-
-        if not features:
-            log("ERROR: No features in KML")
-            KMZ_LOADED = True
-            return
+        log("Root features: %d", len(features))
 
         for i, feature in enumerate(features):
             log("Feature %d: %s", i, feature.__class__.__name__)
             if hasattr(feature, "features"):
-                subfeatures = list(feature.features())
-                log("  Subfeatures: %d", len(subfeatures))
-                for j, pm in enumerate(subfeatures):
+                sub = list(feature.features())
+                log("  Sub-features: %d", len(sub))
+                for j, pm in enumerate(sub):
                     geom = pm.geometry
-                    if geom:
-                        log("  Placemark %d: %s, Geometry: %s", j, pm.name or "Unnamed", type(geom).__name__)
-                        if hasattr(geom, "coords") and geom.coords:
-                            if len(geom.coords[0]) == 2:  # Point
-                                lon, lat = geom.coords[0]
-                                KMZ_FEATURES.append({"name": pm.name or "Unnamed PoP", "lon": lon, "lat": lat})
-                                log("    PoP: %s (%s, %s)", pm.name or "Unnamed", lon, lat)
-                            elif len(geom.coords) > 1:  # LineString
-                                coords = [[c[0], c[1]] for c in geom.coords]
-                                KMZ_ROUTES.append({"name": pm.name or "Fiber Route", "coords": coords})
-                                log("    Route: %s (%d points)", pm.name or "Fiber Route", len(coords))
+                    if geom and hasattr(geom, "coords") and geom.coords:
+                        if len(geom.coords[0]) == 2:
+                            lon, lat = geom.coords[0]
+                            KMZ_FEATURES.append({"name": pm.name or "PoP", "lon": lon, "lat": lat})
+                            log("  PoP %d: %s (%s, %s)", j, pm.name or "Unnamed", lon, lat)
+                        elif len(geom.coords) > 1:
+                            coords = [[c[0], c[1]] for c in geom.coords]
+                            KMZ_ROUTES.append({"name": pm.name or "Route", "coords": coords})
+                            log("  Route %d: %s (%d points)", j, pm.name or "Unnamed", len(coords))
 
-        log("=== KMZ LOAD COMPLETE ===")
-        log("PoPs loaded: %d", len(KMZ_FEATURES))
-        log("Routes loaded: %d", len(KMZ_ROUTES))
-        if KMZ_FEATURES:
-            log("Sample PoP: %s", KMZ_FEATURES[0])
-        if KMZ_ROUTES:
-            log("Sample route: %d points", len(KMZ_ROUTES[0]['coords']) if KMZ_ROUTES[0]['coords'] else 0)
+        log("=== KMZ LOAD SUCCESS ===")
+        log("PoPs: %d", len(KMZ_FEATURES))
+        log("Routes: %d", len(KMZ_ROUTES))
 
     except Exception as e:
-        log("FATAL KMZ ERROR: %s", str(e))
+        log("KMZ LOAD FAILED: %s", str(e))
         log("Traceback: %s", traceback.format_exc())
     finally:
         KMZ_LOADED = True
 
-# FORCE LOAD ON IMPORT
-log("Forcing KMZ load...")
+# === FORCE LOAD ON IMPORT ===
+log("Forcing KMZ load at import time...")
 _load_kmz()
-log("KMZ load status: %s", "LOADED" if KMZ_LOADED else "FAILED")
+log("KMZ load status: %s | PoPs: %d | Routes: %d", 
+    "SUCCESS" if KMZ_LOADED and KMZ_FEATURES else "FAILED", 
+    len(KMZ_FEATURES), len(KMZ_ROUTES))
 
 # === bbmap: 223 PoPs for distance, KMZ for map ===
 @erate_bp.route('/bbmap/<app_number>')
