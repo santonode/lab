@@ -403,13 +403,17 @@ def _load_kmz():
             kml_data = kmz.read(kml_files[0])
             log("KML loaded: %d bytes", len(kml_data))
 
+            # === DUMP FIRST 1000 CHARS ===
+            log("=== FIRST 1000 CHARS OF KML ===")
+            log(kml_data[:1000].decode('utf-8', errors='replace'))
+            log("=== END KML SAMPLE ===")
+
         log("Parsing KML with fastkml...")
         k = kml.KML()
         k.from_string(kml_data)
 
-        # === FIX: Handle <Document> and nested <Folder>s ===
         root_features = list(k.features)
-        log("Root features (should be 1 Document): %d", len(root_features))
+        log("Root features: %d", len(root_features))
 
         all_placemarks = []
 
@@ -428,7 +432,6 @@ def _load_kmz():
 
         log("Total Placemarks found: %d", len(all_placemarks))
 
-        # === Process all Placemarks ===
         for j, pm in enumerate(all_placemarks):
             geom = pm.geometry
             if geom and hasattr(geom, "coords") and geom.coords:
@@ -444,6 +447,19 @@ def _load_kmz():
         log("=== KMZ LOAD SUCCESS ===")
         log("PoPs: %d", len(KMZ_FEATURES))
         log("Routes: %d", len(KMZ_ROUTES))
+
+    except Exception as e:
+        log("KMZ LOAD FAILED: %s", str(e))
+        log("Traceback: %s", traceback.format_exc())
+    finally:
+        KMZ_LOADED = True
+
+# === FORCE LOAD ON IMPORT ===
+log("Forcing KMZ load at import time...")
+_load_kmz()
+log("KMZ load status: %s | PoPs: %d | Routes: %d", 
+    "SUCCESS" if KMZ_LOADED and KMZ_FEATURES else "FAILED", 
+    len(KMZ_FEATURES), len(KMZ_ROUTES))
 
     except Exception as e:
         log("KMZ LOAD FAILED: %s", str(e))
