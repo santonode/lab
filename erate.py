@@ -426,7 +426,7 @@ def _load_kmz():
                     parts = pair.split(',')
                     if len(parts) >= 2:
                         lon, lat = float(parts[0]), float(parts[1])
-                        coords.append([lon, lat])
+                        coords.append([lat, lon])  # ← [LAT, LNG]
                 if len(coords) > 1:
                     KMZ_ROUTES.append({"name": name, "coords": coords})
                     log("  Route %d: %s (%d points)", j, name, len(coords))
