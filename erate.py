@@ -408,7 +408,7 @@ def _load_kmz():
         log("Parsing KML with fastkml...")
         k = kml.KML()
         k.from_string(kml_data)
-        features = list(k.features())
+        features = list(k.features)
         log("Root features: %d", len(features))
 
         for i, feature in enumerate(features):
