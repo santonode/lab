@@ -13,10 +13,8 @@ import psycopg
 import traceback
 from datetime import datetime
 from math import radians, cos, sin, sqrt, atan2
-
-# === KMZ PARSING ===
-from fastkml import kml
 import zipfile
+import xml.etree.ElementTree as ET  # ← FIXED: Use ElementTree, not fastkml
 
 # === LOGGING ===
 LOG_FILE = os.path.join(os.path.dirname(__file__), "import.log")
@@ -350,7 +348,6 @@ def get_bluebird_distance(address):
         lon = float(geocode_data[0]['lon'])
     except:
         return {"distance": float('inf'), "pop_city": "N/A", "coverage": "Unknown"}
-
     def haversine(lat1, lon1, lat2, lon2):
         R = 3958.8
         dlat = radians(lat2 - lat1)
@@ -358,7 +355,6 @@ def get_bluebird_distance(address):
         a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
         c = 2 * atan2(sqrt(a), sqrt(1-a))
         return R * c
-
     min_dist = float('inf')
     nearest_pop = None
     for city, (pop_lat, pop_lon) in pop_data.items():
@@ -369,7 +365,7 @@ def get_bluebird_distance(address):
     coverage = "Full fiber" if min_dist <= 5 else "Nearby" if min_dist <= 50 else "Extended reach"
     return {"distance": min_dist, "pop_city": nearest_pop, "coverage": coverage}
 
-# === KMZ LOADER: Routes + PoPs (for map only) ===
+# === KMZ LOADER: BULLETPROOF WITH ElementTree ===
 KMZ_PATH = os.path.join(os.path.dirname(__file__), "BBN Map KMZ 122023.kmz")
 KMZ_FEATURES = []  # PoPs
 KMZ_ROUTES = []    # Fiber lines
@@ -391,20 +387,35 @@ def _load_kmz():
                 KMZ_LOADED = True
                 return
             kml_data = kmz.read(kml_files[0])
-        doc = kml.KML()
-        doc.from_string(kml_data)
-
-        for feature in doc.features:
-            if hasattr(feature, "features"):
-                for pm in feature.features:
-                    geom = pm.geometry
-                    if geom and hasattr(geom, "coords") and geom.coords:
-                        if len(geom.coords[0]) == 2:
-                            lon, lat = geom.coords[0]
-                            KMZ_FEATURES.append({"name": pm.name or "Unnamed PoP", "lon": lon, "lat": lat})
-                        elif len(geom.coords) > 1:
-                            coords = [[c[0], c[1]] for c in geom.coords]
-                            KMZ_ROUTES.append({"name": pm.name or "Fiber Route", "coords": coords})
+        root = ET.fromstring(kml_data)
+        ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+        for placemark in root.findall('.//kml:Placemark', ns):
+            name_elem = placemark.find('kml:name', ns)
+            name = name_elem.text.strip() if name_elem is not None and name_elem.text else "Unnamed"
+            # Point (PoP)
+            point = placemark.find('.//kml:Point/kml:coordinates', ns)
+            if point is not None and point.text:
+                parts = point.text.strip().split(',')
+                if len(parts) >= 2:
+                    try:
+                        lon, lat = float(parts[0]), float(parts[1])
+                        KMZ_FEATURES.append({"name": name, "lon": lon, "lat": lat})
+                    except ValueError:
+                        pass
+            # LineString (Fiber)
+            line = placemark.find('.//kml:LineString/kml:coordinates', ns)
+            if line is not None and line.text:
+                coords = []
+                for pair in line.text.strip().split():
+                    parts = pair.split(',')
+                    if len(parts) >= 2:
+                        try:
+                            lon, lat = float(parts[0]), float(parts[1])
+                            coords.append([lat, lon])  # [LAT, LNG] for Leaflet
+                        except ValueError:
+                            continue
+                if len(coords) > 1:
+                    KMZ_ROUTES.append({"name": name, "coords": coords})
         log("KMZ loaded – %d PoPs, %d routes", len(KMZ_FEATURES), len(KMZ_ROUTES))
     except Exception as e:
         log("KMZ parsing error: %s", e)
@@ -414,7 +425,7 @@ def _load_kmz():
 
 _load_kmz()
 
-# === ENHANCED BBMap API: 223 PoP distance + KMZ map ===
+# === ENHANCED BBMap API ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -427,17 +438,11 @@ def bbmap(app_number):
             row = cur.fetchone()
         if not row:
             return jsonify({"error": "Applicant not found"}), 404
-
         entity_name, address1, address2, city, state, zip_code, db_lat, db_lon = row
         full_address = f"{address1 or ''} {address2 or ''}, {city or ''}, {state or ''} {zip_code or ''}".strip()
-
         lat = float(db_lat) if db_lat else None
         lon = float(db_lon) if db_lon else None
-
-        # Use 223 PoPs for distance
         dist_info = get_bluebird_distance(full_address)
-
-        # Geocode fallback if no DB coords
         if not (lat and lon):
             try:
                 geocode_resp = requests.get(
@@ -451,8 +456,6 @@ def bbmap(app_number):
                     lat, lon = float(geo[0]['lat']), float(geo[0]['lon'])
             except:
                 lat, lon = None, None
-
-        # Nearest KMZ PoP for map line
         min_dist_kmz = float('inf')
         nearest_kmz_pop = None
         nearest_kmz_coords = None
@@ -469,12 +472,11 @@ def bbmap(app_number):
                 if dist < min_dist_kmz:
                     min_dist_kmz = dist
                     nearest_kmz_pop = pop['name']
-                    nearest_kmz_coords = [pop['lon'], pop['lat']]
-
+                    nearest_kmz_coords = [pop['lat'], pop['lon']]  # [LAT, LNG]
         return jsonify({
             "entity_name": entity_name,
             "address": full_address,
-            "applicant_coords": [lon, lat] if lat and lon else None,
+            "applicant_coords": [lat, lon] if lat and lon else None,  # ← FIXED: [LAT, LNG]
             "pop_city": dist_info['pop_city'],
             "distance": f"{dist_info['distance']:.1f} miles" if dist_info['distance'] != float('inf') else "N/A",
             "coverage": dist_info['coverage'],
@@ -489,7 +491,7 @@ def bbmap(app_number):
     finally:
         conn.close()
 
-# === DASHBOARD (include lat/lng) ===
+# === DASHBOARD ===
 @erate_bp.route('/')
 def dashboard():
     log("Dashboard accessed")
@@ -513,7 +515,6 @@ def dashboard():
                 count_sql += ' WHERE ' + ' AND '.join(where_clauses)
             cur.execute(count_sql, count_params)
             total_count = cur.fetchone()[0]
-
             sql = '''
                 SELECT app_number, entity_name, state, last_modified_datetime,
                        latitude, longitude
@@ -656,7 +657,7 @@ def details(app_number):
     finally:
         conn.close()
 
-# === EXTRACT CSV, IMPORT, LOG, RESET (unchanged) ===
+# === EXTRACT CSV, IMPORT, LOG, RESET ===
 @erate_bp.route('/extract-csv')
 def extract_csv():
     log("Extract CSV requested")
