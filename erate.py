@@ -414,7 +414,7 @@ def _load_kmz():
         for i, feature in enumerate(features):
             log("Feature %d: %s", i, feature.__class__.__name__)
             if hasattr(feature, "features"):
-                sub = list(feature.features())
+                sub = list(feature.features)
                 log("  Sub-features: %d", len(sub))
                 for j, pm in enumerate(sub):
                     geom = pm.geometry
