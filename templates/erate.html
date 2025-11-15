@@ -477,6 +477,7 @@
         <a href="{{ url_for('erate.extract_csv') }}">Extract CSV</a>
         <a href="{{ url_for('erate.import_interactive') }}">Resume Import</a>
     </div>
+
     <!-- DETAILS MODAL -->
     <div class="modal" id="detail-modal">
         <div class="modal-content">
@@ -495,6 +496,7 @@
             </div>
         </div>
     </div>
+
     <!-- BLUEBIRD MODAL -->
     <div class="modal" id="bbmap-modal">
         <div class="modal-content">
@@ -518,6 +520,7 @@
             </div>
         </div>
     </div>
+
     <!-- MAP MODAL -->
     <div class="modal" id="map-modal">
         <div class="modal-content">
@@ -527,6 +530,21 @@
             </div>
             <div class="modal-body">
                 <div id="map-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- OUT OF POINTS MODAL -->
+    <div class="modal" id="outOfPointsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Out of Points</div>
+            </div>
+            <div class="modal-body" id="out-of-points-message" style="text-align:center; font-size:1rem;">
+                Loading...
+            </div>
+            <div style="text-align:center; margin-top:15px;">
+                <button class="btn btn-primary" onclick="location.reload()">OK</button>
             </div>
         </div>
     </div>
@@ -549,16 +567,29 @@
             document.getElementById(type + 'Modal').style.display = 'none';
         }
 
-        // === POINT COUNTER (LIVE UPDATE) ===
+        // === POINT COUNTER + OUT-OF-POINTS POPUP ===
         function updatePoints() {
-            fetch('/erate/points?' + Date.now())  // Cache bust
+            fetch('/erate/points?' + Date.now())
                 .then(r => r.json())
                 .then(data => {
                     const el = document.getElementById('points-display');
                     if (el) {
                         el.textContent = `(${data.points} pts)`;
                         if (data.points <= 5) el.style.color = '#ffc107';
-                        if (data.points <= 0) el.style.color = '#dc3545';
+                        if (data.points <= 0) {
+                            el.style.color = '#dc3545';
+                            // SHOW OUT-OF-POINTS POPUP
+                            fetch('/erate/out-of-points')
+                                .then(r => r.json())
+                                .then(msg => {
+                                    document.getElementById('out-of-points-message').textContent = msg.message;
+                                    document.getElementById('outOfPointsModal').classList.add('show');
+                                })
+                                .catch(() => {
+                                    document.getElementById('out-of-points-message').textContent = "You have run out of points.";
+                                    document.getElementById('outOfPointsModal').classList.add('show');
+                                });
+                        }
                     }
                 })
                 .catch(() => {
@@ -567,7 +598,7 @@
                 });
         }
 
-        // Update on load + every 5s + every click
+        // Update on load + every 5s + every click/submit
         window.addEventListener('load', () => {
             {% if not session.username %}
                 document.getElementById('authModal').style.display = 'flex';
@@ -576,8 +607,6 @@
                 setInterval(updatePoints, 5000);
             {% endif %}
         });
-
-        // Update on every user action
         document.addEventListener('click', updatePoints);
         document.addEventListener('submit', updatePoints);
 
@@ -732,6 +761,9 @@
                 }
                 mapDiv.innerHTML = '';
             }
+            if (type === 'outOfPoints') {
+                document.getElementById('outOfPointsModal').classList.remove('show');
+            }
         }
 
         // === renderSection(), activateTab(), copyAddress() ===
@@ -843,7 +875,7 @@
             });
         }
 
-        [detailModal, bbmapModal, mapModal].forEach(modal => {
+        [detailModal, bbmapModal, mapModal, document.getElementById('outOfPointsModal')].forEach(modal => {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) modal.classList.remove('show');
             });
