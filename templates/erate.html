@@ -343,10 +343,61 @@
     </style>
 </head>
 <body>
+    <!-- AUTH MODAL (ON FIRST VISIT) -->
+    <div class="modal" id="authModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Welcome to E-Rate</div>
+            </div>
+            <div class="modal-body" style="text-align:center;">
+                <button class="btn btn-secondary" onclick="continueAsGuest()" style="margin:8px 0;">Continue as Guest</button>
+                <button class="btn btn-primary" onclick="showRegister()" style="margin:8px 0;">Register</button>
+                <button class="btn btn-success" onclick="showLogin()" style="margin:8px 0;">Login</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- REGISTER MODAL -->
+    <div class="modal" id="registerModal" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Register</div>
+                <button class="modal-close" onclick="closeModal('register')">x</button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" action="{{ url_for('erate.admin') }}">
+                    <input type="hidden" name="action" value="register">
+                    <input type="text" name="username" placeholder="Username" required minlength="3" style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
+                    <input type="password" name="password" placeholder="Password" required minlength="4" style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
+                    <button type="submit" class="btn btn-primary">Register</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOGIN MODAL -->
+    <div class="modal" id="loginModal" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Login</div>
+                <button class="modal-close" onclick="closeModal('login')">x</button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" action="{{ url_for('erate.admin') }}">
+                    <input type="hidden" name="action" value="login">
+                    <input type="text" name="username" placeholder="Username" required style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
+                    <input type="password" name="password" placeholder="Password" required style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
+                    <button type="submit" class="btn btn-success">Login</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- LOADING OVERLAY -->
     <div class="overlay" id="loading">
         <div class="spinner"></div>
     </div>
+
     <div class="container">
         <div class="header">
             {% if session.username %}
@@ -483,6 +534,31 @@
     </div>
 
     <script>
+        // === AUTH MODAL LOGIC ===
+        function continueAsGuest() {
+            fetch('/erate/set_guest', { method: 'POST' })
+                .then(() => location.reload());
+        }
+        function showRegister() {
+            document.getElementById('authModal').style.display = 'none';
+            document.getElementById('registerModal').style.display = 'flex';
+        }
+        function showLogin() {
+            document.getElementById('authModal').style.display = 'none';
+            document.getElementById('loginModal').style.display = 'flex';
+        }
+        function closeModal(type) {
+            document.getElementById(type + 'Modal').style.display = 'none';
+        }
+
+        // Show auth modal on first load if not logged in
+        window.addEventListener('load', () => {
+            {% if not session.username %}
+                document.getElementById('authModal').style.display = 'flex';
+            {% endif %}
+        });
+
+        // === REST OF YOUR JS ===
         const form = document.getElementById('filter-form');
         const overlay = document.getElementById('loading');
         const body = document.body;
@@ -539,36 +615,28 @@
             }
         }
 
-        // === openMapModal() — ZOOM TO 15 MILES + AUTO-OPEN + SAFE RESET ===
+        // === openMapModal() ===
         async function openMapModal(appNumber, dbLat, dbLon) {
             currentAppNumber = appNumber;
             body.classList.add('loading');
             overlay.classList.add('show');
             mapModal.classList.add('show');
-
-            // === DESTROY OLD MAP IF EXISTS ===
             const mapDiv = document.getElementById('map-container');
             if (mapDiv._leaflet_map) {
                 mapDiv._leaflet_map.remove();
                 delete mapDiv._leaflet_map;
             }
             mapDiv.innerHTML = '';
-
             try {
                 const resp = await fetch(`/erate/bbmap/${appNumber}`);
                 const data = await resp.json();
                 if (data.error) throw new Error(data.error);
-
                 const map = L.map(mapDiv);
-                mapDiv._leaflet_map = map;  // Store for later cleanup
-
+                mapDiv._leaflet_map = map;
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     attribution: '&copy; OpenStreetMap | Bluebird Fiber'
                 }).addTo(map);
-
                 let applicantMarker = null;
-
-                // === ROUTES ===
                 data.routes.forEach(r => {
                     if (r.coords.length > 1) {
                         L.polyline(r.coords, { color: '#007bff', weight: 3, opacity: 0.7 })
@@ -576,15 +644,11 @@
                             .addTo(map);
                     }
                 });
-
-                // === POPS ===
                 data.pops.forEach(p => {
                     L.circleMarker([p.lat, p.lon], { radius: 6, color: '#28a745', fillOpacity: 0.8 })
                         .bindPopup(`<strong>${p.name}</strong>`)
                         .addTo(map);
                 });
-
-                // === APPLICANT ===
                 if (data.applicant_coords) {
                     const [lat, lng] = data.applicant_coords;
                     const icon = L.divIcon({
@@ -596,8 +660,6 @@
                         .bindPopup(`<strong>${data.entity_name}</strong><br>${data.address}`)
                         .addTo(map);
                 }
-
-                // === RED LINE TO NEAREST POP ===
                 if (data.nearest_kmz_coords && data.applicant_coords) {
                     const [lat1, lng1] = data.applicant_coords;
                     const [lat2, lng2] = data.nearest_kmz_coords;
@@ -606,8 +668,6 @@
                     }).bindPopup(`<strong>${data.distance}</strong> to ${data.nearest_kmz_pop}`)
                       .addTo(map);
                 }
-
-                // === ZOOM TO 15-MILE RADIUS AROUND APPLICANT ===
                 if (data.applicant_coords) {
                     const [lat, lng] = data.applicant_coords;
                     const radiusMiles = 15;
@@ -619,14 +679,12 @@
                         [lat + latDelta, lng + lngDelta]
                     );
                     map.fitBounds(bounds);
-                    // Auto-open popup after zoom
                     setTimeout(() => {
                         if (applicantMarker) applicantMarker.openPopup();
                     }, 800);
                 } else {
                     map.setView([39.8, -92.5], 7);
                 }
-
             } catch (err) {
                 mapDiv.innerHTML = `<p style="color:#dc3545;">Map error: ${err.message}</p>`;
             } finally {
@@ -635,7 +693,7 @@
             }
         }
 
-        // === closeModal() — DESTROY MAP ON CLOSE ===
+        // === closeModal() ===
         function closeModal(type) {
             if (type === 'detail') detailModal.classList.remove('show');
             if (type === 'bbmap') bbmapModal.classList.remove('show');
