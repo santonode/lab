@@ -99,6 +99,7 @@
             font-size: 0.8rem;
             opacity: 0.9;
             font-weight: 400;
+            transition: color 0.3s;
         }
         .logout {
             position: absolute;
@@ -414,7 +415,6 @@
                 <a href="{{ url_for('erate.logout') }}" class="logout">Logout</a>
             {% endif %}
         </div>
-
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -422,7 +422,6 @@
                 {% endfor %}
             {% endif %}
         {% endwith %}
-
         <div class="filters">
             <form method="get" style="display: contents;" id="filter-form">
                 <label>State: <input type="text" name="state" value="{{ filters.state|default('') }}" maxlength="2" placeholder="KS"></label>
@@ -431,9 +430,7 @@
                 <a href="{{ url_for('erate.dashboard') }}" class="btn btn-secondary">Reset</a>
             </form>
         </div>
-
         <p class="summary">Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</p>
-
         <table>
             <thead>
                 <tr>
@@ -469,20 +466,17 @@
                 {% endif %}
             </tbody>
         </table>
-
         {% if has_more|default(false) %}
         <div class="pagination">
             <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&offset={{ next_offset|default(0) }}" class="load-more">Load More (+)</a>
         </div>
         {% endif %}
     </div>
-
     <!-- FOOTER LINKS -->
     <div class="footer-links">
         <a href="{{ url_for('erate.extract_csv') }}">Extract CSV</a>
         <a href="{{ url_for('erate.import_interactive') }}">Resume Import</a>
     </div>
-
     <!-- DETAILS MODAL -->
     <div class="modal" id="detail-modal">
         <div class="modal-content">
@@ -501,7 +495,6 @@
             </div>
         </div>
     </div>
-
     <!-- BLUEBIRD MODAL -->
     <div class="modal" id="bbmap-modal">
         <div class="modal-content">
@@ -525,7 +518,6 @@
             </div>
         </div>
     </div>
-
     <!-- MAP MODAL -->
     <div class="modal" id="map-modal">
         <div class="modal-content">
@@ -557,9 +549,9 @@
             document.getElementById(type + 'Modal').style.display = 'none';
         }
 
-        // === POINT COUNTER ===
+        // === POINT COUNTER (LIVE UPDATE) ===
         function updatePoints() {
-            fetch('/erate/points')
+            fetch('/erate/points?' + Date.now())  // Cache bust
                 .then(r => r.json())
                 .then(data => {
                     const el = document.getElementById('points-display');
@@ -575,15 +567,19 @@
                 });
         }
 
-        // Update points on load and after every click
+        // Update on load + every 5s + every click
         window.addEventListener('load', () => {
             {% if not session.username %}
                 document.getElementById('authModal').style.display = 'flex';
             {% else %}
                 updatePoints();
-                setInterval(updatePoints, 10000); // Refresh every 10s
+                setInterval(updatePoints, 5000);
             {% endif %}
         });
+
+        // Update on every user action
+        document.addEventListener('click', updatePoints);
+        document.addEventListener('submit', updatePoints);
 
         // === REST OF YOUR JS ===
         const form = document.getElementById('filter-form');
@@ -854,10 +850,9 @@
         });
 
         // Loading overlay on form submit / pagination
-        form.addEventListener('submit', () => { 
-            body.classList.add('loading'); 
-            overlay.classList.add('show'); 
-            updatePoints();
+        form.addEventListener('submit', () => {
+            body.classList.add('loading');
+            overlay.classList.add('show');
         });
         window.addEventListener('load', () => { body.classList.remove('loading'); overlay.classList.remove('show'); });
         document.querySelectorAll('a').forEach(link => {
@@ -866,7 +861,6 @@
                 if (href && href.includes('?')) {
                     body.classList.add('loading');
                     overlay.classList.add('show');
-                    updatePoints();
                 }
             });
         });
