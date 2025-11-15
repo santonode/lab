@@ -560,7 +560,7 @@ def dashboard():
             '''
             params = []
             if where_clauses:
-                sql += ' WHERE ' + ' AND '..join(where_clauses)
+                sql += ' WHERE ' + ' AND '.join(where_clauses)  # ← FIXED: ' AND '.join
                 params.extend(count_params)
             sql += ' ORDER BY last_modified_datetime DESC, app_number LIMIT %s OFFSET %s'
             params.extend([limit + 1, offset])
