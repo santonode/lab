@@ -1,4 +1,4 @@
-# erate.py — FINAL: Bluebird Fiber Routes + 223 PoP Distance + KMZ Map + FULL ADMIN AUTH
+# erate.py — FINAL: Bluebird Fiber Routes + 223 PoP Distance + KMZ Map + FULL ADMIN AUTH + POINT SYSTEM
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup, session
@@ -65,6 +65,29 @@ try:
     test_conn.close()
 except Exception as e:
     log("DB connection test: FAILED to %s", e)
+
+# === POINT SYSTEM ===
+def deduct_point():
+    if not session.get('username'):
+        return
+    # Resolve real username (guest → guest_IP)
+    username = session['username']
+    if username == 'guest':
+        username = f"guest_{request.remote_addr.replace('.', '')}"
+    with psycopg.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT points FROM users WHERE username = %s", (username,))
+            row = cur.fetchone()
+            if not row or row[0] <= 0:
+                session.clear()
+                if username.startswith('guest_'):
+                    flash("You have run out of click points and your guest account has been removed.", "error")
+                else:
+                    flash("You have run out of click points. Email sales@santoelectronics.com to top up your account.", "error")
+                return redirect(url_for('erate.dashboard'))
+            new_points = row[0] - 1
+            cur.execute("UPDATE users SET points = %s WHERE username = %s", (new_points, username))
+            conn.commit()
 
 # === SQL INSERT (70 columns) ===
 INSERT_SQL = '''
@@ -319,7 +342,7 @@ pop_data = {
     "Franklin Park, IL": (41.92852, -87.859),
     "Salina, KS": (38.827668, -97.595326),
     "Sedalia, MO": (38.69839, -93.26415),
-    "St. Jacob, IL": (38.718548, -89.768579),
+    "/St. Jacob, IL": (38.718548, -89.768579),
     "Shelbina, MO": (39.70016, -92.05248),
     "Springfield, MO": (37.208957, -93.292353),
     "Springfield, IL": (39.7817, -89.6501),
@@ -427,6 +450,7 @@ _load_kmz()
 # === ENHANCED BBMap API ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
+    deduct_point()  # DEDUCT ON BBMAP
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
     try:
         with conn.cursor() as cur:
@@ -505,6 +529,10 @@ def dashboard():
             next_offset=0
         )
 
+    # DEDUCT POINT ON FILTER
+    if request.args.get('state') or request.args.get('modified_after'):
+        deduct_point()
+
     state_filter = request.args.get('state', '').strip().upper()
     modified_after_str = request.args.get('modified_after', '').strip()
     offset = max(int(request.args.get('offset', 0)), 0)
@@ -532,7 +560,7 @@ def dashboard():
             '''
             params = []
             if where_clauses:
-                sql += ' WHERE ' + ' AND '.join(where_clauses)
+                sql += ' WHERE ' + ' AND '..join(where_clauses)
                 params.extend(count_params)
             sql += ' ORDER BY last_modified_datetime DESC, app_number LIMIT %s OFFSET %s'
             params.extend([limit + 1, offset])
@@ -572,6 +600,7 @@ def dashboard():
 # === APPLICANT DETAILS API ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
+    deduct_point()  # DEDUCT ON DETAILS
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
     try:
         with conn.cursor() as cur:
@@ -903,11 +932,13 @@ def admin():
                         return redirect(url_for('erate.admin'))
                     cur.execute(
                         "INSERT INTO users (username, password, user_type, points) VALUES (%s, %s, %s, %s)",
-                        (username, hash_password(password), 'Member', 0)
+                        (username, hash_password(password), 'Member', 100)
                     )
                     conn.commit()
-            flash("Registered! You can now login.", "success")
-            return redirect(url_for('erate.admin'))
+            session['username'] = username
+            session['is_santo'] = (username == 'santo')
+            flash(f"Welcome, {username}! You have 100 points.", "success")
+            return redirect(url_for('erate.dashboard'))  # DIRECT TO DASHBOARD
 
         elif action == 'login':
             username = request.form['username'].strip()
@@ -988,15 +1019,21 @@ def admin():
 
 @erate_bp.route('/set_guest', methods=['POST'])
 def set_guest():
-    session['username'] = 'guest'  # ← ALWAYS SHOW "guest"
-    session['is_santo'] = False
     guest_ip_name = f"guest_{request.remote_addr.replace('.', '')}"
+    session['username'] = 'guest'  # UI shows "guest"
+    session['is_santo'] = False
     with psycopg.connect(DATABASE_URL) as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO users (username, user_type, ip_address, points) VALUES (%s, %s, %s, %s) ON CONFLICT (username) DO NOTHING",
-                (guest_ip_name, 'Guest', request.remote_addr, 0)
-            )
+            cur.execute("SELECT points FROM users WHERE username = %s", (guest_ip_name,))
+            row = cur.fetchone()
+            if not row:
+                cur.execute(
+                    "INSERT INTO users (username, user_type, ip_address, points) VALUES (%s, %s, %s, %s)",
+                    (guest_ip_name, 'Guest', request.remote_addr, 25)
+                )
+            elif row[0] <= 0:
+                flash("Guest account expired. Please register for more access.", "error")
+                return redirect(url_for('erate.dashboard'))
             conn.commit()
     return redirect(url_for('erate.dashboard'))
 
