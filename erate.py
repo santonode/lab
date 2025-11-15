@@ -990,3 +990,8 @@ def set_guest():
             )
             conn.commit()
     return '', 204
+
+# === EADMIN ROUTE ===
+@erate_bp.route('/admin')
+def eadmin():
+    return render_template('eadmin.html')
