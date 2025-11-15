@@ -65,13 +65,34 @@
             box-shadow: 0 4px 20px rgba(0,0,0,0.1);
             flex: 1;
         }
-        h1 {
+        .header {
+            background: var(--primary);
+            color: white;
+            padding: 1rem;
             text-align: center;
-            color: var(--primary);
-            margin: 0 0 15px;
-            font-weight: 600;
-            font-size: 1.8rem;
             position: relative;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 1.8rem;
+            font-weight: 600;
+        }
+        .user-info {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #fff;
+            text-decoration: none;
+        }
+        .user-info:hover {
+            text-decoration: underline;
         }
         .logout {
             position: absolute;
@@ -315,7 +336,9 @@
             .footer-links { padding: 15px; }
             .footer-links a { display: block; margin: 8px 0; }
             #map-container { height: 300px; }
-            .logout { font-size: 0.8rem; right: 0.5rem; }
+            .user-info, .logout { font-size: 0.8rem; }
+            .user-info { left: 0.5rem; }
+            .logout { right: 0.5rem; }
         }
     </style>
 </head>
@@ -325,11 +348,16 @@
         <div class="spinner"></div>
     </div>
     <div class="container">
-        <h1>E-Rate Dashboard
+        <div class="header">
             {% if session.username %}
-                <a href="{{ url_for('erate.logout') }}" class="logout">Logout ({{ session.username }})</a>
+                <span class="user-info">{{ session.username }}</span>
             {% endif %}
-        </h1>
+            <h1>E-Rate Dashboard</h1>
+            {% if session.username %}
+                <a href="{{ url_for('erate.logout') }}" class="logout">Logout</a>
+            {% endif %}
+        </div>
+
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -337,6 +365,7 @@
                 {% endfor %}
             {% endif %}
         {% endwith %}
+
         <div class="filters">
             <form method="get" style="display: contents;" id="filter-form">
                 <label>State: <input type="text" name="state" value="{{ filters.state|default('') }}" maxlength="2" placeholder="KS"></label>
@@ -345,7 +374,9 @@
                 <a href="{{ url_for('erate.dashboard') }}" class="btn btn-secondary">Reset</a>
             </form>
         </div>
+
         <p class="summary">Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</p>
+
         <table>
             <thead>
                 <tr>
@@ -381,17 +412,20 @@
                 {% endif %}
             </tbody>
         </table>
+
         {% if has_more|default(false) %}
         <div class="pagination">
             <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&offset={{ next_offset|default(0) }}" class="load-more">Load More (+)</a>
         </div>
         {% endif %}
     </div>
+
     <!-- FOOTER LINKS -->
     <div class="footer-links">
         <a href="{{ url_for('erate.extract_csv') }}">Extract CSV</a>
         <a href="{{ url_for('erate.import_interactive') }}">Resume Import</a>
     </div>
+
     <!-- DETAILS MODAL -->
     <div class="modal" id="detail-modal">
         <div class="modal-content">
@@ -410,6 +444,7 @@
             </div>
         </div>
     </div>
+
     <!-- BLUEBIRD MODAL -->
     <div class="modal" id="bbmap-modal">
         <div class="modal-content">
@@ -433,6 +468,7 @@
             </div>
         </div>
     </div>
+
     <!-- MAP MODAL -->
     <div class="modal" id="map-modal">
         <div class="modal-content">
@@ -445,6 +481,7 @@
             </div>
         </div>
     </div>
+
     <script>
         const form = document.getElementById('filter-form');
         const overlay = document.getElementById('loading');
@@ -578,8 +615,8 @@
                     const latDelta = (radiusMiles / earthRadiusMiles) * (180 / Math.PI);
                     const lngDelta = latDelta / Math.cos(lat * Math.PI / 180);
                     const bounds = L.latLngBounds(
-                        [lat - latDelta, lat - lngDelta],
-                        [lat + latDelta, lat + lngDelta]
+                        [lat - latDelta, lng - lngDelta],
+                        [lat + latDelta, lng + lngDelta]
                     );
                     map.fitBounds(bounds);
                     // Auto-open popup after zoom
