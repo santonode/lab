@@ -1,7 +1,7 @@
-# erate.py — FINAL: Bluebird Fiber Routes + 223 PoP Distance + KMZ Map
+# erate.py — FINAL: Bluebird Fiber Routes + 223 PoP Distance + KMZ Map + FULL ADMIN AUTH
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
-    send_file, flash, current_app, jsonify, Markup
+    send_file, flash, current_app, jsonify, Markup, session
 )
 import csv
 import os
@@ -14,7 +14,8 @@ import traceback
 from datetime import datetime
 from math import radians, cos, sin, sqrt, atan2
 import zipfile
-import xml.etree.ElementTree as ET  # ← FIXED: Use ElementTree, not fastkml
+import xml.etree.ElementTree as ET
+import hashlib
 
 # === LOGGING ===
 LOG_FILE = os.path.join(os.path.dirname(__file__), "import.log")
@@ -367,10 +368,9 @@ def get_bluebird_distance(address):
 
 # === KMZ LOADER: BULLETPROOF WITH ElementTree ===
 KMZ_PATH = os.path.join(os.path.dirname(__file__), "BBN Map KMZ 122023.kmz")
-KMZ_FEATURES = []  # PoPs
-KMZ_ROUTES = []    # Fiber lines
+KMZ_FEATURES = [] # PoPs
+KMZ_ROUTES = [] # Fiber lines
 KMZ_LOADED = False
-
 def _load_kmz():
     global KMZ_FEATURES, KMZ_ROUTES, KMZ_LOADED
     if KMZ_LOADED:
@@ -411,7 +411,7 @@ def _load_kmz():
                     if len(parts) >= 2:
                         try:
                             lon, lat = float(parts[0]), float(parts[1])
-                            coords.append([lat, lon])  # [LAT, LNG] for Leaflet
+                            coords.append([lat, lon]) # [LAT, LNG] for Leaflet
                         except ValueError:
                             continue
                 if len(coords) > 1:
@@ -422,7 +422,6 @@ def _load_kmz():
         log("Traceback: %s", traceback.format_exc())
     finally:
         KMZ_LOADED = True
-
 _load_kmz()
 
 # === ENHANCED BBMap API ===
@@ -472,11 +471,11 @@ def bbmap(app_number):
                 if dist < min_dist_kmz:
                     min_dist_kmz = dist
                     nearest_kmz_pop = pop['name']
-                    nearest_kmz_coords = [pop['lat'], pop['lon']]  # [LAT, LNG]
+                    nearest_kmz_coords = [pop['lat'], pop['lon']] # [LAT, LNG]
         return jsonify({
             "entity_name": entity_name,
             "address": full_address,
-            "applicant_coords": [lat, lon] if lat and lon else None,  # ← FIXED: [LAT, LNG]
+            "applicant_coords": [lat, lon] if lat and lon else None, # ← FIXED: [LAT, LNG]
             "pop_city": dist_info['pop_city'],
             "distance": f"{dist_info['distance']:.1f} miles" if dist_info['distance'] != float('inf') else "N/A",
             "coverage": dist_info['coverage'],
@@ -859,3 +858,135 @@ def reset_import():
     })
     flash("Import reset.", "success")
     return redirect(url_for('erate.import_interactive'))
+
+# === AUTH SYSTEM (ADD TO END) ===
+from flask import session, request, flash, redirect, url_for
+import hashlib
+
+def hash_password(pw):
+    return hashlib.sha256(pw.encode()).hexdigest()
+
+@erate_bp.before_request
+def load_user():
+    if 'username' not in session:
+        session['username'] = None
+        session['is_santo'] = False
+
+@erate_bp.route('/admin', methods=['GET', 'POST'])
+def admin():
+    if request.args.get('logout'):
+        session.clear()
+        flash("Logged out", "success")
+        return redirect(url_for('erate.admin'))
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'register':
+            username = request.form['username'].strip()
+            password = request.form['password']
+            if len(username) < 3 or len(password) < 4:
+                flash("Username ≥3, Password ≥4", "error")
+                return redirect(url_for('erate.admin'))
+            with psycopg.connect(DATABASE_URL) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT id FROM users WHERE username = %s", (username,))
+                    if cur.fetchone():
+                        flash("Username taken", "error")
+                        return redirect(url_for('erate.admin'))
+                    cur.execute(
+                        "INSERT INTO users (username, password, user_type, points) VALUES (%s, %s, %s, %s)",
+                        (username, hash_password(password), 'Member', 0)
+                    )
+                    conn.commit()
+            flash("Registered! You can now login.", "success")
+            return redirect(url_for('erate.admin'))
+
+        elif action == 'login':
+            username = request.form['username'].strip()
+            password = request.form['password']
+            with psycopg.connect(DATABASE_URL) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT password FROM users WHERE username = %s", (username,))
+                    row = cur.fetchone()
+                    if row and row[0] == hash_password(password):
+                        session['username'] = username
+                        session['is_santo'] = (username == 'santo')
+                        flash(f"Welcome, {username}!", "success")
+                    else:
+                        flash("Invalid login", "error")
+            return redirect(url_for('erate.admin'))
+
+        elif 'admin_pass' in request.form:
+            if request.form['admin_pass'] == os.getenv('ADMIN_PASS', 'santo123'):
+                session['username'] = 'santo'
+                session['is_santo'] = True
+                flash("SANTO ADMIN ACCESS GRANTED", "success")
+            else:
+                flash("Invalid admin password", "error")
+            return redirect(url_for('erate.admin'))
+
+        if session.get('is_santo'):
+            if 'delete_user' in request.form:
+                user_id = request.form['delete_user']
+                with psycopg.connect(DATABASE_URL) as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+                        conn.commit()
+                flash("User deleted", "success")
+
+            elif 'edit_user_id' in request.form:
+                user_id = request.form['edit_user_id']
+                username = request.form['new_username']
+                password = request.form['new_password']
+                points = request.form['new_points']
+                user_type = request.form['new_user_type']
+                with psycopg.connect(DATABASE_URL) as conn:
+                    with conn.cursor() as cur:
+                        if password:
+                            cur.execute(
+                                "UPDATE users SET username=%s, password=%s, points=%s, user_type=%s WHERE id=%s",
+                                (username, hash_password(password), points, user_type, user_id)
+                            )
+                        else:
+                            cur.execute(
+                                "UPDATE users SET username=%s, points=%s, user_type=%s WHERE id=%s",
+                                (username, points, user_type, user_id)
+                            )
+                        conn.commit()
+                flash("User updated", "success")
+
+            elif 'add_user' in request.form:
+                username = request.form['username']
+                password = request.form['password']
+                user_type = request.form['user_type']
+                with psycopg.connect(DATABASE_URL) as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "INSERT INTO users (username, password, user_type, points) VALUES (%s, %s, %s, %s)",
+                            (username, hash_password(password), user_type, 0)
+                        )
+                        conn.commit()
+                flash("User added", "success")
+
+    users = []
+    if session.get('is_santo'):
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id, username, password, user_type, points FROM users ORDER BY id")
+                users = [dict(zip(['id', 'username', 'password', 'user_type', 'points'], row)) for row in cur.fetchall()]
+
+    return render_template('eadmin.html', users=users, session=session)
+
+@erate_bp.route('/set_guest', methods=['POST'])
+def set_guest():
+    guest_name = f"guest_{request.remote_addr.replace('.', '')}"
+    session['username'] = guest_name
+    session['is_santo'] = False
+    with psycopg.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO users (username, user_type, ip_address, points) VALUES (%s, %s, %s, %s) ON CONFLICT (username) DO NOTHING",
+                (guest_name, 'Guest', request.remote_addr, 0)
+            )
+            conn.commit()
+    return '', 204
