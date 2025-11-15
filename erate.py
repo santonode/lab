@@ -859,10 +859,7 @@ def reset_import():
     flash("Import reset.", "success")
     return redirect(url_for('erate.import_interactive'))
 
-# === AUTH SYSTEM (ADD TO END) ===
-from flask import session, request, flash, redirect, url_for
-import hashlib
-
+# === AUTH SYSTEM + GUEST → DASHBOARD + LOGOUT ===
 def hash_password(pw):
     return hashlib.sha256(pw.encode()).hexdigest()
 
@@ -877,7 +874,7 @@ def admin():
     if request.args.get('logout'):
         session.clear()
         flash("Logged out", "success")
-        return redirect(url_for('erate.admin'))
+        return redirect(url_for('erate.dashboard'))
 
     if request.method == 'POST':
         action = request.form.get('action')
@@ -972,7 +969,7 @@ def admin():
     if session.get('is_santo'):
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT id, username, password, user_type, points FROM users ORDER BY id")
+                cur.execute("SELECT id, username, COALESCE(password, ''), user_type, points FROM users ORDER BY id")
                 users = [dict(zip(['id', 'username', 'password', 'user_type', 'points'], row)) for row in cur.fetchall()]
 
     return render_template('eadmin.html', users=users, session=session)
@@ -989,9 +986,10 @@ def set_guest():
                 (guest_name, 'Guest', request.remote_addr, 0)
             )
             conn.commit()
-    return '', 204
+    return redirect(url_for('erate.dashboard'))
 
-# === EADMIN ROUTE ===
-@erate_bp.route('/admin')
-def eadmin():
-    return render_template('eadmin.html')
+@erate_bp.route('/logout')
+def logout():
+    session.clear()
+    flash("Logged out", "success")
+    return redirect(url_for('erate.dashboard'))
