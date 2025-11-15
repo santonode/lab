@@ -863,7 +863,8 @@ def _import_all_background(app):
                         ([r['Application Number'] for r in batch],)
                     )
                     existing = {row[0] for row in cur.fetchall()}
-                    filtered_batch = [r for r in batch if r['Application Number Number'] not in existing]
+                    # FIXED: 'Application Number' (not 'Application Number Number')
+                    filtered_batch = [r for r in batch if r['Application Number'] not in existing]
                     if filtered_batch:
                         try:
                             cur.executemany(INSERT_SQL, [_row_to_tuple(r) for r in filtered_batch])
@@ -888,6 +889,7 @@ def _import_all_background(app):
                     ([r['Application Number'] for r in batch],)
                 )
                 existing = {row[0] for row in cur.fetchall()}
+                # FIXED: 'Application Number'
                 filtered_batch = [r for r in batch if r['Application Number'] not in existing]
                 if filtered_batch:
                     try:
