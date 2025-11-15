@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>E-Rate Dashboard</title>
+    <title>E-Rate</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -410,7 +410,7 @@
                     <span class="points" id="points-display">Loading...</span>
                 </span>
             {% endif %}
-            <h1>E-Rate Dashboard</h1>
+            <h1>E-Rate</h1>
             {% if session.username %}
                 <a href="{{ url_for('erate.logout') }}" class="logout">Logout</a>
             {% endif %}
