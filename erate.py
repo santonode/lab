@@ -73,24 +73,21 @@ def deduct_point():
     # Resolve real username (guest → guest_IP)
     username = session['username']
     if username == 'guest':
-        # Proxy-safe IP (Render, etc.)
         ip = request.headers.get('X-Forwarded-For', request.remote_addr)
         if ip:
             ip = ip.split(',')[0].strip()
         else:
             ip = request.remote_addr or 'unknown'
         username = f"guest_{ip.replace('.', '')}"
+    
     with psycopg.connect(DATABASE_URL) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT points FROM users WHERE username = %s", (username,))
             row = cur.fetchone()
             if not row or row[0] <= 0:
                 session.clear()
-                if username.startswith('guest_'):
-                    flash("You have run out of click points and your guest account has been removed.", "error")
-                else:
-                    flash("You have run out of click points. Email sales@santoelectronics.com to top up your account.", "error")
-                return redirect(url_for('erate.dashboard'))
+                # NO FLASH — JS will handle via /points
+                return
             new_points = row[0] - 1
             cur.execute("UPDATE users SET points = %s WHERE username = %s", (new_points, username))
             conn.commit()
@@ -117,6 +114,17 @@ def points():
     except Exception as e:
         log("Points API error: %s", e)
         return jsonify({"points": 0})
+
+# === /out-of-points ENDPOINT (FOR JS POPUP) ===
+@erate_bp.route('/out-of-points')
+def out_of_points():
+    if not session.get('username'):
+        return jsonify({"message": "Session expired."})
+    username = session['username']
+    if username == 'guest':
+        return jsonify({"message": "You have run out of click points and your guest account has been removed."})
+    else:
+        return jsonify({"message": "You have run out of click points. Email sales@santoelectronics.com to top up your account."})
 
 # === SQL INSERT (70 columns) ===
 INSERT_SQL = '''
@@ -338,7 +346,7 @@ pop_data = {
     "Mound City, MO": (40.130033, -95.240698),
     "Mexico, MO": (39.161642, -91.897795),
     "Millington, TN": (35.341761, -89.900522),
-    "Milan, MO": (40.210885, -93_93.113148),
+    "Milan, MO": (40.210885, -93.113148),
     "Marshall, MO": (39.036138, -93.196223),
     "Memphis, MO": (40.457545, -92.167165),
     "Memphis, TN": (35.07413, -90.06514),
@@ -587,7 +595,7 @@ def dashboard():
             '''
             params = []
             if where_clauses:
-                sql += ' WHERE ' + ' AND '.join(where_clauses)  # ← FIXED
+                sql += ' WHERE ' + ' AND '.join(where_clauses)
                 params.extend(count_params)
             sql += ' ORDER BY last_modified_datetime DESC, app_number LIMIT %s OFFSET %s'
             params.extend([limit + 1, offset])
@@ -855,7 +863,7 @@ def _import_all_background(app):
                         ([r['Application Number'] for r in batch],)
                     )
                     existing = {row[0] for row in cur.fetchall()}
-                    filtered_batch = [r for r in batch if r['Application Number'] not in existing]
+                    filtered_batch = [r for r in batch if r['Application Number Number'] not in existing]
                     if filtered_batch:
                         try:
                             cur.executemany(INSERT_SQL, [_row_to_tuple(r) for r in filtered_batch])
@@ -1064,8 +1072,8 @@ def set_guest():
                     (guest_ip_name, 'Guest', ip, 25)
                 )
             elif row[0] <= 0:
-                flash("Guest account expired. Please register for more access.", "error")
-                return redirect(url_for('erate.dashboard'))
+                # Let JS show popup — no flash
+                pass
             conn.commit()
     return redirect(url_for('erate.dashboard'))
 
