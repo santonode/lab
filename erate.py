@@ -920,6 +920,7 @@ def admin():
                         session['username'] = username
                         session['is_santo'] = (username == 'santo')
                         flash(f"Welcome, {username}!", "success")
+                        return redirect(url_for('erate.dashboard'))  # DIRECT TO DASHBOARD
                     else:
                         flash("Invalid login", "error")
             return redirect(url_for('erate.admin'))
