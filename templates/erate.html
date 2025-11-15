@@ -94,6 +94,12 @@
         .user-info:hover {
             text-decoration: underline;
         }
+        .points {
+            margin-left: 6px;
+            font-size: 0.8rem;
+            opacity: 0.9;
+            font-weight: 400;
+        }
         .logout {
             position: absolute;
             right: 1rem;
@@ -339,6 +345,7 @@
             .user-info, .logout { font-size: 0.8rem; }
             .user-info { left: 0.5rem; }
             .logout { right: 0.5rem; }
+            .points { font-size: 0.7rem; }
         }
     </style>
 </head>
@@ -356,7 +363,6 @@
             </div>
         </div>
     </div>
-
     <!-- REGISTER MODAL -->
     <div class="modal" id="registerModal" style="display:none;">
         <div class="modal-content">
@@ -374,7 +380,6 @@
             </div>
         </div>
     </div>
-
     <!-- LOGIN MODAL -->
     <div class="modal" id="loginModal" style="display:none;">
         <div class="modal-content">
@@ -392,16 +397,17 @@
             </div>
         </div>
     </div>
-
     <!-- LOADING OVERLAY -->
     <div class="overlay" id="loading">
         <div class="spinner"></div>
     </div>
-
     <div class="container">
         <div class="header">
             {% if session.username %}
-                <span class="user-info">{{ session.username }}</span>
+                <span class="user-info">
+                    {{ session.username }}
+                    <span class="points" id="points-display">Loading...</span>
+                </span>
             {% endif %}
             <h1>E-Rate Dashboard</h1>
             {% if session.username %}
@@ -551,10 +557,31 @@
             document.getElementById(type + 'Modal').style.display = 'none';
         }
 
-        // Show auth modal on first load if not logged in
+        // === POINT COUNTER ===
+        function updatePoints() {
+            fetch('/erate/points')
+                .then(r => r.json())
+                .then(data => {
+                    const el = document.getElementById('points-display');
+                    if (el) {
+                        el.textContent = `(${data.points} pts)`;
+                        if (data.points <= 5) el.style.color = '#ffc107';
+                        if (data.points <= 0) el.style.color = '#dc3545';
+                    }
+                })
+                .catch(() => {
+                    const el = document.getElementById('points-display');
+                    if (el) el.textContent = '(?)';
+                });
+        }
+
+        // Update points on load and after every click
         window.addEventListener('load', () => {
             {% if not session.username %}
                 document.getElementById('authModal').style.display = 'flex';
+            {% else %}
+                updatePoints();
+                setInterval(updatePoints, 10000); // Refresh every 10s
             {% endif %}
         });
 
@@ -571,6 +598,7 @@
 
         // === showDetails() ===
         async function showDetails(appNumber) {
+            updatePoints();
             currentAppNumber = appNumber;
             body.classList.add('loading');
             overlay.classList.add('show');
@@ -591,6 +619,7 @@
 
         // === checkBluebird() ===
         async function checkBluebird(appNumber) {
+            updatePoints();
             body.classList.add('loading');
             overlay.classList.add('show');
             bbmapBody.innerHTML = 'Searching Bluebird Fiber...';
@@ -617,6 +646,7 @@
 
         // === openMapModal() ===
         async function openMapModal(appNumber, dbLat, dbLon) {
+            updatePoints();
             currentAppNumber = appNumber;
             body.classList.add('loading');
             overlay.classList.add('show');
@@ -824,7 +854,11 @@
         });
 
         // Loading overlay on form submit / pagination
-        form.addEventListener('submit', () => { body.classList.add('loading'); overlay.classList.add('show'); });
+        form.addEventListener('submit', () => { 
+            body.classList.add('loading'); 
+            overlay.classList.add('show'); 
+            updatePoints();
+        });
         window.addEventListener('load', () => { body.classList.remove('loading'); overlay.classList.remove('show'); });
         document.querySelectorAll('a').forEach(link => {
             link.addEventListener('click', (e) => {
@@ -832,6 +866,7 @@
                 if (href && href.includes('?')) {
                     body.classList.add('loading');
                     overlay.classList.add('show');
+                    updatePoints();
                 }
             });
         });
