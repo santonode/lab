@@ -149,7 +149,7 @@
     <!-- REGISTER MODAL -->
     <div class="modal-overlay" id="registerModal" style="display:none;">
         <div class="modal">
-            <button class="close-btn" onclick="closeModal('register')">×</button>
+            <button class="close-btn" onclick="closeModal('register')">x</button>
             <h3>Register</h3>
             <form method="POST" action="{{ url_for('erate.admin') }}">
                 <input type="hidden" name="action" value="register">
@@ -163,7 +163,7 @@
     <!-- LOGIN MODAL -->
     <div class="modal-overlay" id="loginModal" style="display:none;">
         <div class="modal">
-            <button class="close-btn" onclick="closeModal('login')">×</button>
+            <button class="close-btn" onclick="closeModal('login')">x</button>
             <h3>Login</h3>
             <form method="POST" action="{{ url_for('erate.admin') }}">
                 <input type="hidden" name="action" value="login">
@@ -177,7 +177,7 @@
     <div class="header">
         <h1>E-Rate Admin</h1>
         {% if session.username %}
-            <a href="{{ url_for('erate.admin') }}?logout=1" class="logout">Logout</a>
+            <a href="{{ url_for('erate.logout') }}" class="logout">Logout</a>
         {% endif %}
     </div>
 
@@ -219,7 +219,13 @@
                             <tr>
                                 <td>{{ user.id }}</td>
                                 <td>{{ user.username }}</td>
-                                <td style="font-family:monospace;font-size:0.8rem;">{{ user.password[:16] }}...</td>
+                                <td style="font-family:monospace;font-size:0.8rem;">
+                                    {% if user.password %}
+                                        {{ user.password[:16] }}...
+                                    {% else %}
+                                        <em>[none]</em>
+                                    {% endif %}
+                                </td>
                                 <td>{{ user.user_type }}</td>
                                 <td>{{ user.points }}</td>
                                 <td>
@@ -268,10 +274,10 @@
     <script>
         function continueAsGuest() {
             fetch('/erate/set_guest', { method: 'POST' })
-                .then(() => location.reload());
+                .then(() => location.href = '/erate/');
         }
         function showRegister() {
-            document.getElementBy,document.getElementById('authModal').style.display = 'none';
+            document.getElementById('authModal').style.display = 'none';
             document.getElementById('registerModal').style.display = 'flex';
         }
         function showLogin() {
