@@ -73,7 +73,13 @@ def deduct_point():
     # Resolve real username (guest → guest_IP)
     username = session['username']
     if username == 'guest':
-        username = f"guest_{request.remote_addr.replace('.', '')}"
+        # Proxy-safe IP (Render, etc.)
+        ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        if ip:
+            ip = ip.split(',')[0].strip()
+        else:
+            ip = request.remote_addr or 'unknown'
+        username = f"guest_{ip.replace('.', '')}"
     with psycopg.connect(DATABASE_URL) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT points FROM users WHERE username = %s", (username,))
@@ -88,6 +94,29 @@ def deduct_point():
             new_points = row[0] - 1
             cur.execute("UPDATE users SET points = %s WHERE username = %s", (new_points, username))
             conn.commit()
+
+# === /points ENDPOINT (LIVE COUNTER) ===
+@erate_bp.route('/points')
+def points():
+    if not session.get('username'):
+        return jsonify({"points": 0})
+    username = session['username']
+    if username == 'guest':
+        ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        if ip:
+            ip = ip.split(',')[0].strip()
+        else:
+            ip = request.remote_addr or 'unknown'
+        username = f"guest_{ip.replace('.', '')}"
+    try:
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT points FROM users WHERE username = %s", (username,))
+                row = cur.fetchone()
+                return jsonify({"points": row[0] if row and row[0] is not None else 0})
+    except Exception as e:
+        log("Points API error: %s", e)
+        return jsonify({"points": 0})
 
 # === SQL INSERT (70 columns) ===
 INSERT_SQL = '''
@@ -309,7 +338,7 @@ pop_data = {
     "Mound City, MO": (40.130033, -95.240698),
     "Mexico, MO": (39.161642, -91.897795),
     "Millington, TN": (35.341761, -89.900522),
-    "Milan, MO": (40.210885, -93.113148),
+    "Milan, MO": (40.210885, -93_93.113148),
     "Marshall, MO": (39.036138, -93.196223),
     "Memphis, MO": (40.457545, -92.167165),
     "Memphis, TN": (35.07413, -90.06514),
@@ -450,7 +479,7 @@ _load_kmz()
 # === ENHANCED BBMap API ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
-    deduct_point()  # DEDUCT ON BBMAP
+    deduct_point() # DEDUCT ON BBMAP
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
     try:
         with conn.cursor() as cur:
@@ -528,11 +557,9 @@ def dashboard():
             has_more=False,
             next_offset=0
         )
-
     # DEDUCT POINT ON FILTER
     if request.args.get('state') or request.args.get('modified_after'):
         deduct_point()
-
     state_filter = request.args.get('state', '').strip().upper()
     modified_after_str = request.args.get('modified_after', '').strip()
     offset = max(int(request.args.get('offset', 0)), 0)
@@ -560,7 +587,7 @@ def dashboard():
             '''
             params = []
             if where_clauses:
-                sql += ' WHERE ' + ' AND '.join(where_clauses)  # ← FIXED: ' AND '.join
+                sql += ' WHERE ' + ' AND '.join(where_clauses)  # ← FIXED
                 params.extend(count_params)
             sql += ' ORDER BY last_modified_datetime DESC, app_number LIMIT %s OFFSET %s'
             params.extend([limit + 1, offset])
@@ -600,7 +627,7 @@ def dashboard():
 # === APPLICANT DETAILS API ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
-    deduct_point()  # DEDUCT ON DETAILS
+    deduct_point() # DEDUCT ON DETAILS
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
     try:
         with conn.cursor() as cur:
@@ -938,7 +965,7 @@ def admin():
             session['username'] = username
             session['is_santo'] = (username == 'santo')
             flash(f"Welcome, {username}! You have 100 points.", "success")
-            return redirect(url_for('erate.dashboard'))  # DIRECT TO DASHBOARD
+            return redirect(url_for('erate.dashboard'))
 
         elif action == 'login':
             username = request.form['username'].strip()
@@ -951,7 +978,7 @@ def admin():
                         session['username'] = username
                         session['is_santo'] = (username == 'santo')
                         flash(f"Welcome, {username}!", "success")
-                        return redirect(url_for('erate.dashboard'))  # DIRECT TO DASHBOARD
+                        return redirect(url_for('erate.dashboard'))
                     else:
                         flash("Invalid login", "error")
             return redirect(url_for('erate.admin'))
@@ -1019,8 +1046,13 @@ def admin():
 
 @erate_bp.route('/set_guest', methods=['POST'])
 def set_guest():
-    guest_ip_name = f"guest_{request.remote_addr.replace('.', '')}"
-    session['username'] = 'guest'  # UI shows "guest"
+    ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+    if ip:
+        ip = ip.split(',')[0].strip()
+    else:
+        ip = request.remote_addr or 'unknown'
+    guest_ip_name = f"guest_{ip.replace('.', '')}"
+    session['username'] = 'guest'
     session['is_santo'] = False
     with psycopg.connect(DATABASE_URL) as conn:
         with conn.cursor() as cur:
@@ -1029,7 +1061,7 @@ def set_guest():
             if not row:
                 cur.execute(
                     "INSERT INTO users (username, user_type, ip_address, points) VALUES (%s, %s, %s, %s)",
-                    (guest_ip_name, 'Guest', request.remote_addr, 25)
+                    (guest_ip_name, 'Guest', ip, 25)
                 )
             elif row[0] <= 0:
                 flash("Guest account expired. Please register for more access.", "error")
