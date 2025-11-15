@@ -475,7 +475,7 @@ def bbmap(app_number):
         return jsonify({
             "entity_name": entity_name,
             "address": full_address,
-            "applicant_coords": [lat, lon] if lat and lon else None, # ← FIXED: [LAT, LNG]
+            "applicant_coords": [lat, lon] if lat and lon else None,
             "pop_city": dist_info['pop_city'],
             "distance": f"{dist_info['distance']:.1f} miles" if dist_info['distance'] != float('inf') else "N/A",
             "coverage": dist_info['coverage'],
@@ -490,10 +490,21 @@ def bbmap(app_number):
     finally:
         conn.close()
 
-# === DASHBOARD ===
+# === DASHBOARD (WITH AUTH CHECK) ===
 @erate_bp.route('/')
 def dashboard():
     log("Dashboard accessed")
+    # If not logged in → show blank page with auth modal in HTML
+    if not session.get('username'):
+        return render_template('erate.html',
+            table_data=[],
+            total_count=0,
+            total_filtered=0,
+            filters={},
+            has_more=False,
+            next_offset=0
+        )
+
     state_filter = request.args.get('state', '').strip().upper()
     modified_after_str = request.args.get('modified_after', '').strip()
     offset = max(int(request.args.get('offset', 0)), 0)
