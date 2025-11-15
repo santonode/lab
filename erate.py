@@ -988,14 +988,14 @@ def admin():
 
 @erate_bp.route('/set_guest', methods=['POST'])
 def set_guest():
-    guest_name = f"guest_{request.remote_addr.replace('.', '')}"
-    session['username'] = guest_name
+    session['username'] = 'guest'  # ← ALWAYS SHOW "guest"
     session['is_santo'] = False
+    guest_ip_name = f"guest_{request.remote_addr.replace('.', '')}"
     with psycopg.connect(DATABASE_URL) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO users (username, user_type, ip_address, points) VALUES (%s, %s, %s, %s) ON CONFLICT (username) DO NOTHING",
-                (guest_name, 'Guest', request.remote_addr, 0)
+                (guest_ip_name, 'Guest', request.remote_addr, 0)
             )
             conn.commit()
     return redirect(url_for('erate.dashboard'))
