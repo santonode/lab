@@ -719,7 +719,7 @@
             overlay.classList.remove('show');
         }
 
-        // === loadMap() ===
+        // === loadMap() — FNA LINES NOW THICKER ===
         async function loadMap(appNumber, network) {
             const resp = await fetch(`/erate/bbmap/${appNumber}?network=${network}`);
             const data = await resp.json();
@@ -736,8 +736,8 @@
                 if (r.coords.length > 1) {
                     L.polyline(r.coords, { 
                         color: network === 'fna' ? '#dc3545' : '#007bff', 
-                        weight: 3, 
-                        opacity: 0.7 
+                        weight: network === 'fna' ? 4 : 3,  // FNA thicker
+                        opacity: 0.8 
                     })
                         .bindPopup(`<strong>${r.name}</strong>`)
                         .addTo(map);
