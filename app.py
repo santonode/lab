@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 
 # === IMPORTS ===
-from db import init_db_app  # Only init_db_app (includes init_db + teardown)
+from db import init_app  # ← CORRECT: init_app (not init_db_app)
 from erate import erate_bp
 from memes import memes_bp
 
@@ -58,7 +58,7 @@ def root():
     return redirect(url_for('erate.dashboard'))
 
 # === INIT DB ON START ===
-init_db_app(app)  # Calls: init_db() + teardown
+init_app(app)  # ← CORRECT: calls init_db() + teardown
 
 # === GUNICORN HANDLES $PORT — NO app.run() ===
 # DO NOT run Flask dev server in production
