@@ -436,8 +436,8 @@ MAP_DATA = {
     "fna": {"pops": None, "routes": None, "loaded": False}
 }
 
-# === LAZY KMZ LOADER ===
-def _load_kmz(provider):
+# === LAZY KMZ LOADER (FNA: FILTERED BY APPLICANT) ===
+def _load_kmz(provider, applicant_coords=None):
     global MAP_DATA
     if MAP_DATA[provider]["loaded"]:
         return
@@ -450,7 +450,7 @@ def _load_kmz(provider):
         return
 
     try:
-        log("Loading KMZ [%s] from disk...", provider.upper())
+        log("Loading KMZ [%s]...", provider.upper())
         with zipfile.ZipFile(path, 'r') as kmz:
             kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
             if not kml_files:
@@ -468,6 +468,19 @@ def _load_kmz(provider):
         routes = []
         pops_count = 0
         routes_count = 0
+
+        # Haversine distance
+        def haversine(lat1, lon1, lat2, lon2):
+            R = 3958.8
+            dlat = radians(lat2 - lat1)
+            dlon = radians(lon2 - lon1)
+            a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+            c = 2 * atan2(sqrt(a), sqrt(1-a))
+            return R * c
+
+        # Only filter FNA routes near applicant
+        filter_radius = 50 if provider == "fna" and applicant_coords else None
+        app_lat, app_lon = (applicant_coords[0], applicant_coords[1]) if applicant_coords else (None, None)
 
         for placemark in root.findall('.//kml:Placemark', ns):
             name_elem = placemark.find('kml:name', ns)
@@ -505,13 +518,21 @@ def _load_kmz(provider):
                             except ValueError:
                                 continue
                     if len(coords) > 1:
+                        # FILTER FNA: only if near applicant
+                        if provider == "fna" and filter_radius and app_lat:
+                            in_range = any(
+                                haversine(app_lat, app_lon, lat, lon) <= filter_radius
+                                for lat, lon in coords
+                            )
+                            if not in_range:
+                                continue
                         routes.append({"name": name, "coords": coords})
                         routes_count += 1
 
         MAP_DATA[provider]["pops"] = pops
         MAP_DATA[provider]["routes"] = routes
         MAP_DATA[provider]["loaded"] = True
-        log("KMZ loaded [%s] – %d PoPs, %d routes", provider.upper(), pops_count, routes_count)
+        log("KMZ loaded [%s] – %d PoPs, %d routes (filtered)", provider.upper(), pops_count, routes_count)
 
     except Exception as e:
         log("KMZ parse error [%s]: %s", provider, e)
@@ -519,16 +540,12 @@ def _load_kmz(provider):
         MAP_DATA[provider]["pops"] = []
         MAP_DATA[provider]["routes"] = []
 
-# === ENHANCED BBMap API (WITH NETWORK SWITCH + LAZY LOAD) ===
+# === ENHANCED BBMap API (WITH NETWORK SWITCH + LAZY LOAD + FNA FILTER) ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
     network = request.args.get('network', 'bluebird')
     if network not in ['bluebird', 'fna']:
         network = 'bluebird'
-
-    # LAZY LOAD KMZ
-    if not MAP_DATA[network]["loaded"]:
-        _load_kmz(network)
 
     deduct_point()
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -545,7 +562,8 @@ def bbmap(app_number):
         full_address = f"{address1 or ''} {address2 or ''}, {city or ''}, {state or ''} {zip_code or ''}".strip()
         lat = float(db_lat) if db_lat else None
         lon = float(db_lon) if db_lon else None
-        dist_info = get_bluebird_distance(full_address)
+
+        # GEOCODE IF NEEDED
         if not (lat and lon):
             try:
                 geocode_resp = requests.get(
@@ -559,6 +577,10 @@ def bbmap(app_number):
                     lat, lon = float(geo[0]['lat']), float(geo[0]['lon'])
             except:
                 lat, lon = None, None
+
+        # LAZY LOAD KMZ WITH FILTER FOR FNA
+        if not MAP_DATA[network]["loaded"]:
+            _load_kmz(network, applicant_coords=[lat, lon] if lat and lon else None)
 
         pops = MAP_DATA[network]["pops"] or []
         routes = MAP_DATA[network]["routes"] or []
@@ -615,7 +637,7 @@ def dashboard():
     state_filter = request.args.get('state', '').strip().upper()
     modified_after_str = request.args.get('modified_after', '').strip()
     text_search = request.args.get('text', '').strip()
-    offset = max(int(request.args.get('offset', 0)), 0)
+    offset = 0
     limit = 10
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10, autocommit=True)
     try:
@@ -870,7 +892,7 @@ def import_interactive():
         })
         thread = threading.Thread(target=_import_all_background, args=(current_app._get_current_object(),))
         thread.daemon = True
-        current_app.config['IMPORT_THREAD'] = thread
+        current_app.config['IMPORT_THREAD'] = thread الل
         thread.start()
         flash("Bulk import started. Check /erate/view-log", "success")
         return redirect(url_for('erate.import_interactive'))
