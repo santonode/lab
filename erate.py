@@ -436,7 +436,7 @@ MAP_DATA = {
     "fna": {"pops": [], "routes": [], "loaded": False}
 }
 
-# === KMZ LOADER: BULLETPROOF WITH ElementTree ===
+# === KMZ LOADER: BULLETPROOF WITH FOLDER SUPPORT + FNA COORD SWAP ===
 def _load_kmz(provider):
     global MAP_DATA
     if MAP_DATA[provider]["loaded"]:
@@ -456,10 +456,13 @@ def _load_kmz(provider):
             kml_data = kmz.read(kml_files[0])
         root = ET.fromstring(kml_data)
         ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+
+        # Search ALL Placemarks (even in nested Folders)
         for placemark in root.findall('.//kml:Placemark', ns):
             name_elem = placemark.find('kml:name', ns)
             name = name_elem.text.strip() if name_elem is not None and name_elem.text else "Unnamed"
-            # Point (PoP)
+
+            # POINT (PoP)
             point = placemark.find('.//kml:Point/kml:coordinates', ns)
             if point is not None and point.text:
                 parts = point.text.strip().split(',')
@@ -469,7 +472,8 @@ def _load_kmz(provider):
                         MAP_DATA[provider]["pops"].append({"name": name, "lon": lon, "lat": lat})
                     except ValueError:
                         pass
-            # LineString (Fiber)
+
+            # LINESTRING (FIBER)
             line = placemark.find('.//kml:LineString/kml:coordinates', ns)
             if line is not None and line.text:
                 coords = []
@@ -478,11 +482,16 @@ def _load_kmz(provider):
                     if len(parts) >= 2:
                         try:
                             lon, lat = float(parts[0]), float(parts[1])
-                            coords.append([lat, lon]) # [LAT, LNG] for Leaflet
+                            # FNA uses [LNG, LAT] → swap to [LAT, LNG]
+                            if provider == "fna":
+                                coords.append([lat, lon])
+                            else:
+                                coords.append([lat, lon])  # Bluebird: already [LAT, LNG]
                         except ValueError:
                             continue
                 if len(coords) > 1:
                     MAP_DATA[provider]["routes"].append({"name": name, "coords": coords})
+
         log("KMZ loaded [%s] – %d PoPs, %d routes", provider.upper(), len(MAP_DATA[provider]["pops"]), len(MAP_DATA[provider]["routes"]))
     except Exception as e:
         log("KMZ parse error [%s]: %s", provider, e)
@@ -602,7 +611,7 @@ def dashboard():
                 where_clauses.append('last_modified_datetime >= %s')
                 count_params.append(modified_after_str)
             if text_search:
-                where_clauses.append("to_tsvector('english', cat2_desc) @@ plain_to_tsquery('english', %s)")
+                where_clauses.append("to_tsvector('english', cat2_desc) @@ plainto_tsquery('english', %s)")
                 count_params.append(text_search)
             if where_clauses:
                 count_sql += ' WHERE ' + ' AND '.join(where_clauses)
