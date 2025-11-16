@@ -892,8 +892,8 @@ def import_interactive():
         })
         thread = threading.Thread(target=_import_all_background, args=(current_app._get_current_object(),))
         thread.daemon = True
-        current_app.config['IMPORT_THREAD'] = thread الل
-        thread.start()
+        current_app.config['IMPORT_THREAD'] = thread
+                thread.start()
         flash("Bulk import started. Check /erate/view-log", "success")
         return redirect(url_for('erate.import_interactive'))
     return render_template('erate_import.html', progress=progress, is_importing=is_importing)
