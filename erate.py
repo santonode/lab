@@ -430,12 +430,13 @@ def get_bluebird_distance(address):
 KMZ_PATH_BLUEBIRD = os.path.join(os.path.dirname(__file__), "BBN Map KMZ 122023.kmz")
 KMZ_PATH_FNA = os.path.join(os.path.dirname(__file__), "AllMemberFiber.kmz")
 
-# === GLOBAL MAP DATA ===
+# === GLOBAL MAP DATA (LAZY LOADED) ===
 MAP_DATA = {
-    "bluebird": {"pops": [], "routes": [], "loaded": False},
-    "fna": {"pops": [], "routes": [], "loaded": False}
+    "bluebird": {"pops": None, "routes": None, "loaded": False},
+    "fna": {"pops": None, "routes": None, "loaded": False}
 }
 
+# === LAZY KMZ LOADER ===
 def _load_kmz(provider):
     global MAP_DATA
     if MAP_DATA[provider]["loaded"]:
@@ -444,18 +445,27 @@ def _load_kmz(provider):
     if not os.path.exists(path):
         log("KMZ not found: %s", path)
         MAP_DATA[provider]["loaded"] = True
+        MAP_DATA[provider]["pops"] = []
+        MAP_DATA[provider]["routes"] = []
         return
+
     try:
+        log("Loading KMZ [%s] from disk...", provider.upper())
         with zipfile.ZipFile(path, 'r') as kmz:
             kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
             if not kml_files:
                 log("No .kml in %s", path)
                 MAP_DATA[provider]["loaded"] = True
+                MAP_DATA[provider]["pops"] = []
+                MAP_DATA[provider]["routes"] = []
                 return
             kml_data = kmz.read(kml_files[0])
+        
         root = ET.fromstring(kml_data)
         ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
+        pops = []
+        routes = []
         pops_count = 0
         routes_count = 0
 
@@ -463,22 +473,21 @@ def _load_kmz(provider):
             name_elem = placemark.find('kml:name', ns)
             name = name_elem.text.strip() if name_elem is not None and name_elem.text else "Unnamed"
 
-            # === POINT (PoP) ===
+            # POINT (PoP)
             point = placemark.find('.//kml:Point/kml:coordinates', ns)
             if point is not None and point.text:
                 parts = point.text.strip().split(',')
                 if len(parts) >= 2:
                     try:
                         lon, lat = float(parts[0]), float(parts[1])
-                        MAP_DATA[provider]["pops"].append({"name": name, "lon": lon, "lat": lat})
+                        pops.append({"name": name, "lon": lon, "lat": lat})
                         pops_count += 1
                     except ValueError:
                         pass
 
-            # === LINESTRING (FIBER) — SUPPORT MultiGeometry + NESTED ===
+            # LINESTRING — SUPPORT MultiGeometry
             line_strings = placemark.findall('.//kml:LineString/kml:coordinates', ns)
             if not line_strings:
-                # Try MultiGeometry → LineString
                 line_strings = placemark.findall('.//kml:MultiGeometry/kml:LineString/kml:coordinates', ns)
 
             for line in line_strings:
@@ -489,34 +498,38 @@ def _load_kmz(provider):
                         if len(parts) >= 2:
                             try:
                                 lon, lat = float(parts[0]), float(parts[1])
-                                # FNA: [LNG, LAT] → swap
                                 if provider == "fna":
-                                    coords.append([lat, lon])
+                                    coords.append([lat, lon])  # FNA: [LNG, LAT] → swap
                                 else:
                                     coords.append([lat, lon])
                             except ValueError:
                                 continue
                     if len(coords) > 1:
-                        MAP_DATA[provider]["routes"].append({"name": name, "coords": coords})
+                        routes.append({"name": name, "coords": coords})
                         routes_count += 1
 
+        MAP_DATA[provider]["pops"] = pops
+        MAP_DATA[provider]["routes"] = routes
+        MAP_DATA[provider]["loaded"] = True
         log("KMZ loaded [%s] – %d PoPs, %d routes", provider.upper(), pops_count, routes_count)
+
     except Exception as e:
         log("KMZ parse error [%s]: %s", provider, e)
-        log("Traceback: %s", traceback.format_exc())
-    finally:
         MAP_DATA[provider]["loaded"] = True
+        MAP_DATA[provider]["pops"] = []
+        MAP_DATA[provider]["routes"] = []
 
-# Load both on startup
-_load_kmz("bluebird")
-_load_kmz("fna")
-
-# === ENHANCED BBMap API (WITH NETWORK SWITCH) ===
+# === ENHANCED BBMap API (WITH NETWORK SWITCH + LAZY LOAD) ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
     network = request.args.get('network', 'bluebird')
     if network not in ['bluebird', 'fna']:
         network = 'bluebird'
+
+    # LAZY LOAD KMZ
+    if not MAP_DATA[network]["loaded"]:
+        _load_kmz(network)
+
     deduct_point()
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
     try:
@@ -547,9 +560,8 @@ def bbmap(app_number):
             except:
                 lat, lon = None, None
 
-        # Use selected network
-        pops = MAP_DATA[network]["pops"]
-        routes = MAP_DATA[network]["routes"]
+        pops = MAP_DATA[network]["pops"] or []
+        routes = MAP_DATA[network]["routes"] or []
 
         min_dist_kmz = float('inf')
         nearest_kmz_pop = None
