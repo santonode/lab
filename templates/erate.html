@@ -719,7 +719,7 @@
             overlay.classList.remove('show');
         }
 
-        // === loadMap() — FNA LINES NOW THICKER ===
+        // === loadMap() — FNA LINES THICKER & OPAQUE ===
         async function loadMap(appNumber, network) {
             const resp = await fetch(`/erate/bbmap/${appNumber}?network=${network}`);
             const data = await resp.json();
@@ -732,25 +732,27 @@
             }).addTo(map);
 
             let applicantMarker = null;
+
             data.routes.forEach(r => {
                 if (r.coords.length > 1) {
-                    L.polyline(r.coords, { 
-                        color: network === 'fna' ? '#dc3545' : '#007bff', 
-                        weight: network === 'fna' ? 4 : 3,  // FNA thicker
-                        opacity: 0.8 
+                    L.polyline(r.coords, {
+                        color: network === 'fna' ? '#dc3545' : '#007bff',
+                        weight: network === 'fna' ? 4 : 3,
+                        opacity: network === 'fna' ? 0.9 : 0.7
                     })
-                        .bindPopup(`<strong>${r.name}</strong>`)
-                        .addTo(map);
+                    .bindPopup(`<strong>${r.name}</strong>`)
+                    .addTo(map);
                 }
             });
+
             data.pops.forEach(p => {
-                L.circleMarker([p.lat, p.lon], { 
-                    radius: 6, 
-                    color: network === 'fna' ? '#dc3545' : '#28a745', 
-                    fillOpacity: 0.8 
+                L.circleMarker([p.lat, p.lon], {
+                    radius: 6,
+                    color: network === 'fna' ? '#dc3545' : '#28a745',
+                    fillOpacity: 0.8
                 })
-                    .bindPopup(`<strong>${p.name}</strong>`)
-                    .addTo(map);
+                .bindPopup(`<strong>${p.name}</strong>`)
+                .addTo(map);
             });
 
             if (data.applicant_coords) {
