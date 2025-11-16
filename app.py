@@ -1,14 +1,16 @@
 # app.py
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, redirect, url_for
 import os
 from datetime import datetime
-from db import init_db, init_app as init_db_app  # REMOVED init_db_pool
+
+# === IMPORTS ===
+from db import init_db_app  # Only init_db_app (includes init_db + teardown)
 from erate import erate_bp
 from memes import memes_bp
 
 # === CREATE APP ===
 app = Flask(__name__, static_folder='static', template_folder='templates')
-app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))
+app.secret_key = os.getenv('SECRET_KEY', os.urandom(24).hex())
 
 # === DATABASE URL ===
 app.config['DATABASE_URL'] = os.getenv(
@@ -22,6 +24,7 @@ def strftime_filter(value, format="%m/%d/%Y %H:%M"):
     if value is None:
         return ""
     return value.strftime(format)
+
 app.jinja_env.filters['strftime'] = strftime_filter
 
 # === CACHE BUSTER ===
@@ -49,7 +52,12 @@ def static2_files(filename):
     response.headers['Cache-Control'] = 'no-cache'
     return response
 
-# === INIT DB ON START (NO POOL) ===
+# === ROOT REDIRECT → E-RATE DASHBOARD ===
+@app.route('/')
+def root():
+    return redirect(url_for('erate.dashboard'))
+
+# === INIT DB ON START ===
 init_db_app(app)  # Calls: init_db() + teardown
 
 # === GUNICORN HANDLES $PORT — NO app.run() ===
