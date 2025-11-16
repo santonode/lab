@@ -531,6 +531,9 @@
                         <option value="bluebird">Bluebird Network</option>
                         <option value="fna">FNA Network</option>
                     </select>
+                    <select id="fna-member-select" style="display:none; padding:6px; font-size:0.8rem;" disabled>
+                        <option>Loading members...</option>
+                    </select>
                 </div>
                 <button class="modal-close" onclick="closeModal('map')">x</button>
             </div>
@@ -570,7 +573,6 @@
         function closeModal(type) {
             document.getElementById(type + 'Modal').style.display = 'none';
         }
-
         // === POINT COUNTER + OUT-OF-POINTS POPUP ===
         function updatePoints() {
             fetch('/erate/points?' + Date.now())
@@ -600,7 +602,6 @@
                     if (el) el.textContent = '(?)';
                 });
         }
-
         // === RUN ALL JS ON LOAD ===
         window.addEventListener('load', () => {
             const isLoggedIn = {{ 'true' if session.username else 'false' }};
@@ -610,7 +611,6 @@
                 updatePoints();
                 setInterval(updatePoints, 5000);
             }
-
             // === RESTORE CLICK HANDLERS ===
             document.querySelectorAll('.app-number').forEach(el => {
                 el.onclick = () => showDetails(el.textContent.trim());
@@ -632,10 +632,8 @@
                 };
             });
         });
-
         document.addEventListener('click', updatePoints);
         document.addEventListener('submit', updatePoints);
-
         // === REST OF YOUR JS ===
         const form = document.getElementById('filter-form');
         const overlay = document.getElementById('loading');
@@ -647,6 +645,7 @@
         const bbmapBody = document.getElementById('bbmap-body');
         let currentAppNumber = null;
         let currentNetwork = 'bluebird';
+        let currentFnaMember = null;
 
         // === showDetails() ===
         async function showDetails(appNumber) {
@@ -668,7 +667,6 @@
                 overlay.classList.remove('show');
             }
         }
-
         // === checkBluebird() ===
         async function checkBluebird(appNumber) {
             updatePoints();
@@ -695,7 +693,6 @@
                 overlay.classList.remove('show');
             }
         }
-
         // === openMapModal() ===
         async function openMapModal(appNumber, dbLat, dbLon) {
             updatePoints();
@@ -709,42 +706,36 @@
                 delete mapDiv._leaflet_map;
             }
             mapDiv.innerHTML = '';
-
-            // Reset dropdown
+            // Reset dropdowns
             document.getElementById('network-select').value = currentNetwork;
+            document.getElementById('fna-member-select').style.display = 'none';
+            document.getElementById('fna-member-select').disabled = true;
+            document.getElementById('fna-member-select').innerHTML = '<option>Loading members...</option>';
             document.getElementById('map-title').textContent = (currentNetwork === 'fna' ? 'FNA' : 'Bluebird') + ' Network + Applicant';
-
             await loadMap(appNumber, currentNetwork);
             body.classList.remove('loading');
             overlay.classList.remove('show');
         }
 
-        // === loadMap() — FNA LINES THICKER & OPAQUE ===
-        async function loadMap(appNumber, network) {
-            const resp = await fetch(`/erate/bbmap/${appNumber}?network=${network}`);
+        // === loadMap() — FNA MEMBER ON-DEMAND ===
+        async function loadMap(appNumber, network, fna_member = null) {
+            let url = `/erate/bbmap/${appNumber}?network=${network}`;
+            if (fna_member) {
+                url += `&fna_member=${encodeURIComponent(fna_member)}`;
+            }
+            const resp = await fetch(url);
             const data = await resp.json();
             if (data.error) throw new Error(data.error);
 
             const map = L.map('map-container');
             document.getElementById('map-container')._leaflet_map = map;
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap | ' + (network === 'fna' ? 'FNA' : 'Bluebird Fiber')
+                attribution: '&copy; OpenStreetMap | ' + (network === 'fna' ? `FNA - ${fna_member || 'Select Member'}` : 'Bluebird Fiber')
             }).addTo(map);
 
             let applicantMarker = null;
 
-            data.routes.forEach(r => {
-                if (r.coords.length > 1) {
-                    L.polyline(r.coords, {
-                        color: network === 'fna' ? '#dc3545' : '#007bff',
-                        weight: network === 'fna' ? 4 : 3,
-                        opacity: network === 'fna' ? 0.9 : 0.7
-                    })
-                    .bindPopup(`<strong>${r.name}</strong>`)
-                    .addTo(map);
-                }
-            });
-
+            // PoPs
             data.pops.forEach(p => {
                 L.circleMarker([p.lat, p.lon], {
                     radius: 6,
@@ -755,6 +746,22 @@
                 .addTo(map);
             });
 
+            // Routes
+            if (data.routes && data.routes.length > 0) {
+                data.routes.forEach(r => {
+                    if (r.coords.length > 1) {
+                        L.polyline(r.coords, {
+                            color: network === 'fna' ? '#dc3545' : '#007bff',
+                            weight: network === 'fna' ? 4 : 3,
+                            opacity: network === 'fna' ? 0.9 : 0.7
+                        })
+                        .bindPopup(`<strong>${r.name}</strong>`)
+                        .addTo(map);
+                    }
+                });
+            }
+
+            // Applicant
             if (data.applicant_coords) {
                 const [lat, lng] = data.applicant_coords;
                 const icon = L.divIcon({
@@ -767,6 +774,7 @@
                     .addTo(map);
             }
 
+            // Distance line
             if (data.nearest_kmz_coords && data.applicant_coords) {
                 const [lat1, lng1] = data.applicant_coords;
                 const [lat2, lng2] = data.nearest_kmz_coords;
@@ -776,6 +784,7 @@
                   .addTo(map);
             }
 
+            // Fit bounds
             if (data.applicant_coords) {
                 const [lat, lng] = data.applicant_coords;
                 const radiusMiles = 15;
@@ -793,16 +802,65 @@
             } else {
                 map.setView([39.8, -92.5], 7);
             }
+
+            // Update title
+            document.getElementById('map-title').textContent = 
+                network === 'fna' 
+                    ? (fna_member ? `FNA - ${fna_member}` : 'FNA Network')
+                    : 'Bluebird Network + Applicant';
         }
 
         // === NETWORK SWITCHER ===
         document.getElementById('network-select')?.addEventListener('change', async (e) => {
-            currentNetwork = e.target.value;
-            document.getElementById('map-title').textContent = (currentNetwork === 'fna' ? 'FNA' : 'Bluebird') + ' Network + Applicant';
+            const network = e.target.value;
+            const memberSelect = document.getElementById('fna-member-select');
+            currentNetwork = network;
+
+            if (network === 'fna') {
+                memberSelect.style.display = 'block';
+                memberSelect.disabled = true;
+                memberSelect.innerHTML = '<option>Loading members...</option>';
+                try {
+                    const resp = await fetch(`/erate/bbmap/${currentAppNumber}?network=fna`);
+                    const data = await resp.json();
+                    if (data.fna_members) {
+                        memberSelect.innerHTML = '<option value="">— Select Member —</option>';
+                        data.fna_members.forEach(m => {
+                            const opt = document.createElement('option');
+                            opt.value = m;
+                            opt.textContent = m;
+                            memberSelect.appendChild(opt);
+                        });
+                        memberSelect.disabled = false;
+                    }
+                } catch {
+                    memberSelect.innerHTML = '<option>Error loading members</option>';
+                }
+            } else {
+                memberSelect.style.display = 'none';
+                currentFnaMember = null;
+            }
+
+            document.getElementById('map-title').textContent = 
+                network === 'fna' ? 'FNA Network + Applicant' : 'Bluebird Network + Applicant';
+
             if (currentAppNumber) {
                 body.classList.add('loading');
                 overlay.classList.add('show');
-                await loadMap(currentAppNumber, currentNetwork);
+                await loadMap(currentAppNumber, network, currentFnaMember);
+                body.classList.remove('loading');
+                overlay.classList.remove('show');
+            }
+        });
+
+        // === FNA MEMBER SELECT ===
+        document.getElementById('fna-member-select')?.addEventListener('change', async (e) => {
+            const member = e.target.value;
+            currentFnaMember = member;
+            if (member && currentAppNumber) {
+                body.classList.add('loading');
+                overlay.classList.add('show');
+                await loadMap(currentAppNumber, 'fna', member);
                 body.classList.remove('loading');
                 overlay.classList.remove('show');
             }
