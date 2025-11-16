@@ -516,7 +516,7 @@
                     <button onclick="copyAddress()" style="margin-top:5px; padding:4px 8px; background:#27ae60; color:white; border:none; border-radius:3px; cursor:pointer; font-size:0.8rem;">Copy</button>
                 </div>
                 <small style="color:#666;">
-                    <em>Paste into Bluebird search bar → Click search → Zoom to location</em>
+                    <em>Paste into Bluebird search bar to Click search to Zoom to location</em>
                 </small>
             </div>
         </div>
@@ -525,7 +525,13 @@
     <div class="modal" id="map-modal">
         <div class="modal-content">
             <div class="modal-header">
-                <div class="modal-title">Bluebird Network + Applicant</div>
+                <div class="modal-title" id="map-title">Network + Applicant</div>
+                <div style="margin-left: auto; display: flex; gap: 8px; align-items: center;">
+                    <select id="network-select" class="btn btn-secondary" style="padding: 6px; font-size: 0.8rem;">
+                        <option value="bluebird">Bluebird Network</option>
+                        <option value="fna">FNA Network</option>
+                    </select>
+                </div>
                 <button class="modal-close" onclick="closeModal('map')">x</button>
             </div>
             <div class="modal-body">
@@ -640,6 +646,7 @@
         const detailBody = document.getElementById('detail-body');
         const bbmapBody = document.getElementById('bbmap-body');
         let currentAppNumber = null;
+        let currentNetwork = 'bluebird';
 
         // === showDetails() ===
         async function showDetails(appNumber) {
@@ -702,71 +709,102 @@
                 delete mapDiv._leaflet_map;
             }
             mapDiv.innerHTML = '';
-            try {
-                const resp = await fetch(`/erate/bbmap/${appNumber}`);
-                const data = await resp.json();
-                if (data.error) throw new Error(data.error);
-                const map = L.map(mapDiv);
-                mapDiv._leaflet_map = map;
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '&copy; OpenStreetMap | Bluebird Fiber'
-                }).addTo(map);
-                let applicantMarker = null;
-                data.routes.forEach(r => {
-                    if (r.coords.length > 1) {
-                        L.polyline(r.coords, { color: '#007bff', weight: 3, opacity: 0.7 })
-                            .bindPopup(`<strong>${r.name}</strong>`)
-                            .addTo(map);
-                    }
-                });
-                data.pops.forEach(p => {
-                    L.circleMarker([p.lat, p.lon], { radius: 6, color: '#28a745', fillOpacity: 0.8 })
-                        .bindPopup(`<strong>${p.name}</strong>`)
+
+            // Reset dropdown
+            document.getElementById('network-select').value = currentNetwork;
+            document.getElementById('map-title').textContent = (currentNetwork === 'fna' ? 'FNA' : 'Bluebird') + ' Network + Applicant';
+
+            await loadMap(appNumber, currentNetwork);
+            body.classList.remove('loading');
+            overlay.classList.remove('show');
+        }
+
+        // === loadMap() ===
+        async function loadMap(appNumber, network) {
+            const resp = await fetch(`/erate/bbmap/${appNumber}?network=${network}`);
+            const data = await resp.json();
+            if (data.error) throw new Error(data.error);
+
+            const map = L.map('map-container');
+            document.getElementById('map-container')._leaflet_map = map;
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap | ' + (network === 'fna' ? 'FNA' : 'Bluebird Fiber')
+            }).addTo(map);
+
+            let applicantMarker = null;
+            data.routes.forEach(r => {
+                if (r.coords.length > 1) {
+                    L.polyline(r.coords, { 
+                        color: network === 'fna' ? '#dc3545' : '#007bff', 
+                        weight: 3, 
+                        opacity: 0.7 
+                    })
+                        .bindPopup(`<strong>${r.name}</strong>`)
                         .addTo(map);
+                }
+            });
+            data.pops.forEach(p => {
+                L.circleMarker([p.lat, p.lon], { 
+                    radius: 6, 
+                    color: network === 'fna' ? '#dc3545' : '#28a745', 
+                    fillOpacity: 0.8 
+                })
+                    .bindPopup(`<strong>${p.name}</strong>`)
+                    .addTo(map);
+            });
+
+            if (data.applicant_coords) {
+                const [lat, lng] = data.applicant_coords;
+                const icon = L.divIcon({
+                    className: 'applicant-pin',
+                    html: '<div style="background:#007bff;border-radius:50%;width:12px;height:12px;border:3px solid white;"></div>',
+                    iconSize: [18, 18]
                 });
-                if (data.applicant_coords) {
-                    const [lat, lng] = data.applicant_coords;
-                    const icon = L.divIcon({
-                        className: 'applicant-pin',
-                        html: '<div style="background:#007bff;border-radius:50%;width:12px;height:12px;border:3px solid white;"></div>',
-                        iconSize: [18, 18]
-                    });
-                    applicantMarker = L.marker([lat, lng], { icon })
-                        .bindPopup(`<strong>${data.entity_name}</strong><br>${data.address}`)
-                        .addTo(map);
-                }
-                if (data.nearest_kmz_coords && data.applicant_coords) {
-                    const [lat1, lng1] = data.applicant_coords;
-                    const [lat2, lng2] = data.nearest_kmz_coords;
-                    L.polyline([[lat1, lng1], [lat2, lng2]], {
-                        color: '#dc3545', weight: 4, dashArray: '10, 10', opacity: 0.8
-                    }).bindPopup(`<strong>${data.distance}</strong> to ${data.nearest_kmz_pop}`)
-                      .addTo(map);
-                }
-                if (data.applicant_coords) {
-                    const [lat, lng] = data.applicant_coords;
-                    const radiusMiles = 15;
-                    const earthRadiusMiles = 3958.8;
-                    const latDelta = (radiusMiles / earthRadiusMiles) * (180 / Math.PI);
-                    const lngDelta = latDelta / Math.cos(lat * Math.PI / 180);
-                    const bounds = L.latLngBounds(
-                        [lat - latDelta, lng - lngDelta],
-                        [lat + latDelta, lng + lngDelta]
-                    );
-                    map.fitBounds(bounds);
-                    setTimeout(() => {
-                        if (applicantMarker) applicantMarker.openPopup();
-                    }, 800);
-                } else {
-                    map.setView([39.8, -92.5], 7);
-                }
-            } catch (err) {
-                mapDiv.innerHTML = `<p style="color:#dc3545;">Map error: ${err.message}</p>`;
-            } finally {
+                applicantMarker = L.marker([lat, lng], { icon })
+                    .bindPopup(`<strong>${data.entity_name}</strong><br>${data.address}`)
+                    .addTo(map);
+            }
+
+            if (data.nearest_kmz_coords && data.applicant_coords) {
+                const [lat1, lng1] = data.applicant_coords;
+                const [lat2, lng2] = data.nearest_kmz_coords;
+                L.polyline([[lat1, lng1], [lat2, lng2]], {
+                    color: '#dc3545', weight: 4, dashArray: '10, 10', opacity: 0.8
+                }).bindPopup(`<strong>${data.distance}</strong> to ${data.nearest_kmz_pop}`)
+                  .addTo(map);
+            }
+
+            if (data.applicant_coords) {
+                const [lat, lng] = data.applicant_coords;
+                const radiusMiles = 15;
+                const earthRadiusMiles = 3958.8;
+                const latDelta = (radiusMiles / earthRadiusMiles) * (180 / Math.PI);
+                const lngDelta = latDelta / Math.cos(lat * Math.PI / 180);
+                const bounds = L.latLngBounds(
+                    [lat - latDelta, lng - lngDelta],
+                    [lat + latDelta, lng + lngDelta]
+                );
+                map.fitBounds(bounds);
+                setTimeout(() => {
+                    if (applicantMarker) applicantMarker.openPopup();
+                }, 800);
+            } else {
+                map.setView([39.8, -92.5], 7);
+            }
+        }
+
+        // === NETWORK SWITCHER ===
+        document.getElementById('network-select')?.addEventListener('change', async (e) => {
+            currentNetwork = e.target.value;
+            document.getElementById('map-title').textContent = (currentNetwork === 'fna' ? 'FNA' : 'Bluebird') + ' Network + Applicant';
+            if (currentAppNumber) {
+                body.classList.add('loading');
+                overlay.classList.add('show');
+                await loadMap(currentAppNumber, currentNetwork);
                 body.classList.remove('loading');
                 overlay.classList.remove('show');
             }
-        }
+        });
 
         // === closeModal() ===
         function closeModal(type) {
