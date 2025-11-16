@@ -436,7 +436,6 @@ MAP_DATA = {
     "fna": {"pops": [], "routes": [], "loaded": False}
 }
 
-# === KMZ LOADER: BULLETPROOF WITH FOLDER SUPPORT + FNA COORD SWAP ===
 def _load_kmz(provider):
     global MAP_DATA
     if MAP_DATA[provider]["loaded"]:
@@ -457,12 +456,14 @@ def _load_kmz(provider):
         root = ET.fromstring(kml_data)
         ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
-        # Search ALL Placemarks (even in nested Folders)
+        pops_count = 0
+        routes_count = 0
+
         for placemark in root.findall('.//kml:Placemark', ns):
             name_elem = placemark.find('kml:name', ns)
             name = name_elem.text.strip() if name_elem is not None and name_elem.text else "Unnamed"
 
-            # POINT (PoP)
+            # === POINT (PoP) ===
             point = placemark.find('.//kml:Point/kml:coordinates', ns)
             if point is not None and point.text:
                 parts = point.text.strip().split(',')
@@ -470,29 +471,36 @@ def _load_kmz(provider):
                     try:
                         lon, lat = float(parts[0]), float(parts[1])
                         MAP_DATA[provider]["pops"].append({"name": name, "lon": lon, "lat": lat})
+                        pops_count += 1
                     except ValueError:
                         pass
 
-            # LINESTRING (FIBER)
-            line = placemark.find('.//kml:LineString/kml:coordinates', ns)
-            if line is not None and line.text:
-                coords = []
-                for pair in line.text.strip().split():
-                    parts = pair.split(',')
-                    if len(parts) >= 2:
-                        try:
-                            lon, lat = float(parts[0]), float(parts[1])
-                            # FNA uses [LNG, LAT] → swap to [LAT, LNG]
-                            if provider == "fna":
-                                coords.append([lat, lon])
-                            else:
-                                coords.append([lat, lon])  # Bluebird: already [LAT, LNG]
-                        except ValueError:
-                            continue
-                if len(coords) > 1:
-                    MAP_DATA[provider]["routes"].append({"name": name, "coords": coords})
+            # === LINESTRING (FIBER) — SUPPORT MultiGeometry + NESTED ===
+            line_strings = placemark.findall('.//kml:LineString/kml:coordinates', ns)
+            if not line_strings:
+                # Try MultiGeometry → LineString
+                line_strings = placemark.findall('.//kml:MultiGeometry/kml:LineString/kml:coordinates', ns)
 
-        log("KMZ loaded [%s] – %d PoPs, %d routes", provider.upper(), len(MAP_DATA[provider]["pops"]), len(MAP_DATA[provider]["routes"]))
+            for line in line_strings:
+                if line.text:
+                    coords = []
+                    for pair in line.text.strip().split():
+                        parts = pair.split(',')
+                        if len(parts) >= 2:
+                            try:
+                                lon, lat = float(parts[0]), float(parts[1])
+                                # FNA: [LNG, LAT] → swap
+                                if provider == "fna":
+                                    coords.append([lat, lon])
+                                else:
+                                    coords.append([lat, lon])
+                            except ValueError:
+                                continue
+                    if len(coords) > 1:
+                        MAP_DATA[provider]["routes"].append({"name": name, "coords": coords})
+                        routes_count += 1
+
+        log("KMZ loaded [%s] – %d PoPs, %d routes", provider.upper(), pops_count, routes_count)
     except Exception as e:
         log("KMZ parse error [%s]: %s", provider, e)
         log("Traceback: %s", traceback.format_exc())
