@@ -146,6 +146,10 @@
             width: 50px;
             text-transform: uppercase;
         }
+        .filters input[name="text"] {
+            width: 120px;
+            text-transform: none;
+        }
         .btn {
             padding: 8px 16px;
             border: none;
@@ -347,6 +351,7 @@
             .user-info { left: 0.5rem; }
             .logout { right: 0.5rem; }
             .points { font-size: 0.7rem; }
+            .filters input[name="text"] { width: 100%; }
         }
     </style>
 </head>
@@ -426,6 +431,7 @@
             <form method="get" style="display: contents;" id="filter-form">
                 <label>State: <input type="text" name="state" value="{{ filters.state|default('') }}" maxlength="2" placeholder="KS"></label>
                 <label>Modified After: <input type="date" name="modified_after" value="{{ filters.modified_after|default('') }}"></label>
+                <label>Text: <input type="text" name="text" value="{{ filters.text|default('') }}" placeholder="fiber"></label>
                 <button type="submit" class="btn btn-primary">Filter</button>
                 <a href="{{ url_for('erate.dashboard') }}" class="btn btn-secondary">Reset</a>
             </form>
@@ -468,7 +474,7 @@
         </table>
         {% if has_more|default(false) %}
         <div class="pagination">
-            <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&offset={{ next_offset|default(0) }}" class="load-more">Load More (+)</a>
+            <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset|default(0) }}" class="load-more">Load More (+)</a>
         </div>
         {% endif %}
     </div>
@@ -477,7 +483,6 @@
         <a href="mailto:sales@santoelectronics.com">sales@santoelectronics.com</a>
         <a href="https://santoelectronics.com/toser">Terms of Service</a>
     </div>
-
     <!-- DETAILS MODAL -->
     <div class="modal" id="detail-modal">
         <div class="modal-content">
@@ -496,7 +501,6 @@
             </div>
         </div>
     </div>
-
     <!-- BLUEBIRD MODAL -->
     <div class="modal" id="bbmap-modal">
         <div class="modal-content">
@@ -520,7 +524,6 @@
             </div>
         </div>
     </div>
-
     <!-- MAP MODAL -->
     <div class="modal" id="map-modal">
         <div class="modal-content">
@@ -533,7 +536,6 @@
             </div>
         </div>
     </div>
-
     <!-- OUT OF POINTS MODAL -->
     <div class="modal" id="outOfPointsModal">
         <div class="modal-content">
@@ -548,7 +550,6 @@
             </div>
         </div>
     </div>
-
     <script>
         // === AUTH MODAL LOGIC ===
         function continueAsGuest() {
@@ -566,7 +567,6 @@
         function closeModal(type) {
             document.getElementById(type + 'Modal').style.display = 'none';
         }
-
         // === POINT COUNTER + OUT-OF-POINTS POPUP ===
         function updatePoints() {
             fetch('/erate/points?' + Date.now())
@@ -597,7 +597,6 @@
                     if (el) el.textContent = '(?)';
                 });
         }
-
         // Update on load + every 5s + every click/submit
         window.addEventListener('load', () => {
             {% if not session.username %}
@@ -609,7 +608,6 @@
         });
         document.addEventListener('click', updatePoints);
         document.addEventListener('submit', updatePoints);
-
         // === REST OF YOUR JS ===
         const form = document.getElementById('filter-form');
         const overlay = document.getElementById('loading');
@@ -620,7 +618,6 @@
         const detailBody = document.getElementById('detail-body');
         const bbmapBody = document.getElementById('bbmap-body');
         let currentAppNumber = null;
-
         // === showDetails() ===
         async function showDetails(appNumber) {
             updatePoints();
@@ -641,7 +638,6 @@
                 overlay.classList.remove('show');
             }
         }
-
         // === checkBluebird() ===
         async function checkBluebird(appNumber) {
             updatePoints();
@@ -668,7 +664,6 @@
                 overlay.classList.remove('show');
             }
         }
-
         // === openMapModal() ===
         async function openMapModal(appNumber, dbLat, dbLon) {
             updatePoints();
@@ -718,7 +713,7 @@
                 if (data.nearest_kmz_coords && data.applicant_coords) {
                     const [lat1, lng1] = data.applicant_coords;
                     const [lat2, lng2] = data.nearest_kmz_coords;
-                    L.polyline([[lat1, lng1], [lat2, lng2]], {
+                    L.polyline([[lat1, lng1], state: [lat2, lng2]], {
                         color: '#dc3545', weight: 4, dashArray: '10, 10', opacity: 0.8
                     }).bindPopup(`<strong>${data.distance}</strong> to ${data.nearest_kmz_pop}`)
                       .addTo(map);
@@ -747,7 +742,6 @@
                 overlay.classList.remove('show');
             }
         }
-
         // === closeModal() ===
         function closeModal(type) {
             if (type === 'detail') detailModal.classList.remove('show');
@@ -765,7 +759,6 @@
                 document.getElementById('outOfPointsModal').classList.remove('show');
             }
         }
-
         // === renderSection(), activateTab(), copyAddress() ===
         function renderSection(section, data) {
             let html = '';
@@ -838,14 +831,12 @@
             }
             detailBody.innerHTML = html;
         }
-
         function activateTab(section) {
             document.querySelectorAll('.tab-link').forEach(link => {
                 link.classList.remove('active');
                 if (link.dataset.section === section) link.classList.add('active');
             });
         }
-
         document.querySelectorAll('.tab-link').forEach(link => {
             link.addEventListener('click', async (e) => {
                 e.preventDefault();
@@ -864,7 +855,6 @@
                 }
             });
         });
-
         function copyAddress() {
             const address = document.getElementById('address-text').textContent;
             navigator.clipboard.writeText(address).then(() => {
@@ -874,13 +864,11 @@
                 setTimeout(() => btn.textContent = originalText, 1500);
             });
         }
-
         [detailModal, bbmapModal, mapModal, document.getElementById('outOfPointsModal')].forEach(modal => {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) modal.classList.remove('show');
             });
         });
-
         // Loading overlay on form submit / pagination
         form.addEventListener('submit', () => {
             body.classList.add('loading');
