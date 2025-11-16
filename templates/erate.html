@@ -450,16 +450,13 @@
             <tbody>
                 {% if table_data %}
                     {% for row in table_data %}
-                    <tr>
-                        <td><span class="app-number" onclick="showDetails('{{ row.app_number }}')">{{ row.app_number|default('—') }}</span></td>
-                        <td><span class="entity-name" onclick="checkBluebird('{{ row.app_number }}')">{{ row.entity_name|default('—') }}</span></td>
+                    <tr {% if row.latitude %}data-lat="{{ row.latitude }}"{% endif %} {% if row.longitude %}data-lon="{{ row.longitude }}"{% endif %}>
+                        <td><span class="app-number">{{ row.app_number|default('—') }}</span></td>
+                        <td><span class="entity-name">{{ row.entity_name|default('—') }}</span></td>
                         <td>{{ row.state|default('—') }}</td>
                         <td class="modified">{{ row.last_modified_datetime|strftime('%m/%d/%Y') if row.last_modified_datetime else '—' }}</td>
                         <td>
-                            <button class="btn btn-primary btn-sm"
-                                    onclick="openMapModal('{{ row.app_number }}', {{ row.latitude|default('null') }}, {{ row.longitude|default('null') }})">
-                                Map
-                            </button>
+                            <button class="btn btn-primary btn-sm">Map</button>
                         </td>
                     </tr>
                     {% endfor %}
@@ -567,6 +564,7 @@
         function closeModal(type) {
             document.getElementById(type + 'Modal').style.display = 'none';
         }
+
         // === POINT COUNTER + OUT-OF-POINTS POPUP ===
         function updatePoints() {
             fetch('/erate/points?' + Date.now())
@@ -578,7 +576,6 @@
                         if (data.points <= 5) el.style.color = '#ffc107';
                         if (data.points <= 0) {
                             el.style.color = '#dc3545';
-                            // SHOW OUT-OF-POINTS POPUP
                             fetch('/erate/out-of-points')
                                 .then(r => r.json())
                                 .then(msg => {
@@ -597,17 +594,42 @@
                     if (el) el.textContent = '(?)';
                 });
         }
-        // Update on load + every 5s + every click/submit
+
+        // === RUN ALL JS ON LOAD ===
         window.addEventListener('load', () => {
-            {% if not session.username %}
+            const isLoggedIn = {{ 'true' if session.username else 'false' }};
+            if (!isLoggedIn) {
                 document.getElementById('authModal').style.display = 'flex';
-            {% else %}
+            } else {
                 updatePoints();
                 setInterval(updatePoints, 5000);
-            {% endif %}
+            }
+
+            // === RESTORE CLICK HANDLERS ===
+            document.querySelectorAll('.app-number').forEach(el => {
+                el.onclick = () => showDetails(el.textContent.trim());
+            });
+            document.querySelectorAll('.entity-name').forEach(el => {
+                el.onclick = () => {
+                    const row = el.closest('tr');
+                    const appNumber = row.querySelector('.app-number').textContent.trim();
+                    checkBluebird(appNumber);
+                };
+            });
+            document.querySelectorAll('.btn-sm').forEach(btn => {
+                btn.onclick = () => {
+                    const row = btn.closest('tr');
+                    const appNumber = row.querySelector('.app-number').textContent.trim();
+                    const lat = row.dataset.lat ? parseFloat(row.dataset.lat) : null;
+                    const lon = row.dataset.lon ? parseFloat(row.dataset.lon) : null;
+                    openMapModal(appNumber, lat, lon);
+                };
+            });
         });
+
         document.addEventListener('click', updatePoints);
         document.addEventListener('submit', updatePoints);
+
         // === REST OF YOUR JS ===
         const form = document.getElementById('filter-form');
         const overlay = document.getElementById('loading');
@@ -618,6 +640,7 @@
         const detailBody = document.getElementById('detail-body');
         const bbmapBody = document.getElementById('bbmap-body');
         let currentAppNumber = null;
+
         // === showDetails() ===
         async function showDetails(appNumber) {
             updatePoints();
@@ -638,6 +661,7 @@
                 overlay.classList.remove('show');
             }
         }
+
         // === checkBluebird() ===
         async function checkBluebird(appNumber) {
             updatePoints();
@@ -664,6 +688,7 @@
                 overlay.classList.remove('show');
             }
         }
+
         // === openMapModal() ===
         async function openMapModal(appNumber, dbLat, dbLon) {
             updatePoints();
@@ -713,7 +738,7 @@
                 if (data.nearest_kmz_coords && data.applicant_coords) {
                     const [lat1, lng1] = data.applicant_coords;
                     const [lat2, lng2] = data.nearest_kmz_coords;
-                    L.polyline([[lat1, lng1], state: [lat2, lng2]], {
+                    L.polyline([[lat1, lng1], [lat2, lng2]], {
                         color: '#dc3545', weight: 4, dashArray: '10, 10', opacity: 0.8
                     }).bindPopup(`<strong>${data.distance}</strong> to ${data.nearest_kmz_pop}`)
                       .addTo(map);
@@ -742,6 +767,7 @@
                 overlay.classList.remove('show');
             }
         }
+
         // === closeModal() ===
         function closeModal(type) {
             if (type === 'detail') detailModal.classList.remove('show');
@@ -759,6 +785,7 @@
                 document.getElementById('outOfPointsModal').classList.remove('show');
             }
         }
+
         // === renderSection(), activateTab(), copyAddress() ===
         function renderSection(section, data) {
             let html = '';
@@ -831,12 +858,14 @@
             }
             detailBody.innerHTML = html;
         }
+
         function activateTab(section) {
             document.querySelectorAll('.tab-link').forEach(link => {
                 link.classList.remove('active');
                 if (link.dataset.section === section) link.classList.add('active');
             });
         }
+
         document.querySelectorAll('.tab-link').forEach(link => {
             link.addEventListener('click', async (e) => {
                 e.preventDefault();
@@ -855,6 +884,7 @@
                 }
             });
         });
+
         function copyAddress() {
             const address = document.getElementById('address-text').textContent;
             navigator.clipboard.writeText(address).then(() => {
@@ -864,11 +894,13 @@
                 setTimeout(() => btn.textContent = originalText, 1500);
             });
         }
+
         [detailModal, bbmapModal, mapModal, document.getElementById('outOfPointsModal')].forEach(modal => {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) modal.classList.remove('show');
             });
         });
+
         // Loading overlay on form submit / pagination
         form.addEventListener('submit', () => {
             body.classList.add('loading');
