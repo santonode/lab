@@ -603,6 +603,8 @@ def bbmap(app_number):
                     nearest_kmz_pop = pop['name']
                     nearest_kmz_coords = [pop['lat'], pop['lon']]
 
+        dist_info = get_bluebird_distance(full_address)
+
         return jsonify({
             "entity_name": entity_name,
             "address": full_address,
@@ -637,7 +639,7 @@ def dashboard():
     state_filter = request.args.get('state', '').strip().upper()
     modified_after_str = request.args.get('modified_after', '').strip()
     text_search = request.args.get('text', '').strip()
-    offset = 0
+    offset = max(int(request.args.get('offset', 0)), 0)
     limit = 10
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10, autocommit=True)
     try:
@@ -893,7 +895,7 @@ def import_interactive():
         thread = threading.Thread(target=_import_all_background, args=(current_app._get_current_object(),))
         thread.daemon = True
         current_app.config['IMPORT_THREAD'] = thread
-                thread.start()
+        thread.start()
         flash("Bulk import started. Check /erate/view-log", "success")
         return redirect(url_for('erate.import_interactive'))
     return render_template('erate_import.html', progress=progress, is_importing=is_importing)
