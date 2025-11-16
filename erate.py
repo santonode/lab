@@ -1,4 +1,4 @@
-# erate.py — FINAL: Bluebird Fiber Routes + 223 PoP Distance + KMZ Map + FULL ADMIN AUTH + POINT SYSTEM + TEXT SEARCH
+# erate.py — FINAL: Bluebird + FNA Fiber Routes + 223 PoP Distance + KMZ Map + FULL ADMIN AUTH + POINT SYSTEM + TEXT SEARCH
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup, session
@@ -426,25 +426,32 @@ def get_bluebird_distance(address):
     coverage = "Full fiber" if min_dist <= 5 else "Nearby" if min_dist <= 50 else "Extended reach"
     return {"distance": min_dist, "pop_city": nearest_pop, "coverage": coverage}
 
+# === KMZ PATHS ===
+KMZ_PATH_BLUEBIRD = os.path.join(os.path.dirname(__file__), "BBN Map KMZ 122023.kmz")
+KMZ_PATH_FNA = os.path.join(os.path.dirname(__file__), "AllMemberFiber.kmz")
+
+# === GLOBAL MAP DATA ===
+MAP_DATA = {
+    "bluebird": {"pops": [], "routes": [], "loaded": False},
+    "fna": {"pops": [], "routes": [], "loaded": False}
+}
+
 # === KMZ LOADER: BULLETPROOF WITH ElementTree ===
-KMZ_PATH = os.path.join(os.path.dirname(__file__), "BBN Map KMZ 122023.kmz")
-KMZ_FEATURES = [] # PoPs
-KMZ_ROUTES = [] # Fiber lines
-KMZ_LOADED = False
-def _load_kmz():
-    global KMZ_FEATURES, KMZ_ROUTES, KMZ_LOADED
-    if KMZ_LOADED:
+def _load_kmz(provider):
+    global MAP_DATA
+    if MAP_DATA[provider]["loaded"]:
         return
-    if not os.path.exists(KMZ_PATH):
-        log("KMZ file not found: %s", KMZ_PATH)
-        KMZ_LOADED = True
+    path = KMZ_PATH_BLUEBIRD if provider == "bluebird" else KMZ_PATH_FNA
+    if not os.path.exists(path):
+        log("KMZ not found: %s", path)
+        MAP_DATA[provider]["loaded"] = True
         return
     try:
-        with zipfile.ZipFile(KMZ_PATH, 'r') as kmz:
+        with zipfile.ZipFile(path, 'r') as kmz:
             kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
             if not kml_files:
-                log("No .kml inside KMZ")
-                KMZ_LOADED = True
+                log("No .kml in %s", path)
+                MAP_DATA[provider]["loaded"] = True
                 return
             kml_data = kmz.read(kml_files[0])
         root = ET.fromstring(kml_data)
@@ -459,7 +466,7 @@ def _load_kmz():
                 if len(parts) >= 2:
                     try:
                         lon, lat = float(parts[0]), float(parts[1])
-                        KMZ_FEATURES.append({"name": name, "lon": lon, "lat": lat})
+                        MAP_DATA[provider]["pops"].append({"name": name, "lon": lon, "lat": lat})
                     except ValueError:
                         pass
             # LineString (Fiber)
@@ -475,19 +482,25 @@ def _load_kmz():
                         except ValueError:
                             continue
                 if len(coords) > 1:
-                    KMZ_ROUTES.append({"name": name, "coords": coords})
-        log("KMZ loaded – %d PoPs, %d routes", len(KMZ_FEATURES), len(KMZ_ROUTES))
+                    MAP_DATA[provider]["routes"].append({"name": name, "coords": coords})
+        log("KMZ loaded [%s] – %d PoPs, %d routes", provider.upper(), len(MAP_DATA[provider]["pops"]), len(MAP_DATA[provider]["routes"]))
     except Exception as e:
-        log("KMZ parsing error: %s", e)
+        log("KMZ parse error [%s]: %s", provider, e)
         log("Traceback: %s", traceback.format_exc())
     finally:
-        KMZ_LOADED = True
-_load_kmz()
+        MAP_DATA[provider]["loaded"] = True
 
-# === ENHANCED BBMap API ===
+# Load both on startup
+_load_kmz("bluebird")
+_load_kmz("fna")
+
+# === ENHANCED BBMap API (WITH NETWORK SWITCH) ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
-    deduct_point() # DEDUCT ON BBMAP
+    network = request.args.get('network', 'bluebird')
+    if network not in ['bluebird', 'fna']:
+        network = 'bluebird'
+    deduct_point()
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
     try:
         with conn.cursor() as cur:
@@ -516,6 +529,11 @@ def bbmap(app_number):
                     lat, lon = float(geo[0]['lat']), float(geo[0]['lon'])
             except:
                 lat, lon = None, None
+
+        # Use selected network
+        pops = MAP_DATA[network]["pops"]
+        routes = MAP_DATA[network]["routes"]
+
         min_dist_kmz = float('inf')
         nearest_kmz_pop = None
         nearest_kmz_coords = None
@@ -527,12 +545,13 @@ def bbmap(app_number):
                 a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
                 c = 2 * atan2(sqrt(a), sqrt(1-a))
                 return R * c
-            for pop in KMZ_FEATURES:
+            for pop in pops:
                 dist = haversine(lat, lon, pop['lat'], pop['lon'])
                 if dist < min_dist_kmz:
                     min_dist_kmz = dist
                     nearest_kmz_pop = pop['name']
-                    nearest_kmz_coords = [pop['lat'], pop['lon']] # [LAT, LNG]
+                    nearest_kmz_coords = [pop['lat'], pop['lon']]
+
         return jsonify({
             "entity_name": entity_name,
             "address": full_address,
@@ -542,11 +561,12 @@ def bbmap(app_number):
             "coverage": dist_info['coverage'],
             "nearest_kmz_pop": nearest_kmz_pop,
             "nearest_kmz_coords": nearest_kmz_coords,
-            "routes": KMZ_ROUTES,
-            "pops": KMZ_FEATURES,
+            "routes": routes,
+            "pops": pops,
+            "network": network
         }), 200, {'Content-Type': 'application/json'}
     except Exception as e:
-        log("Bluebird API error: %s", e)
+        log("BBMap API error: %s", e)
         return jsonify({"error": "Service unavailable"}), 500
     finally:
         conn.close()
@@ -560,17 +580,14 @@ def dashboard():
             table_data=[], total_count=0, total_filtered=0,
             filters={}, has_more=False, next_offset=0
         )
-
     # DEDUCT POINT ON ANY FILTER (including text)
     if any(request.args.get(k) for k in ['state', 'modified_after', 'text']):
         deduct_point()
-
     state_filter = request.args.get('state', '').strip().upper()
     modified_after_str = request.args.get('modified_after', '').strip()
     text_search = request.args.get('text', '').strip()
     offset = max(int(request.args.get('offset', 0)), 0)
     limit = 10
-
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10, autocommit=True)
     try:
         with conn.cursor() as cur:
@@ -578,7 +595,6 @@ def dashboard():
             count_sql = 'SELECT COUNT(*) FROM erate'
             count_params = []
             where_clauses = []
-
             if state_filter:
                 where_clauses.append('state = %s')
                 count_params.append(state_filter)
@@ -586,14 +602,12 @@ def dashboard():
                 where_clauses.append('last_modified_datetime >= %s')
                 count_params.append(modified_after_str)
             if text_search:
-                where_clauses.append("to_tsvector('english', cat2_desc) @@ plainto_tsquery('english', %s)")
+                where_clauses.append("to_tsvector('english', cat2_desc) @@ plain_to_tsquery('english', %s)")
                 count_params.append(text_search)
-
             if where_clauses:
                 count_sql += ' WHERE ' + ' AND '.join(where_clauses)
             cur.execute(count_sql, count_params)
             total_count = cur.fetchone()[0]
-
             # FILTERED DATA
             sql = '''
                 SELECT app_number, entity_name, state, last_modified_datetime,
@@ -604,12 +618,10 @@ def dashboard():
             if where_clauses:
                 sql += ' WHERE ' + ' AND '.join(where_clauses)
                 params.extend(count_params)
-
             sql += ' ORDER BY last_modified_datetime DESC, app_number LIMIT %s OFFSET %s'
             params.extend([limit + 1, offset])
             cur.execute(sql, params)
             rows = cur.fetchall()
-
             table_data = [
                 {
                     'app_number': r[0],
@@ -625,7 +637,6 @@ def dashboard():
             table_data = table_data[:limit]
             next_offset = offset + limit
             total_filtered = offset + len(table_data)
-
         return render_template(
             'erate.html',
             table_data=table_data,
