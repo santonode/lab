@@ -1,4 +1,4 @@
-# erate.py — FINAL: Bluebird Fiber Routes + 223 PoP Distance + KMZ Map + FULL ADMIN AUTH + POINT SYSTEM
+# erate.py — FINAL: Bluebird Fiber Routes + 223 PoP Distance + KMZ Map + FULL ADMIN AUTH + POINT SYSTEM + TEXT SEARCH
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup, session
@@ -79,7 +79,7 @@ def deduct_point():
         else:
             ip = request.remote_addr or 'unknown'
         username = f"guest_{ip.replace('.', '')}"
-    
+   
     with psycopg.connect(DATABASE_URL) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT points FROM users WHERE username = %s", (username,))
@@ -551,43 +551,50 @@ def bbmap(app_number):
     finally:
         conn.close()
 
-# === DASHBOARD (WITH AUTH CHECK) ===
+# === DASHBOARD (WITH AUTH CHECK + TEXT SEARCH) ===
 @erate_bp.route('/')
 def dashboard():
     log("Dashboard accessed")
-    # If not logged in → show blank page with auth modal in HTML
     if not session.get('username'):
         return render_template('erate.html',
-            table_data=[],
-            total_count=0,
-            total_filtered=0,
-            filters={},
-            has_more=False,
-            next_offset=0
+            table_data=[], total_count=0, total_filtered=0,
+            filters={}, has_more=False, next_offset=0
         )
-    # DEDUCT POINT ON FILTER
-    if request.args.get('state') or request.args.get('modified_after'):
+
+    # DEDUCT POINT ON ANY FILTER (including text)
+    if any(request.args.get(k) for k in ['state', 'modified_after', 'text']):
         deduct_point()
+
     state_filter = request.args.get('state', '').strip().upper()
     modified_after_str = request.args.get('modified_after', '').strip()
+    text_search = request.args.get('text', '').strip()
     offset = max(int(request.args.get('offset', 0)), 0)
     limit = 10
+
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10, autocommit=True)
     try:
         with conn.cursor() as cur:
+            # TOTAL COUNT
             count_sql = 'SELECT COUNT(*) FROM erate'
             count_params = []
             where_clauses = []
+
             if state_filter:
                 where_clauses.append('state = %s')
                 count_params.append(state_filter)
             if modified_after_str:
                 where_clauses.append('last_modified_datetime >= %s')
                 count_params.append(modified_after_str)
+            if text_search:
+                where_clauses.append("to_tsvector('english', cat2_desc) @@ plainto_tsquery('english', %s)")
+                count_params.append(text_search)
+
             if where_clauses:
                 count_sql += ' WHERE ' + ' AND '.join(where_clauses)
             cur.execute(count_sql, count_params)
             total_count = cur.fetchone()[0]
+
+            # FILTERED DATA
             sql = '''
                 SELECT app_number, entity_name, state, last_modified_datetime,
                        latitude, longitude
@@ -597,10 +604,12 @@ def dashboard():
             if where_clauses:
                 sql += ' WHERE ' + ' AND '.join(where_clauses)
                 params.extend(count_params)
+
             sql += ' ORDER BY last_modified_datetime DESC, app_number LIMIT %s OFFSET %s'
             params.extend([limit + 1, offset])
             cur.execute(sql, params)
             rows = cur.fetchall()
+
             table_data = [
                 {
                     'app_number': r[0],
@@ -616,10 +625,15 @@ def dashboard():
             table_data = table_data[:limit]
             next_offset = offset + limit
             total_filtered = offset + len(table_data)
+
         return render_template(
             'erate.html',
             table_data=table_data,
-            filters={'state': state_filter, 'modified_after': modified_after_str},
+            filters={
+                'state': state_filter,
+                'modified_after': modified_after_str,
+                'text': text_search
+            },
             total_count=total_count,
             total_filtered=total_filtered,
             has_more=has_more,
@@ -863,7 +877,6 @@ def _import_all_background(app):
                         ([r['Application Number'] for r in batch],)
                     )
                     existing = {row[0] for row in cur.fetchall()}
-                    # FIXED: 'Application Number' (not 'Application Number Number')
                     filtered_batch = [r for r in batch if r['Application Number'] not in existing]
                     if filtered_batch:
                         try:
@@ -889,7 +902,6 @@ def _import_all_background(app):
                     ([r['Application Number'] for r in batch],)
                 )
                 existing = {row[0] for row in cur.fetchall()}
-                # FIXED: 'Application Number'
                 filtered_batch = [r for r in batch if r['Application Number'] not in existing]
                 if filtered_batch:
                     try:
@@ -952,7 +964,6 @@ def admin():
         session.clear()
         flash("Logged out", "success")
         return redirect(url_for('erate.dashboard'))
-
     if request.method == 'POST':
         action = request.form.get('action')
         if action == 'register':
@@ -976,7 +987,6 @@ def admin():
             session['is_santo'] = (username == 'santo')
             flash(f"Welcome, {username}! You have 100 points.", "success")
             return redirect(url_for('erate.dashboard'))
-
         elif action == 'login':
             username = request.form['username'].strip()
             password = request.form['password']
@@ -992,7 +1002,6 @@ def admin():
                     else:
                         flash("Invalid login", "error")
             return redirect(url_for('erate.admin'))
-
         elif 'admin_pass' in request.form:
             if request.form['admin_pass'] == os.getenv('ADMIN_PASS', 'santo123'):
                 session['username'] = 'santo'
@@ -1001,7 +1010,6 @@ def admin():
             else:
                 flash("Invalid admin password", "error")
             return redirect(url_for('erate.admin'))
-
         if session.get('is_santo'):
             if 'delete_user' in request.form:
                 user_id = request.form['delete_user']
@@ -1010,7 +1018,6 @@ def admin():
                         cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
                         conn.commit()
                 flash("User deleted", "success")
-
             elif 'edit_user_id' in request.form:
                 user_id = request.form['edit_user_id']
                 username = request.form['new_username']
@@ -1031,7 +1038,6 @@ def admin():
                             )
                         conn.commit()
                 flash("User updated", "success")
-
             elif 'add_user' in request.form:
                 username = request.form['username']
                 password = request.form['password']
@@ -1044,14 +1050,12 @@ def admin():
                         )
                         conn.commit()
                 flash("User added", "success")
-
     users = []
     if session.get('is_santo'):
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT id, username, COALESCE(password, ''), user_type, points FROM users ORDER BY id")
                 users = [dict(zip(['id', 'username', 'password', 'user_type', 'points'], row)) for row in cur.fetchall()]
-
     return render_template('eadmin.html', users=users, session=session)
 
 @erate_bp.route('/set_guest', methods=['POST'])
