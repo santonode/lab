@@ -428,7 +428,25 @@ def get_bluebird_distance(address):
 
 # === KMZ PATHS ===
 KMZ_PATH_BLUEBIRD = os.path.join(os.path.dirname(__file__), "BBN Map KMZ 122023.kmz")
-KMZ_PATH_FNA = os.path.join(os.path.dirname(__file__), "AllMemberFiber.kmz")
+FNA_MEMBERS_DIR = os.path.join(os.path.dirname(__file__), "fna_members")
+FNA_MEMBERS = {}
+
+# === LOAD FNA MEMBERS FROM SPLIT KMZ FILES ===
+def _load_fna_members():
+    global FNA_MEMBERS
+    if FNA_MEMBERS:
+        return
+    if not os.path.exists(FNA_MEMBERS_DIR):
+        log("FNA members directory not found: %s", FNA_MEMBERS_DIR)
+        return
+    for file in os.listdir(FNA_MEMBERS_DIR):
+        if file.lower().endswith('.kmz'):
+            member_name = os.path.splitext(file)[0].replace('_', ' ')
+            FNA_MEMBERS[member_name] = os.path.join(FNA_MEMBERS_DIR, file)
+    log("Loaded %d FNA members", len(FNA_MEMBERS))
+
+# Call on startup
+_load_fna_members()
 
 # === GLOBAL MAP DATA (LAZY LOADED) ===
 MAP_DATA = {
@@ -436,19 +454,18 @@ MAP_DATA = {
     "fna": {"pops": None, "routes": None, "loaded": False}
 }
 
-# === LAZY KMZ LOADER (FNA: FILTERED BY APPLICANT) ===
-def _load_kmz(provider, applicant_coords=None):
+# === LAZY KMZ LOADER (BLUEBIRD ONLY) ===
+def _load_kmz(provider):
     global MAP_DATA
     if MAP_DATA[provider]["loaded"]:
         return
-    path = KMZ_PATH_BLUEBIRD if provider == "bluebird" else KMZ_PATH_FNA
+    path = KMZ_PATH_BLUEBIRD
     if not os.path.exists(path):
         log("KMZ not found: %s", path)
         MAP_DATA[provider]["loaded"] = True
         MAP_DATA[provider]["pops"] = []
         MAP_DATA[provider]["routes"] = []
         return
-
     try:
         log("Loading KMZ [%s]...", provider.upper())
         with zipfile.ZipFile(path, 'r') as kmz:
@@ -463,29 +480,13 @@ def _load_kmz(provider, applicant_coords=None):
         
         root = ET.fromstring(kml_data)
         ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-
         pops = []
         routes = []
         pops_count = 0
         routes_count = 0
-
-        # Haversine distance
-        def haversine(lat1, lon1, lat2, lon2):
-            R = 3958.8
-            dlat = radians(lat2 - lat1)
-            dlon = radians(lon2 - lon1)
-            a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
-            c = 2 * atan2(sqrt(a), sqrt(1-a))
-            return R * c
-
-        # Only filter FNA routes near applicant
-        filter_radius = 50 if provider == "fna" and applicant_coords else None
-        app_lat, app_lon = (applicant_coords[0], applicant_coords[1]) if applicant_coords else (None, None)
-
         for placemark in root.findall('.//kml:Placemark', ns):
             name_elem = placemark.find('kml:name', ns)
             name = name_elem.text.strip() if name_elem is not None and name_elem.text else "Unnamed"
-
             # POINT (PoP)
             point = placemark.find('.//kml:Point/kml:coordinates', ns)
             if point is not None and point.text:
@@ -497,12 +498,10 @@ def _load_kmz(provider, applicant_coords=None):
                         pops_count += 1
                     except ValueError:
                         pass
-
             # LINESTRING — SUPPORT MultiGeometry
             line_strings = placemark.findall('.//kml:LineString/kml:coordinates', ns)
             if not line_strings:
                 line_strings = placemark.findall('.//kml:MultiGeometry/kml:LineString/kml:coordinates', ns)
-
             for line in line_strings:
                 if line.text:
                     coords = []
@@ -511,41 +510,34 @@ def _load_kmz(provider, applicant_coords=None):
                         if len(parts) >= 2:
                             try:
                                 lon, lat = float(parts[0]), float(parts[1])
-                                if provider == "fna":
-                                    coords.append([lat, lon])  # FNA: [LNG, LAT] → swap
-                                else:
-                                    coords.append([lat, lon])
+                                coords.append([lat, lon])
                             except ValueError:
                                 continue
                     if len(coords) > 1:
-                        # FILTER FNA: only if near applicant
-                        if provider == "fna" and filter_radius and app_lat:
-                            in_range = any(
-                                haversine(app_lat, app_lon, lat, lon) <= filter_radius
-                                for lat, lon in coords
-                            )
-                            if not in_range:
-                                continue
                         routes.append({"name": name, "coords": coords})
                         routes_count += 1
-
         MAP_DATA[provider]["pops"] = pops
         MAP_DATA[provider]["routes"] = routes
         MAP_DATA[provider]["loaded"] = True
-        log("KMZ loaded [%s] – %d PoPs, %d routes (filtered)", provider.upper(), pops_count, routes_count)
-
+        log("KMZ loaded [%s] – %d PoPs, %d routes", provider.upper(), pops_count, routes_count)
     except Exception as e:
         log("KMZ parse error [%s]: %s", provider, e)
         MAP_DATA[provider]["loaded"] = True
         MAP_DATA[provider]["pops"] = []
         MAP_DATA[provider]["routes"] = []
 
-# === ENHANCED BBMap API (WITH NETWORK SWITCH + LAZY LOAD + FNA FILTER) ===
+# === ENHANCED BBMap API (FNA: MEMBER ON-DEMAND) ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
     network = request.args.get('network', 'bluebird')
-    if network not in ['bluebird', 'fna']:
-        network = 'bluebird'
+    fna_member = request.args.get('fna_member')
+
+    if network == "fna" and not fna_member:
+        # Return list of members
+        return jsonify({
+            "fna_members": sorted(FNA_MEMBERS.keys()),
+            "message": "Select an FNA member"
+        })
 
     deduct_point()
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -563,7 +555,6 @@ def bbmap(app_number):
         lat = float(db_lat) if db_lat else None
         lon = float(db_lon) if db_lon else None
 
-        # GEOCODE IF NEEDED
         if not (lat and lon):
             try:
                 geocode_resp = requests.get(
@@ -578,12 +569,55 @@ def bbmap(app_number):
             except:
                 lat, lon = None, None
 
-        # LAZY LOAD KMZ WITH FILTER FOR FNA
-        if not MAP_DATA[network]["loaded"]:
-            _load_kmz(network, applicant_coords=[lat, lon] if lat and lon else None)
+        pops = []
+        routes = []
 
-        pops = MAP_DATA[network]["pops"] or []
-        routes = MAP_DATA[network]["routes"] or []
+        if network == "bluebird":
+            if not MAP_DATA["bluebird"]["loaded"]:
+                _load_kmz("bluebird")
+            pops = MAP_DATA["bluebird"]["pops"]
+            routes = MAP_DATA["bluebird"]["routes"]
+        else:  # FNA + member
+            member_path = FNA_MEMBERS.get(fna_member)
+            if not member_path or not os.path.exists(member_path):
+                return jsonify({"error": "Member KMZ not found"}), 404
+            
+            try:
+                with zipfile.ZipFile(member_path, 'r') as kmz:
+                    kml_data = kmz.read('doc.kml')
+                root = ET.fromstring(kml_data)
+                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+                for placemark in root.findall('.//kml:Placemark', ns):
+                    name_elem = placemark.find('kml:name', ns)
+                    name = name_elem.text.strip() if name_elem is not None else "Fiber"
+                    
+                    point = placemark.find('.//kml:Point/kml:coordinates', ns)
+                    if point and point.text:
+                        parts = point.text.strip().split(',')
+                        if len(parts) >= 2:
+                            try:
+                                lon, lat = float(parts[0]), float(parts[1])
+                                pops.append({"name": name, "lon": lon, "lat": lat})
+                            except: pass
+                    
+                    line_strings = placemark.findall('.//kml:LineString/kml:coordinates', ns) or \
+                                   placemark.findall('.//kml:MultiGeometry/kml:LineString/kml:coordinates', ns)
+                    for line in line_strings:
+                        if line.text:
+                            coords = []
+                            for pair in line.text.strip().split():
+                                parts = pair.split(',')
+                                if len(parts) >= 2:
+                                    try:
+                                        lon, lat = float(parts[0]), float(parts[1])
+                                        coords.append([lat, lon])
+                                    except: continue
+                            if len(coords) > 1:
+                                routes.append({"name": name, "coords": coords})
+                log("Loaded FNA member: %s → %d PoPs, %d routes", fna_member, len(pops), len(routes))
+            except Exception as e:
+                log("FNA member load error: %s", e)
+                return jsonify({"error": "Failed to load member"}), 500
 
         min_dist_kmz = float('inf')
         nearest_kmz_pop = None
@@ -616,7 +650,8 @@ def bbmap(app_number):
             "nearest_kmz_coords": nearest_kmz_coords,
             "routes": routes,
             "pops": pops,
-            "network": network
+            "network": network,
+            "fna_member": fna_member if network == "fna" else None
         }), 200, {'Content-Type': 'application/json'}
     except Exception as e:
         log("BBMap API error: %s", e)
