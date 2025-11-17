@@ -1,4 +1,4 @@
-# erate.py — FINAL: Bluebird + FNA Fiber Routes + 223 PoP Distance + KMZ Map + FULL ADMIN AUTH + POINT SYSTEM + TEXT SEARCH
+# erate.py — FINAL: Bluebird + FNA Member Routes + 223 PoP Distance + KMZ Map + FULL ADMIN AUTH + POINT SYSTEM + TEXT SEARCH
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup, session
@@ -86,13 +86,12 @@ def deduct_point():
             row = cur.fetchone()
             if not row or row[0] <= 0:
                 session.clear()
-                # NO FLASH — JS will handle via /points
                 return
             new_points = row[0] - 1
             cur.execute("UPDATE users SET points = %s WHERE username = %s", (new_points, username))
             conn.commit()
 
-# === /points ENDPOINT (LIVE COUNTER) ===
+# === /points ENDPOINT ===
 @erate_bp.route('/points')
 def points():
     if not session.get('username'):
@@ -115,7 +114,7 @@ def points():
         log("Points API error: %s", e)
         return jsonify({"points": 0})
 
-# === /out-of-points ENDPOINT (FOR JS POPUP) ===
+# === /out-of-points ENDPOINT ===
 @erate_bp.route('/out-of-points')
 def out_of_points():
     if not session.get('username'):
@@ -451,7 +450,6 @@ _load_fna_members()
 # === GLOBAL MAP DATA (LAZY LOADED) ===
 MAP_DATA = {
     "bluebird": {"pops": None, "routes": None, "loaded": False},
-    "fna": {"pops": None, "routes": None, "loaded": False}
 }
 
 # === LAZY KMZ LOADER (BLUEBIRD ONLY) ===
@@ -533,7 +531,6 @@ def bbmap(app_number):
     fna_member = request.args.get('fna_member')
 
     if network == "fna" and not fna_member:
-        # Return list of members
         return jsonify({
             "fna_members": sorted(FNA_MEMBERS.keys()),
             "message": "Select an FNA member"
@@ -668,7 +665,7 @@ def dashboard():
             table_data=[], total_count=0, total_filtered=0,
             filters={}, has_more=False, next_offset=0
         )
-    # DEDUCT POINT ON ANY FILTER (including text)
+    # DEDUCT POINT ON ANY FILTER
     if any(request.args.get(k) for k in ['state', 'modified_after', 'text']):
         deduct_point()
     state_filter = request.args.get('state', '').strip().upper()
@@ -679,7 +676,6 @@ def dashboard():
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10, autocommit=True)
     try:
         with conn.cursor() as cur:
-            # TOTAL COUNT
             count_sql = 'SELECT COUNT(*) FROM erate'
             count_params = []
             where_clauses = []
@@ -696,7 +692,6 @@ def dashboard():
                 count_sql += ' WHERE ' + ' AND '.join(where_clauses)
             cur.execute(count_sql, count_params)
             total_count = cur.fetchone()[0]
-            # FILTERED DATA
             sql = '''
                 SELECT app_number, entity_name, state, last_modified_datetime,
                        latitude, longitude
@@ -748,7 +743,7 @@ def dashboard():
 # === APPLICANT DETAILS API ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
-    deduct_point() # DEDUCT ON DETAILS
+    deduct_point()
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
     try:
         with conn.cursor() as cur:
@@ -757,7 +752,6 @@ def details(app_number):
             if not row:
                 return jsonify({"error": "Applicant not found"}), 404
             row = row[1:]
-            log("DETAILS ROW for %s: %s", app_number, row[:10])
             def fmt_date(dt):
                 if isinstance(dt, datetime):
                     return dt.strftime('%m/%d/%Y')
@@ -1177,7 +1171,6 @@ def set_guest():
                     (guest_ip_name, 'Guest', ip, 25)
                 )
             elif row[0] <= 0:
-                # Let JS show popup — no flash
                 pass
             conn.commit()
     return redirect(url_for('erate.dashboard'))
