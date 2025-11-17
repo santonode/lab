@@ -79,7 +79,7 @@ def deduct_point():
         else:
             ip = request.remote_addr or 'unknown'
         username = f"guest_{ip.replace('.', '')}"
-   
+  
     with psycopg.connect(DATABASE_URL) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT points FROM users WHERE username = %s", (username,))
@@ -475,7 +475,7 @@ def _load_kmz(provider):
                 MAP_DATA[provider]["routes"] = []
                 return
             kml_data = kmz.read(kml_files[0])
-        
+       
         root = ET.fromstring(kml_data)
         ns = {'kml': 'http://www.opengis.net/kml/2.2'}
         pops = []
@@ -527,26 +527,24 @@ def _load_kmz(provider):
 # === ENHANCED BBMap API (FNA: MEMBER ON-DEMAND) ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
-    network = request.args.get('network', 'bluebird')
-    fna_member = request.args.get('fna_member')
-
-    if network == "fna" and not fna_member:
-        return jsonify({
-            "fna_members": sorted(FNA_MEMBERS.keys()),
-            "message": "Select an FNA member"
-        })
-
-    deduct_point()
-    conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
     try:
+        network = request.args.get('network', 'bluebird')
+        fna_member = request.args.get('fna_member')
+
+        log("bbmap request: app=%s network=%s member=%s", app_number, network, fna_member)
+
+        conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT entity_name, address1, address2, city, state, zip_code, latitude, longitude
                 FROM erate WHERE app_number = %s
             """, (app_number,))
             row = cur.fetchone()
+        conn.close()
+
         if not row:
             return jsonify({"error": "Applicant not found"}), 404
+
         entity_name, address1, address2, city, state, zip_code, db_lat, db_lon = row
         full_address = f"{address1 or ''} {address2 or ''}, {city or ''}, {state or ''} {zip_code or ''}".strip()
         lat = float(db_lat) if db_lat else None
@@ -566,6 +564,20 @@ def bbmap(app_number):
             except:
                 lat, lon = None, None
 
+        # === FNA MEMBER LIST ===
+        if network == "fna" and not fna_member:
+            log("Serving FNA member list: %d members", len(FNA_MEMBERS))
+            return jsonify({
+                "fna_members": sorted(FNA_MEMBERS.keys()),
+                "pops": [],
+                "routes": [],
+                "applicant_coords": [lat, lon] if lat and lon else None,
+                "address": full_address,
+                "nearest_kmz_coords": None,
+                "distance": None,
+                "nearest_kmz_pop": None
+            })
+
         pops = []
         routes = []
 
@@ -577,17 +589,22 @@ def bbmap(app_number):
         else:  # FNA + member
             member_path = FNA_MEMBERS.get(fna_member)
             if not member_path or not os.path.exists(member_path):
+                log("FNA KMZ not found: %s", fna_member)
                 return jsonify({"error": "Member KMZ not found"}), 404
-            
+           
             try:
                 with zipfile.ZipFile(member_path, 'r') as kmz:
-                    kml_data = kmz.read('doc.kml')
+                    kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
+                    if not kml_files:
+                        log("No .kml in FNA KMZ: %s", member_path)
+                        return jsonify({"error": "Invalid KMZ"}), 500
+                    kml_data = kmz.read(kml_files[0])
                 root = ET.fromstring(kml_data)
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
                 for placemark in root.findall('.//kml:Placemark', ns):
                     name_elem = placemark.find('kml:name', ns)
                     name = name_elem.text.strip() if name_elem is not None else "Fiber"
-                    
+                   
                     point = placemark.find('.//kml:Point/kml:coordinates', ns)
                     if point and point.text:
                         parts = point.text.strip().split(',')
@@ -596,7 +613,7 @@ def bbmap(app_number):
                                 lon, lat = float(parts[0]), float(parts[1])
                                 pops.append({"name": name, "lon": lon, "lat": lat})
                             except: pass
-                    
+                   
                     line_strings = placemark.findall('.//kml:LineString/kml:coordinates', ns) or \
                                    placemark.findall('.//kml:MultiGeometry/kml:LineString/kml:coordinates', ns)
                     for line in line_strings:
@@ -616,6 +633,7 @@ def bbmap(app_number):
                 log("FNA member load error: %s", e)
                 return jsonify({"error": "Failed to load member"}), 500
 
+        # Nearest PoP logic
         min_dist_kmz = float('inf')
         nearest_kmz_pop = None
         nearest_kmz_coords = None
@@ -650,11 +668,10 @@ def bbmap(app_number):
             "network": network,
             "fna_member": fna_member if network == "fna" else None
         }), 200, {'Content-Type': 'application/json'}
+
     except Exception as e:
         log("BBMap API error: %s", e)
         return jsonify({"error": "Service unavailable"}), 500
-    finally:
-        conn.close()
 
 # === DASHBOARD (WITH AUTH CHECK + TEXT SEARCH) ===
 @erate_bp.route('/')
@@ -933,7 +950,6 @@ def _import_all_background(app):
     global CSV_HEADERS_LOGGED, ROW_DEBUG_COUNT
     CSV_HEADERS_LOGGED = False
     ROW_DEBUG_COUNT = 0
-    seen_in_csv = set()
     log("=== IMPORT STARTED — DEBUG ENABLED ===")
     try:
         log("Bulk import started")
@@ -958,11 +974,7 @@ def _import_all_background(app):
                     last_heartbeat = time.time()
                 app_number = row.get('Application Number', '').strip()
                 if not app_number: continue
-                if app_number in seen_in_csv:
-                    log("SKIPPED CSV DUPLICATE: %s", app_number)
-                    continue
                 batch.append(row)
-                seen_in_csv.add(app_number)
                 imported += 1
                 if len(batch) >= 1000:
                     cur.execute(
