@@ -695,10 +695,10 @@
             }
         }
 
-        // === openMapModal() — **SET currentAppNumber FIRST** ===
+        // === openMapModal() — ALWAYS CLEAN UP LOADING ===
         async function openMapModal(appNumber, dbLat, dbLon) {
             updatePoints();
-            currentAppNumber = appNumber; // ← **MUST BE FIRST**
+            currentAppNumber = appNumber;
             body.classList.add('loading');
             overlay.classList.add('show');
             mapModal.classList.add('show');
@@ -708,15 +708,20 @@
                 delete mapDiv._leaflet_map;
             }
             mapDiv.innerHTML = '';
-            // Reset dropdowns
-            document.getElementById('network-select').value = currentNetwork;
-            document.getElementById('fna-member-select').style.display = 'none';
-            document.getElementById('fna-member-select').disabled = true;
-            document.getElementById('fna-member-select').innerHTML = '<option>Loading members...</option>';
-            document.getElementById('map-title').textContent = (currentNetwork === 'fna' ? 'FNA' : 'Bluebird') + ' Network + Applicant';
-            await loadMap(appNumber, currentNetwork);
-            body.classList.remove('loading');
-            overlay.classList.remove('show');
+            try {
+                document.getElementById('network-select').value = currentNetwork;
+                document.getElementById('fna-member-select').style.display = 'none';
+                document.getElementById('fna-member-select').disabled = true;
+                document.getElementById('fna-member-select').innerHTML = '<option>Loading members...</option>';
+                document.getElementById('map-title').textContent = (currentNetwork === 'fna' ? 'FNA' : 'Bluebird') + ' Network + Applicant';
+                await loadMap(appNumber, currentNetwork);
+            } catch (err) {
+                console.error("Map load failed:", err);
+                alert("Failed to load map. Please try again.");
+            } finally {
+                body.classList.remove('loading');
+                overlay.classList.remove('show');
+            }
         }
 
         // === loadMap() — FNA MEMBER ON-DEMAND ===
@@ -781,7 +786,7 @@
                 const [lat1, lng1] = data.applicant_coords;
                 const [lat2, lng2] = data.nearest_kmz_coords;
                 L.polyline([[lat1, lng1], [lat2, lng2]], {
-                    color: '#dc3545', weight: 4, dashArray: '10, 10', opacity: 0.8
+                    color: '#dc3545', weight: 4, dashArray: '10, 10',, 10', opacity: 0.8
                 }).bindPopup(`<strong>${data.distance}</strong> to ${data.nearest_kmz_pop}`)
                   .addTo(map);
             }
@@ -812,7 +817,7 @@
                     : 'Bluebird Network + Applicant';
         }
 
-        // === NETWORK SWITCHER — **ONLY IF currentAppNumber EXISTS** ===
+        // === NETWORK SWITCHER — CRASH-PROOF ===
         document.getElementById('network-select')?.addEventListener('change', async (e) => {
             const network = e.target.value;
             const memberSelect = document.getElementById('fna-member-select');
@@ -852,9 +857,15 @@
             if (currentAppNumber) {
                 body.classList.add('loading');
                 overlay.classList.add('show');
-                await loadMap(currentAppNumber, network, currentFnaMember);
-                body.classList.remove('loading');
-                overlay.classList.remove('show');
+                try {
+                    await loadMap(currentAppNumber, network, currentFnaMember);
+                } catch (err) {
+                    console.error("Map load failed:", err);
+                    alert("Failed to load fiber. Please try again.");
+                } finally {
+                    body.classList.remove('loading');
+                    overlay.classList.remove('show');
+                }
             }
         });
 
@@ -865,13 +876,18 @@
             if (member && currentAppNumber) {
                 body.classList.add('loading');
                 overlay.classList.add('show');
-                await loadMap(currentAppNumber, 'fna', member);
-                body.classList.remove('loading');
-                overlay.classList.remove('show');
+                try {
+                    await loadMap(currentAppNumber, 'fna', member);
+                } catch (err) {
+                    console.error("FNA load failed:", err);
+                } finally {
+                    body.classList.remove('loading');
+                    overlay.classList.remove('show');
+                }
             }
         });
 
-        // === closeModal() ===
+        // === closeModal() — DOUBLE SAFETY ===
         function closeModal(type) {
             if (type === 'detail') detailModal.classList.remove('show');
             if (type === 'bbmap') bbmapModal.classList.remove('show');
@@ -887,6 +903,9 @@
             if (type === 'outOfPoints') {
                 document.getElementById('outOfPointsModal').classList.remove('show');
             }
+
+            body.classList.remove('loading');
+            overlay.classList.remove('show');
         }
 
         // === renderSection(), activateTab(), copyAddress() ===
