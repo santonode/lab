@@ -692,6 +692,7 @@
                 overlay.classList.remove('show');
             }
         }
+        
         // === openMapModal() — FULLY CLEAR MAP ===
         async function openMapModal(appNumber, dbLat, dbLon) {
             updatePoints();
@@ -701,33 +702,58 @@
             mapModal.classList.add('show');
 
             const mapDiv = document.getElementById('map-container');
-            
-            // === DESTROY OLD MAP ===
             if (mapDiv._leaflet_map) {
                 mapDiv._leaflet_map.remove();
                 delete mapDiv._leaflet_map;
             }
             mapDiv.innerHTML = '';
 
-            try {
-                document.getElementById('network-select').value = currentNetwork;
-                document.getElementById('fna-member-select').style.display = 'none';
-                document.getElementById('fna-member-select').disabled = true;
-                document.getElementById('fna-member-select').innerHTML = '<option>Loading members...</option>';
-                document.getElementById('map-title').textContent = (currentNetwork === 'fna' ? 'FNA' : 'Bluebird') + ' Network + Applicant';
+            document.getElementById('network-select').value = currentNetwork;
+            const memberSelect = document.getElementById('fna-member-select');
 
-                await loadMap(appNumber, currentNetwork);
-            } catch (err) {
-                console.error("Map load failed:", err);
-                mapDiv.innerHTML = 
-                    `<div style="padding:20px; color:red; font-weight:bold;">
-                       Failed to load map: ${err.message}
-                       <br><small>Try refreshing or switching networks.</small>
-                     </div>`;
-            } finally {
-                body.classList.remove('loading');
-                overlay.classList.remove('show');
+            // Force FNA dropdown + first member load if FNA is selected
+            if (currentNetwork === 'fna') {
+                document.getElementById('map-loading').style.display = 'flex';
+                document.body.style.cursor = 'wait';
+                try {
+                    const resp = await fetch(`/erate/bbmap/${appNumber}?network=fna`);
+                    const data = await resp.json();
+                    if (data.fna_members && data.fna_members.length > 0) {
+                        memberSelect.style.display = 'block';
+                        memberSelect.innerHTML = '<option value="">— Select Member —</option>';
+                        data.fna_members.forEach(displayText => {
+                            let cleanName = displayText.replace(/^★\s*/, '').trim();
+                            const parenIndex = cleanName.indexOf(' (');
+                            if (parenIndex !== -1) cleanName = cleanName.substring(0, parenIndex).trim();
+                            const opt = document.createElement('option');
+                            opt.value = cleanName;
+                            opt.textContent = displayText;
+                            memberSelect.appendChild(opt);
+                        });
+                        memberSelect.disabled = false;
+                        if (!currentFnaMember) {
+                            const first = data.fna_members[0].replace(/^★\s*/, '').split(' (')[0].trim();
+                            memberSelect.value = first;
+                            currentFnaMember = first;
+                        }
+                    }
+                } catch (err) {
+                    console.error("FNA failed on open:", err);
+                } finally {
+                    document.getElementById('map-loading').style.display = 'none';
+                    document.body.style.cursor = 'default';
+                }
+            } else {
+                memberSelect.style.display = 'none';
             }
+
+            document.getElementById('map-title').textContent = 
+                currentNetwork === 'fna' ? 'FNA Network + Applicant' : 'Bluebird Network + Applicant';
+
+            await loadMap(appNumber, currentNetwork, currentFnaMember);
+
+            body.classList.remove('loading');
+            overlay.classList.remove('show');
         }
 
         // === loadMap() — ONLY INIT IF NOT EXISTS ===
