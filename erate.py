@@ -524,136 +524,217 @@ def _load_kmz(provider):
         MAP_DATA[provider]["pops"] = []
         MAP_DATA[provider]["routes"] = []
 
-# === ENHANCED BBMap API — FINAL VERSION WITH SMART FNA DROPDOWN ===
+# === FINAL WORKING BBMap API — STARRED MEMBERS LOAD + NO SYNTAX ERROR ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
-    try:
-        network = request.args.get('network', 'bluebird')
-        fna_member = request.args.get('fna_member')
-        log("bbmap request: app=%s network=%s member=%s", app_number, network, fna_member)
+    network = request.args.get('network', 'bluebird')
+    fna_member = request.args.get('fna_member')
+    log("bbmap request: app=%s network=%s member=%s", app_number, network, fna_member)
 
-        conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT entity_name, address1, address2, city, state, zip_code, latitude, longitude
-                FROM erate WHERE app_number = %s
-            """, (app_number,))
-            row = cur.fetchone()
-        conn.close()
+    # === GET APPLICANT FROM DB ===
+    conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT entity_name, address1, address2, city, state, zip_code, latitude, longitude
+            FROM erate WHERE app_number = %s
+        """, (app_number,))
+        row = cur.fetchone()
+    conn.close()
 
-        if not row:
-            return jsonify({"error": "Applicant not found"}), 404
+    if not row:
+        return jsonify({"error": "Applicant not found"}), 404
 
-        entity_name, address1, address2, city, state, zip_code, db_lat, db_lon = row
-        full_address = f"{address1 or ''} {address2 or ''}, {city or ''}, {state or ''} {zip_code or ''}".strip()
+    entity_name, address1, address2, city, state, zip_code, db_lat, db_lon = row
+    full_address = f"{address1 or ''} {address2 or ''}, {city or ''}, {state or ''} {zip_code or ''}".strip()
 
-        # === LOCK IN TRUE APPLICANT COORDS (NEVER CHANGES) ===
-        applicant_lat = float(db_lat) if db_lat and str(db_lat).strip() and float(db_lat) != 0 else None
-        applicant_lon = float(db_lon) if db_lon and str(db_lon).strip() and float(db_lon) != 0 else None
+    # === LOCK IN APPLICANT COORDS ===
+    applicant_lat = float(db_lat) if db_lat and str(db_lat).strip() and float(db_lat) != 0 else None
+    applicant_lon = float(db_lon) if db_lon and str(db_lon).strip() and float(db_lon) != 0 else None
 
-        if not (applicant_lat and applicant_lon):
+    if not (applicant_lat and applicant_lon):
+        try:
+            geocode_resp = requests.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={'q': full_address, 'format': 'json', 'limit': 1},
+                headers={'User-Agent': 'E-Rate Dashboard/1.0'},
+                timeout=10
+            )
+            geo = geocode_resp.json()
+            if geo:
+                applicant_lat = float(geo[0]['lat'])
+                applicant_lon = float(geo[0]['lon'])
+        except:
+            applicant_lat = applicant_lon = None
+
+    final_applicant_coords = [applicant_lat, applicant_lon] if applicant_lat and applicant_lon else None
+
+    # === SMART FNA DROPDOWN (TOP 3 WITH STAR) ===
+    if network == "fna" and not fna_member:
+        log("Serving SMART FNA member list")
+
+        def haversine(lat1, lon1, lat2, lon2):
+            R = 3958.8
+            dlat = radians(lat2 - lat1)
+            dlon = radians(lon2 - lon1)
+            a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+            c = 2 * atan2(sqrt(a), sqrt(1-a))
+            return R * c
+
+        member_distances = []
+        for member_name, path in FNA_MEMBERS.items():
             try:
-                geocode_resp = requests.get(
-                    "https://nominatim.openstreetmap.org/search",
-                    params={'q': full_address, 'format': 'json', 'limit': 1},
-                    headers={'User-Agent': 'E-Rate Dashboard/1.0'},
-                    timeout=10
-                )
-                geo = geocode_resp.json()
-                if geo and 'lat' in geo[0] and 'lon' in geo[0]:
-                    applicant_lat = float(geo[0]['lat'])
-                    applicant_lon = float(geo[0]['lon'])
-            except Exception as e:
-                log("Geocode fallback failed: %s", e)
-                applicant_lat = applicant_lon = None
-
-        final_applicant_coords = [applicant_lat, applicant_lon] if applicant_lat and applicant_lon else None
-
-        # === SMART FNA DROPDOWN + STARRED MEMBERS LOAD CORRECTLY ===
-        if network == "fna" and not fna_member:
-            log("Serving SMART FNA member list with distance ranking")
-
-            def haversine(lat1, lon1, lat2, lon2):
-                R = 3958.8
-                dlat = radians(lat2 - lat1)
-                dlon = radians(lon2 - lon1)
-                a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
-                c = 2 * atan2(sqrt(a), sqrt(1-a))
-                return R * c
-
-            member_distances = []
-            app_lat = applicant_lat
-            app_lon = applicant_lon
-
-            for member_name, path in FNA_MEMBERS.items():
-                try:
-                    with zipfile.ZipFile(path, 'r') as kmz:
-                        kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
-                        if not kml_files: 
-                            member_distances.append((member_name, 99999))
-                            continue
-                        kml_data = kmz.read(kml_files[0])
-                    root = ET.fromstring(kml_data)
-                    ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-                    points = root.findall('.//kml:Point/kml:coordinates', ns)
-                    if not points:
-                        coords = root.findall('.//kml:coordinates', ns)
-                        if coords:
-                            first = coords[0].text.strip().split(',')[:2]
-                            lon, lat = float(first[0]), float(first[1])
-                            dist = haversine(app_lat, app_lon, lat, lon) if app_lat else 99999
-                            member_distances.append((member_name, dist))
-                        else:
-                            member_distances.append((member_name, 99999))
+                with zipfile.ZipFile(path, 'r') as kmz:
+                    kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
+                    if not kml_files:
+                        member_distances.append((member_name, 99999))
                         continue
-                    min_dist = float('inf')
-                    for point in points:
-                        if not point.text: continue
-                        parts = point.text.strip().split(',')
-                        if len(parts) < 2: continue
-                        lon, lat = float(parts[0]), float(parts[1])
-                        if app_lat and app_lon:
-                            dist = haversine(app_lat, app_lon, lat, lon)
-                            if dist < min_dist:
-                                min_dist = dist
-                    member_distances.append((member_name, min_dist if min_dist != float('inf') else 99999))
-                except:
+                    kml_data = kmz.read(kml_files[0])
+                root = ET.fromstring(kml_data)
+                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+                points = root.findall('.//kml:Point/kml:coordinates', ns)
+                if not points:
                     member_distances.append((member_name, 99999))
+                    continue
+                min_dist = float('inf')
+                for point in points:
+                    if not point.text: continue
+                    parts = point.text.strip().split(',')
+                    if len(parts) < 2: continue
+                    lon, lat = float(parts[0]), float(parts[1])
+                    if applicant_lat and applicant_lon:
+                        dist = haversine(applicant_lat, applicant_lon, lat, lon)
+                        if dist < min_dist:
+                            min_dist = dist
+                member_distances.append((member_name, min_dist if min_dist != float('inf') else 99999))
+            except:
+                member_distances.append((member_name, 99999))
 
-            member_distances.sort(key=lambda x: (x[1], x[0]))
-            ranked_members = []
-            for i, (clean_name, dist) in enumerate(member_distances):
-                if i < 3:
-                    ranked_members.append(f"★ {clean_name}")
-                else:
-                    ranked_members.append(clean_name)
+        member_distances.sort(key=lambda x: (x[1], x[0]))
+        ranked_members = []
+        for i, (name, dist) in enumerate(member_distances):
+            if i < 3:
+                ranked_members.append(f"★ {name}")
+            else:
+                ranked_members.append(name)
 
-            return jsonify({
-                "fna_members": ranked_members,
-                "pops": [],
-                "routes": [],
-                "applicant_coords": final_applicant_coords,
-                "address": full_address,
-                "nearest_kmz_coords": None,
-                "distance": None,
-                "nearest_kmz_pop": None
-            })
+        return jsonify({
+            "fna_members": ranked_members,
+            "pops": [],
+            "routes": [],
+            "applicant_coords": final_applicant_coords,
+            "address": full_address,
+            "nearest_kmz_coords": None,
+            "distance": None,
+            "nearest_kmz_pop": None
+        })
 
-        elif network == "fna" and fna_member:
-            # === STRIP STAR FROM DISPLAY NAME BEFORE LOOKUP ===
-            clean_member_name = fna_member
-            if fna_member.startswith("★ "):
-                clean_member_name = fna_member[2:]
-            elif fna_member.startswith("★"):
-                clean_member_name = fna_member[1:]
+    # === LOAD FIBER (BLUEBIRD OR FNA) ===
+    pops = []
+    routes = []
 
-            member_path = FNA_MEMBERS.get(clean_member_name)
-            if not member_path and fna_member in FNA_MEMBERS:
-                member_path = FNA_MEMBERS[fna_member]  # fallback
+    if network == "bluebird":
+        if not MAP_DATA["bluebird"]["loaded"]:
+            _load_kmz("bluebird")
+        pops = MAP_DATA["bluebird"]["pops"]
+        routes = MAP_DATA["bluebird"]["routes"]
 
-            if not member_path or not os.path.exists(member_path):
-                log("FNA KMZ not found: '%s' (cleaned: '%s')", fna_member, clean_member_name)
-                return jsonify({"error": "Member KMZ not found"}), 404
+    elif network == "fna" and fna_member:
+        # Remove star from name before lookup
+        clean_name = fna_member
+        if fna_member.startswith("★ "):
+            clean_name = fna_member[2:]
+        elif fna_member.startswith("★"):
+            clean_name = fna_member[1:]
+
+        member_path = FNA_MEMBERS.get(clean_name)
+        if not member_path:
+            member_path = FNA_MEMBERS.get(fna_member)  # fallback
+
+        if not member_path or not os.path.exists(member_path):
+            log("FNA KMZ not found: '%s' → tried clean: '%s'", fna_member, clean_name)
+            return jsonify({"error": "Member KMZ not found"}), 404
+
+        try:
+            with zipfile.ZipFile(member_path, 'r') as kmz:
+                kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
+                if not kml_files:
+                    return jsonify({"error": "Invalid KMZ"}), 500
+                kml_data = kmz.read(kml_files[0])
+            root = ET.fromstring(kml_data)
+            ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+
+            for placemark in root.findall('.//kml:Placemark', ns):
+                name_elem = placemark.find('kml:name', ns)
+                name = name_elem.text.strip() if name_elem is not None and name_elem.text else "Fiber"
+
+                point = placemark.find('.//kml:Point/kml:coordinates', ns)
+                if point and point.text:
+                    parts = point.text.strip().split(',')
+                    if len(parts) >= 2:
+                        try:
+                            lon, lat = float(parts[0]), float(parts[1])
+                            pops.append({"name": name, "lon": lon, "lat": lat})
+                        except: pass
+
+                line_strings = (
+                    placemark.findall('.//kml:LineString/kml:coordinates', ns) or
+                    placemark.findall('.//kml:MultiGeometry/kml:LineString/kml:coordinates', ns)
+                )
+                for line in line_strings:
+                    if line.text:
+                        coords = []
+                        for pair in line.text.strip().split():
+                            parts = pair.split(',')
+                            if len(parts) >= 2:
+                                try:
+                                    lon, lat = float(parts[0]), float(parts[1])
+                                    coords.append([lat, lon])
+                                except: continue
+                            if len(coords) > 1:
+                                routes.append({"name": name, "coords": coords})
+
+            log("Loaded FNA member: %s → %d PoPs, %d routes", clean_name, len(pops), len(routes))
+        except Exception as e:
+            log("FNA load error: %s", e)
+            return jsonify({"error": "Failed to load member"}), 500
+
+    # === NEAREST PoP + BLUEBIRD DISTANCE ===
+    nearest_kmz_pop = None
+    nearest_kmz_coords = None
+    if final_applicant_coords and pops:
+        app_lat, app_lon = final_applicant_coords
+        def haversine(lat1, lon1, lat2, lon2):
+            R = 3958.8
+            dlat = radians(lat2 - lat1)
+            dlon = radians(lon2 - lon1)
+            a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+            c = 2 * atan2(sqrt(a), sqrt(1-a))
+            return R * c
+        min_dist = float('inf')
+        for pop in pops:
+            dist = haversine(app_lat, app_lon, pop['lat'], pop['lon'])
+            if dist < min_dist:
+                min_dist = dist
+                nearest_kmz_pop = pop['name']
+                nearest_kmz_coords = [pop['lat'], pop['lon']]
+
+    dist_info = get_bluebird_distance(full_address)
+
+    return jsonify({
+        "entity_name": entity_name,
+        "address": full_address,
+        "applicant_coords": final_applicant_coords,
+        "pop_city": dist_info['pop_city'],
+        "distance": f"{dist_info['distance']:.1f} miles" if dist_info['distance'] != float('inf') else "N/A",
+        "coverage": dist_info['coverage'],
+        "nearest_kmz_pop": nearest_kmz_pop,
+        "nearest_kmz_coords": nearest_kmz_coords,
+        "routes": routes,
+        "pops": pops,
+        "network": network,
+        "fna_member": fna_member if network == "fna" else None
+    })
+
 
 # === DASHBOARD (WITH AUTH CHECK + TEXT SEARCH) ===
 @erate_bp.route('/')
