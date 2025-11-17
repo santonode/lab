@@ -781,12 +781,12 @@
                     .addTo(map);
             }
 
-            // Distance line
+            // Distance line — FIXED: Removed double comma
             if (data.nearest_kmz_coords && data.applicant_coords) {
                 const [lat1, lng1] = data.applicant_coords;
                 const [lat2, lng2] = data.nearest_kmz_coords;
                 L.polyline([[lat1, lng1], [lat2, lng2]], {
-                    color: '#dc3545', weight: 4, dashArray: '10, 10',, 10', opacity: 0.8
+                    color: '#dc3545', weight: 4, dashArray: '10, 10', opacity: 0.8
                 }).bindPopup(`<strong>${data.distance}</strong> to ${data.nearest_kmz_pop}`)
                   .addTo(map);
             }
