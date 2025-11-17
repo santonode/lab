@@ -568,7 +568,7 @@ def bbmap(app_number):
 
     final_applicant_coords = [applicant_lat, applicant_lon] if applicant_lat and applicant_lon else None
 
-# === SMART FNA DROPDOWN — TRUE CLOSEST 3 MEMBERS (BY ROUTE DISTANCE) ===
+        # === SMART FNA DROPDOWN — TRUE CLOSEST 3 MEMBERS (BY ROUTE DISTANCE) ===
         if network == "fna" and not fna_member:
             log("Serving ACCURATE FNA ranking for app %s at %s", app_number, full_address)
 
@@ -595,7 +595,6 @@ def bbmap(app_number):
                         root = ET.fromstring(kmz.read(kml_file))
                         ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
-                        # Look in ALL coordinates — LineStrings and Points
                         all_coords = []
                         for coord_elem in root.findall('.//kml:coordinates', ns):
                             if not coord_elem.text:
@@ -619,13 +618,11 @@ def bbmap(app_number):
 
                 member_rankings.append((member_name, min_distance))
 
-            # Sort by true closest fiber
             member_rankings.sort(key=lambda x: x[1])
 
-            # Build display list — star top 3 under 100 miles
             ranked_members = []
             for i, (name, dist) in enumerate(member_rankings):
-                if i < 3 and dist < 100:  # Only star reasonable ones
+                if i < 3 and dist < 100:
                     ranked_members.append(f"★ {name} ({dist:.0f}mi)")
                 else:
                     ranked_members.append(name)
