@@ -568,65 +568,80 @@ def bbmap(app_number):
 
     final_applicant_coords = [applicant_lat, applicant_lon] if applicant_lat and applicant_lon else None
 
-    # === SMART FNA DROPDOWN (TOP 3 WITH STAR) ===
-    if network == "fna" and not fna_member:
-        log("Serving SMART FNA member list")
+# === SMART FNA DROPDOWN — TRUE CLOSEST 3 MEMBERS (BY ROUTE DISTANCE) ===
+        if network == "fna" and not fna_member:
+            log("Serving ACCURATE FNA ranking for app %s at %s", app_number, full_address)
 
-        def haversine(lat1, lon1, lat2, lon2):
-            R = 3958.8
-            dlat = radians(lat2 - lat1)
-            dlon = radians(lon2 - lon1)
-            a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
-            c = 2 * atan2(sqrt(a), sqrt(1-a))
-            return R * c
+            def haversine(lat1, lon1, lat2, lon2):
+                R = 3958.8
+                dlat = radians(lat2 - lat1)
+                dlon = radians(lon2 - lon1)
+                a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+                c = 2 * atan2(sqrt(a), sqrt(1-a))
+                return R * c
 
-        member_distances = []
-        for member_name, path in FNA_MEMBERS.items():
-            try:
-                with zipfile.ZipFile(path, 'r') as kmz:
-                    kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
-                    if not kml_files:
-                        member_distances.append((member_name, 99999))
-                        continue
-                    kml_data = kmz.read(kml_files[0])
-                root = ET.fromstring(kml_data)
-                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-                points = root.findall('.//kml:Point/kml:coordinates', ns)
-                if not points:
-                    member_distances.append((member_name, 99999))
+            member_rankings = []
+
+            for member_name, path in FNA_MEMBERS.items():
+                if not os.path.exists(path):
                     continue
-                min_dist = float('inf')
-                for point in points:
-                    if not point.text: continue
-                    parts = point.text.strip().split(',')
-                    if len(parts) < 2: continue
-                    lon, lat = float(parts[0]), float(parts[1])
-                    if applicant_lat and applicant_lon:
-                        dist = haversine(applicant_lat, applicant_lon, lat, lon)
-                        if dist < min_dist:
-                            min_dist = dist
-                member_distances.append((member_name, min_dist if min_dist != float('inf') else 99999))
-            except:
-                member_distances.append((member_name, 99999))
 
-        member_distances.sort(key=lambda x: (x[1], x[0]))
-        ranked_members = []
-        for i, (name, dist) in enumerate(member_distances):
-            if i < 3:
-                ranked_members.append(f"★ {name}")
-            else:
-                ranked_members.append(name)
+                min_distance = float('inf')
+                try:
+                    with zipfile.ZipFile(path, 'r') as kmz:
+                        kml_file = next((f for f in kmz.namelist() if f.lower().endswith('.kml')), None)
+                        if not kml_file:
+                            continue
+                        root = ET.fromstring(kmz.read(kml_file))
+                        ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
-        return jsonify({
-            "fna_members": ranked_members,
-            "pops": [],
-            "routes": [],
-            "applicant_coords": final_applicant_coords,
-            "address": full_address,
-            "nearest_kmz_coords": None,
-            "distance": None,
-            "nearest_kmz_pop": None
-        })
+                        # Look in ALL coordinates — LineStrings and Points
+                        all_coords = []
+                        for coord_elem in root.findall('.//kml:coordinates', ns):
+                            if not coord_elem.text:
+                                continue
+                            for pair in coord_elem.text.strip().split():
+                                parts = pair.split(',')
+                                if len(parts) >= 2:
+                                    try:
+                                        lon, lat = float(parts[0]), float(parts[1])
+                                        all_coords.append((lat, lon))
+                                    except:
+                                        continue
+
+                        if all_coords and applicant_lat and applicant_lon:
+                            distances = [haversine(applicant_lat, applicant_lon, lat, lon) for lat, lon in all_coords]
+                            min_distance = min(distances)
+
+                except Exception as e:
+                    log("Error scanning %s: %s", member_name, e)
+                    min_distance = float('inf')
+
+                member_rankings.append((member_name, min_distance))
+
+            # Sort by true closest fiber
+            member_rankings.sort(key=lambda x: x[1])
+
+            # Build display list — star top 3 under 100 miles
+            ranked_members = []
+            for i, (name, dist) in enumerate(member_rankings):
+                if i < 3 and dist < 100:  # Only star reasonable ones
+                    ranked_members.append(f"★ {name} ({dist:.0f}mi)")
+                else:
+                    ranked_members.append(name)
+
+            log("Top 3 closest FNA members: %s", ranked_members[:3])
+
+            return jsonify({
+                "fna_members": ranked_members,
+                "pops": [],
+                "routes": [],
+                "applicant_coords": final_applicant_coords,
+                "address": full_address,
+                "nearest_kmz_coords": None,
+                "distance": None,
+                "nearest_kmz_pop": None
+            })
 
     # === LOAD FIBER (BLUEBIRD OR FNA) ===
     pops = []
