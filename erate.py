@@ -252,7 +252,7 @@ def _row_to_tuple(row):
         row.get('Category Two Description', ''),
         row.get('Installment Type', ''),
         int(row.get('Installment Min Range Years') or 0),
-        int(row.get('Installment Max Range Years')') or 0),
+        int(row.get('Installment Max Range Years') or 0),
         row.get('Request for Proposal Identifier', ''),
         row.get('State or Local Restrictions', ''),
         row.get('State or Local Restrictions Description', ''),
