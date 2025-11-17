@@ -692,40 +692,55 @@
                 overlay.classList.remove('show');
             }
         }
-        // === openMapModal() — ALWAYS CLEAN UP LOADING ===
+        // === openMapModal() — FULLY CLEAR MAP ===
         async function openMapModal(appNumber, dbLat, dbLon) {
             updatePoints();
             currentAppNumber = appNumber;
             body.classList.add('loading');
             overlay.classList.add('show');
             mapModal.classList.add('show');
+
             const mapDiv = document.getElementById('map-container');
+            
+            // === DESTROY OLD MAP ===
             if (mapDiv._leaflet_map) {
                 mapDiv._leaflet_map.remove();
                 delete mapDiv._leaflet_map;
             }
             mapDiv.innerHTML = '';
+
             try {
                 document.getElementById('network-select').value = currentNetwork;
                 document.getElementById('fna-member-select').style.display = 'none';
                 document.getElementById('fna-member-select').disabled = true;
                 document.getElementById('fna-member-select').innerHTML = '<option>Loading members...</option>';
                 document.getElementById('map-title').textContent = (currentNetwork === 'fna' ? 'FNA' : 'Bluebird') + ' Network + Applicant';
+
                 await loadMap(appNumber, currentNetwork);
             } catch (err) {
                 console.error("Map load failed:", err);
-                document.getElementById('map-container').innerHTML = 
+                mapDiv.innerHTML = 
                     `<div style="padding:20px; color:red; font-weight:bold;">
-                       Failed to load fiber: ${err.message || "Unknown error"}
-                       <br><small>Check console (F12) for details</small>
+                       Failed to load map: ${err.message}
+                       <br><small>Try refreshing or switching networks.</small>
                      </div>`;
             } finally {
                 body.classList.remove('loading');
                 overlay.classList.remove('show');
             }
         }
-        // === loadMap() — FNA + BLUEBIRD ROUTES (RED FOR FNA) ===
+
+        // === loadMap() — ONLY INIT IF NOT EXISTS ===
         async function loadMap(appNumber, network, fna_member = null) {
+            const mapDiv = document.getElementById('map-container');
+            
+            // === PREVENT DOUBLE INIT ===
+            if (mapDiv._leaflet_map) {
+                mapDiv._leaflet_map.remove();
+                delete mapDiv._leaflet_map;
+            }
+            mapDiv.innerHTML = '';
+
             let url = `/erate/bbmap/${appNumber}?network=${network}`;
             if (fna_member) {
                 url += `&fna_member=${encodeURIComponent(fna_member)}`;
@@ -734,15 +749,16 @@
             const data = await resp.json();
             if (data.error) throw new Error(data.error);
 
-            const map = L.map('map-container');
-            document.getElementById('map-container')._leaflet_map = map;
+            const map = L.map(mapDiv);
+            mapDiv._leaflet_map = map;
+
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; OpenStreetMap | ' + (network === 'fna' ? `FNA - ${fna_member || 'Select Member'}` : 'Bluebird Fiber')
             }).addTo(map);
 
             let applicantMarker = null;
 
-            // === POPS (GREEN for Bluebird, RED for FNA) ===
+            // PoPs
             data.pops.forEach(p => {
                 L.circleMarker([p.lat, p.lon], {
                     radius: 6,
@@ -753,7 +769,7 @@
                 .addTo(map);
             });
 
-            // === ROUTES (BLUE for Bluebird, RED for FNA) ===
+            // Routes
             if (data.routes && data.routes.length > 0) {
                 data.routes.forEach(r => {
                     if (r.coords.length > 1) {
@@ -768,7 +784,7 @@
                 });
             }
 
-            // === APPLICANT PIN ===
+            // Applicant
             if (data.applicant_coords) {
                 const [lat, lng] = data.applicant_coords;
                 const icon = L.divIcon({
@@ -781,7 +797,7 @@
                     .addTo(map);
             }
 
-            // === DISTANCE LINE ===
+            // Distance line
             if (data.nearest_kmz_coords && data.applicant_coords) {
                 const [lat1, lng1] = data.applicant_coords;
                 const [lat2, lng2] = data.nearest_kmz_coords;
@@ -791,7 +807,7 @@
                   .addTo(map);
             }
 
-            // === FIT BOUNDS ===
+            // Fit bounds
             if (data.applicant_coords) {
                 const [lat, lng] = data.applicant_coords;
                 const radiusMiles = 15;
@@ -810,14 +826,13 @@
                 map.setView([39.8, -92.5], 7);
             }
 
-            // === UPDATE TITLE ===
             document.getElementById('map-title').textContent = 
                 network === 'fna' 
                     ? (fna_member ? `FNA - ${fna_member}` : 'FNA Network')
                     : 'Bluebird Network + Applicant';
         }
 
-        // === NETWORK SWITCHER — CRASH-PROOF ===
+        // === NETWORK SWITCHER ===
         document.getElementById('network-select')?.addEventListener('change', async (e) => {
             const network = e.target.value;
             const memberSelect = document.getElementById('fna-member-select');
@@ -863,8 +878,7 @@
                     console.error("Map load failed:", err);
                     document.getElementById('map-container').innerHTML = 
                         `<div style="padding:20px; color:red; font-weight:bold;">
-                           Failed to load fiber: ${err.message || "Unknown error"}
-                           <br><small>Check console (F12) for details</small>
+                           Failed to load fiber: ${err.message}
                          </div>`;
                 } finally {
                     body.classList.remove('loading');
@@ -884,10 +898,6 @@
                     await loadMap(currentAppNumber, 'fna', member);
                 } catch (err) {
                     console.error("FNA load failed:", err);
-                    document.getElementById('map-container').innerHTML = 
-                        `<div style="padding:20px; color:red; font-weight:bold;">
-                           Failed to load FNA fiber: ${err.message || "Unknown error"}
-                         </div>`;
                 } finally {
                     body.classList.remove('loading');
                     overlay.classList.remove('show');
@@ -895,7 +905,7 @@
             }
         });
 
-        // === closeModal() — DOUBLE SAFETY ===
+        // === closeModal() ===
         function closeModal(type) {
             if (type === 'detail') detailModal.classList.remove('show');
             if (type === 'bbmap') bbmapModal.classList.remove('show');
