@@ -569,7 +569,7 @@ def bbmap(app_number):
 
         final_applicant_coords = [applicant_lat, applicant_lon] if applicant_lat and applicant_lon else None
 
-        # === SMART FNA DROPDOWN: TOP 3 CLOSEST WITH STAR ===
+        # === SMART FNA DROPDOWN + STARRED MEMBERS LOAD CORRECTLY ===
         if network == "fna" and not fna_member:
             log("Serving SMART FNA member list with distance ranking")
 
@@ -622,11 +622,11 @@ def bbmap(app_number):
 
             member_distances.sort(key=lambda x: (x[1], x[0]))
             ranked_members = []
-            for i, (name, dist) in enumerate(member_distances):
+            for i, (clean_name, dist) in enumerate(member_distances):
                 if i < 3:
-                    ranked_members.append(f"★ {name}")
+                    ranked_members.append(f"★ {clean_name}")
                 else:
-                    ranked_members.append(name)
+                    ranked_members.append(clean_name)
 
             return jsonify({
                 "fna_members": ranked_members,
@@ -639,106 +639,21 @@ def bbmap(app_number):
                 "nearest_kmz_pop": None
             })
 
-        # === LOAD FIBER (BLUEBIRD OR FNA MEMBER) ===
-        pops = []
-        routes = []
-
-        if network == "bluebird":
-            if not MAP_DATA["bluebird"]["loaded"]:
-                _load_kmz("bluebird")
-            pops = MAP_DATA["bluebird"]["pops"]
-            routes = MAP_DATA["bluebird"]["routes"]
-
         elif network == "fna" and fna_member:
-            member_path = FNA_MEMBERS.get(fna_member)
+            # === STRIP STAR FROM DISPLAY NAME BEFORE LOOKUP ===
+            clean_member_name = fna_member
+            if fna_member.startswith("★ "):
+                clean_member_name = fna_member[2:]
+            elif fna_member.startswith("★"):
+                clean_member_name = fna_member[1:]
+
+            member_path = FNA_MEMBERS.get(clean_member_name)
+            if not member_path and fna_member in FNA_MEMBERS:
+                member_path = FNA_MEMBERS[fna_member]  # fallback
+
             if not member_path or not os.path.exists(member_path):
-                log("FNA KMZ not found: %s", fna_member)
+                log("FNA KMZ not found: '%s' (cleaned: '%s')", fna_member, clean_member_name)
                 return jsonify({"error": "Member KMZ not found"}), 404
-
-            try:
-                with zipfile.ZipFile(member_path, 'r') as kmz:
-                    kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
-                    if not kml_files:
-                        return jsonify({"error": "Invalid KMZ"}), 500
-                    kml_data = kmz.read(kml_files[0])
-                root = ET.fromstring(kml_data)
-                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-
-                for placemark in root.findall('.//kml:Placemark', ns):
-                    name_elem = placemark.find('kml:name', ns)
-                    name = name_elem.text.strip() if name_elem is not None and name_elem.text else "Fiber"
-
-                    point = placemark.find('.//kml:Point/kml:coordinates', ns)
-                    if point and point.text:
-                        parts = point.text.strip().split(',')
-                        if len(parts) >= 2:
-                            try:
-                                lon, lat = float(parts[0]), float(parts[1])
-                                pops.append({"name": name, "lon": lon, "lat": lat})
-                            except: pass
-
-                    line_strings = (
-                        placemark.findall('.//kml:LineString/kml:coordinates', ns) or
-                        placemark.findall('.//kml:MultiGeometry/kml:LineString/kml:coordinates', ns)
-                    )
-                    for line in line_strings:
-                        if line.text:
-                            coords = []
-                            for pair in line.text.strip().split():
-                                parts = pair.split(',')
-                                if len(parts) >= 2:
-                                    try:
-                                        lon, lat = float(parts[0]), float(parts[1])
-                                        coords.append([lat, lon])
-                                    except: continue
-                            if len(coords) > 1:
-                                routes.append({"name": name, "coords": coords})
-
-                log("Loaded FNA member: %s → %d PoPs, %d routes", fna_member, len(pops), len(routes))
-            except Exception as e:
-                log("FNA member load error: %s", e)
-                return jsonify({"error": "Failed to load member"}), 500
-
-        # === NEAREST PoP IN CURRENT NETWORK ===
-        min_dist_kmz = float('inf')
-        nearest_kmz_pop = None
-        nearest_kmz_coords = None
-        if final_applicant_coords:
-            app_lat, app_lon = final_applicant_coords
-            def haversine(lat1, lon1, lat2, lon2):
-                R = 3958.8
-                dlat = radians(lat2 - lat1)
-                dlon = radians(lon2 - lon1)
-                a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
-                c = 2 * atan2(sqrt(a), sqrt(1-a))
-                return R * c
-            for pop in pops:
-                dist = haversine(app_lat, app_lon, pop['lat'], pop['lon'])
-                if dist < min_dist_kmz:
-                    min_dist_kmz = dist
-                    nearest_kmz_pop = pop['name']
-                    nearest_kmz_coords = [pop['lat'], pop['lon']]
-
-        dist_info = get_bluebird_distance(full_address)
-
-        return jsonify({
-            "entity_name": entity_name,
-            "address": full_address,
-            "applicant_coords": final_applicant_coords,
-            "pop_city": dist_info['pop_city'],
-            "distance": f"{dist_info['distance']:.1f} miles" if dist_info['distance'] != float('inf') else "N/A",
-            "coverage": dist_info['coverage'],
-            "nearest_kmz_pop": nearest_kmz_pop,
-            "nearest_kmz_coords": nearest_kmz_coords,
-            "routes": routes,
-            "pops": pops,
-            "network": network,
-            "fna_member": fna_member if network == "fna" else None
-        }), 200, {'Content-Type': 'application/json'}
-
-    except Exception as e:
-        log("BBMap API error: %s", e)
-        return jsonify({"error": "Service unavailable"}), 500
 
 # === DASHBOARD (WITH AUTH CHECK + TEXT SEARCH) ===
 @erate_bp.route('/')
