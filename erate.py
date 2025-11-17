@@ -1,4 +1,6 @@
 # erate.py — FINAL: Bluebird + FNA Member Routes + 223 PoP Distance + KMZ Map + FULL ADMIN AUTH + POINT SYSTEM + TEXT SEARCH
+# + FIXED: Applicant pin never moves
+# + NEW: FNA dropdown shows top 3 closest members first with star
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup, session
@@ -70,7 +72,6 @@ except Exception as e:
 def deduct_point():
     if not session.get('username'):
         return
-    # Resolve real username (guest → guest_IP)
     username = session['username']
     if username == 'guest':
         ip = request.headers.get('X-Forwarded-For', request.remote_addr)
@@ -79,7 +80,7 @@ def deduct_point():
         else:
             ip = request.remote_addr or 'unknown'
         username = f"guest_{ip.replace('.', '')}"
-  
+ 
     with psycopg.connect(DATABASE_URL) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT points FROM users WHERE username = %s", (username,))
@@ -251,7 +252,7 @@ def _row_to_tuple(row):
         row.get('Category Two Description', ''),
         row.get('Installment Type', ''),
         int(row.get('Installment Min Range Years') or 0),
-        int(row.get('Installment Max Range Years') or 0),
+        int(row.get('Installment Max Range Years')') or 0),
         row.get('Request for Proposal Identifier', ''),
         row.get('State or Local Restrictions', ''),
         row.get('State or Local Restrictions Description', ''),
@@ -444,7 +445,6 @@ def _load_fna_members():
             FNA_MEMBERS[member_name] = os.path.join(FNA_MEMBERS_DIR, file)
     log("Loaded %d FNA members", len(FNA_MEMBERS))
 
-# Call on startup
 _load_fna_members()
 
 # === GLOBAL MAP DATA (LAZY LOADED) ===
@@ -475,7 +475,7 @@ def _load_kmz(provider):
                 MAP_DATA[provider]["routes"] = []
                 return
             kml_data = kmz.read(kml_files[0])
-       
+      
         root = ET.fromstring(kml_data)
         ns = {'kml': 'http://www.opengis.net/kml/2.2'}
         pops = []
@@ -524,7 +524,7 @@ def _load_kmz(provider):
         MAP_DATA[provider]["pops"] = []
         MAP_DATA[provider]["routes"] = []
 
-# === ENHANCED BBMap API (FNA: MEMBER ON-DEMAND) — FIXED APPLICANT PIN ===
+# === ENHANCED BBMap API — FINAL VERSION WITH SMART FNA DROPDOWN ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
     try:
@@ -547,11 +547,10 @@ def bbmap(app_number):
         entity_name, address1, address2, city, state, zip_code, db_lat, db_lon = row
         full_address = f"{address1 or ''} {address2 or ''}, {city or ''}, {state or ''} {zip_code or ''}".strip()
 
-        # === LOCK IN THE TRUE APPLICANT COORDINATES FROM DB (NEVER CHANGE) ===
+        # === LOCK IN TRUE APPLICANT COORDS (NEVER CHANGES) ===
         applicant_lat = float(db_lat) if db_lat and str(db_lat).strip() and float(db_lat) != 0 else None
         applicant_lon = float(db_lon) if db_lon and str(db_lon).strip() and float(db_lon) != 0 else None
 
-        # Only geocode as fallback if DB has no valid coords
         if not (applicant_lat and applicant_lon):
             try:
                 geocode_resp = requests.get(
@@ -568,14 +567,69 @@ def bbmap(app_number):
                 log("Geocode fallback failed: %s", e)
                 applicant_lat = applicant_lon = None
 
-        # THIS IS NOW THE FINAL, UNTOUCHABLE APPLICANT COORDINATE
         final_applicant_coords = [applicant_lat, applicant_lon] if applicant_lat and applicant_lon else None
 
-        # === FNA MEMBER LIST (when no member selected) ===
+        # === SMART FNA DROPDOWN: TOP 3 CLOSEST WITH STAR ===
         if network == "fna" and not fna_member:
-            log("Serving FNA member list: %d members", len(FNA_MEMBERS))
+            log("Serving SMART FNA member list with distance ranking")
+
+            def haversine(lat1, lon1, lat2, lon2):
+                R = 3958.8
+                dlat = radians(lat2 - lat1)
+                dlon = radians(lon2 - lon1)
+                a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+                c = 2 * atan2(sqrt(a), sqrt(1-a))
+                return R * c
+
+            member_distances = []
+            app_lat = applicant_lat
+            app_lon = applicant_lon
+
+            for member_name, path in FNA_MEMBERS.items():
+                try:
+                    with zipfile.ZipFile(path, 'r') as kmz:
+                        kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
+                        if not kml_files: 
+                            member_distances.append((member_name, 99999))
+                            continue
+                        kml_data = kmz.read(kml_files[0])
+                    root = ET.fromstring(kml_data)
+                    ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+                    points = root.findall('.//kml:Point/kml:coordinates', ns)
+                    if not points:
+                        coords = root.findall('.//kml:coordinates', ns)
+                        if coords:
+                            first = coords[0].text.strip().split(',')[:2]
+                            lon, lat = float(first[0]), float(first[1])
+                            dist = haversine(app_lat, app_lon, lat, lon) if app_lat else 99999
+                            member_distances.append((member_name, dist))
+                        else:
+                            member_distances.append((member_name, 99999))
+                        continue
+                    min_dist = float('inf')
+                    for point in points:
+                        if not point.text: continue
+                        parts = point.text.strip().split(',')
+                        if len(parts) < 2: continue
+                        lon, lat = float(parts[0]), float(parts[1])
+                        if app_lat and app_lon:
+                            dist = haversine(app_lat, app_lon, lat, lon)
+                            if dist < min_dist:
+                                min_dist = dist
+                    member_distances.append((member_name, min_dist if min_dist != float('inf') else 99999))
+                except:
+                    member_distances.append((member_name, 99999))
+
+            member_distances.sort(key=lambda x: (x[1], x[0]))
+            ranked_members = []
+            for i, (name, dist) in enumerate(member_distances):
+                if i < 3:
+                    ranked_members.append(f"★ {name}")
+                else:
+                    ranked_members.append(name)
+
             return jsonify({
-                "fna_members": sorted(FNA_MEMBERS.keys()),
+                "fna_members": ranked_members,
                 "pops": [],
                 "routes": [],
                 "applicant_coords": final_applicant_coords,
@@ -585,6 +639,7 @@ def bbmap(app_number):
                 "nearest_kmz_pop": None
             })
 
+        # === LOAD FIBER (BLUEBIRD OR FNA MEMBER) ===
         pops = []
         routes = []
 
@@ -613,7 +668,6 @@ def bbmap(app_number):
                     name_elem = placemark.find('kml:name', ns)
                     name = name_elem.text.strip() if name_elem is not None and name_elem.text else "Fiber"
 
-                    # Points (PoPs)
                     point = placemark.find('.//kml:Point/kml:coordinates', ns)
                     if point and point.text:
                         parts = point.text.strip().split(',')
@@ -623,7 +677,6 @@ def bbmap(app_number):
                                 pops.append({"name": name, "lon": lon, "lat": lat})
                             except: pass
 
-                    # Lines
                     line_strings = (
                         placemark.findall('.//kml:LineString/kml:coordinates', ns) or
                         placemark.findall('.//kml:MultiGeometry/kml:LineString/kml:coordinates', ns)
@@ -646,11 +699,10 @@ def bbmap(app_number):
                 log("FNA member load error: %s", e)
                 return jsonify({"error": "Failed to load member"}), 500
 
-        # === Nearest PoP in current network (for distance line) ===
+        # === NEAREST PoP IN CURRENT NETWORK ===
         min_dist_kmz = float('inf')
         nearest_kmz_pop = None
         nearest_kmz_coords = None
-
         if final_applicant_coords:
             app_lat, app_lon = final_applicant_coords
             def haversine(lat1, lon1, lat2, lon2):
@@ -660,7 +712,6 @@ def bbmap(app_number):
                 a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
                 c = 2 * atan2(sqrt(a), sqrt(1-a))
                 return R * c
-
             for pop in pops:
                 dist = haversine(app_lat, app_lon, pop['lat'], pop['lon'])
                 if dist < min_dist_kmz:
@@ -668,13 +719,12 @@ def bbmap(app_number):
                     nearest_kmz_pop = pop['name']
                     nearest_kmz_coords = [pop['lat'], pop['lon']]
 
-        # Bluebird 223 distance (always shown)
         dist_info = get_bluebird_distance(full_address)
 
         return jsonify({
             "entity_name": entity_name,
             "address": full_address,
-            "applicant_coords": final_applicant_coords,  # ← NEVER CHANGES
+            "applicant_coords": final_applicant_coords,
             "pop_city": dist_info['pop_city'],
             "distance": f"{dist_info['distance']:.1f} miles" if dist_info['distance'] != float('inf') else "N/A",
             "coverage": dist_info['coverage'],
