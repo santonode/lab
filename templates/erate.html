@@ -695,10 +695,10 @@
             }
         }
 
-        // === openMapModal() — **FIX: SET currentAppNumber FIRST** ===
+        // === openMapModal() — **SET currentAppNumber FIRST** ===
         async function openMapModal(appNumber, dbLat, dbLon) {
             updatePoints();
-            currentAppNumber = appNumber; // ← **CRITICAL: SET BEFORE ANYTHING**
+            currentAppNumber = appNumber; // ← **MUST BE FIRST**
             body.classList.add('loading');
             overlay.classList.add('show');
             mapModal.classList.add('show');
@@ -812,7 +812,7 @@
                     : 'Bluebird Network + Applicant';
         }
 
-        // === NETWORK SWITCHER — **FIX: ONLY IF currentAppNumber EXISTS** ===
+        // === NETWORK SWITCHER — **ONLY IF currentAppNumber EXISTS** ===
         document.getElementById('network-select')?.addEventListener('change', async (e) => {
             const network = e.target.value;
             const memberSelect = document.getElementById('fna-member-select');
@@ -825,7 +825,7 @@
                 try {
                     const resp = await fetch(`/erate/bbmap/${currentAppNumber}?network=fna`);
                     const data = await resp.json();
-                    if (data.fna_members) {
+                    if (data.fna_members && data.fna_members.length > 0) {
                         memberSelect.innerHTML = '<option value="">— Select Member —</option>';
                         data.fna_members.forEach(m => {
                             const opt = document.createElement('option');
@@ -834,8 +834,11 @@
                             memberSelect.appendChild(opt);
                         });
                         memberSelect.disabled = false;
+                    } else {
+                        memberSelect.innerHTML = '<option>No members available</option>';
                     }
                 } catch (err) {
+                    console.error("FNA members load error:", err);
                     memberSelect.innerHTML = '<option>Error loading members</option>';
                 }
             } else {
