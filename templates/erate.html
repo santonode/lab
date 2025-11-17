@@ -667,6 +667,7 @@
                 overlay.classList.remove('show');
             }
         }
+
         // === checkBluebird() ===
         async function checkBluebird(appNumber) {
             updatePoints();
@@ -693,10 +694,11 @@
                 overlay.classList.remove('show');
             }
         }
-        // === openMapModal() ===
+
+        // === openMapModal() — **FIX: SET currentAppNumber FIRST** ===
         async function openMapModal(appNumber, dbLat, dbLon) {
             updatePoints();
-            currentAppNumber = appNumber;
+            currentAppNumber = appNumber; // ← **CRITICAL: SET BEFORE ANYTHING**
             body.classList.add('loading');
             overlay.classList.add('show');
             mapModal.classList.add('show');
@@ -810,13 +812,13 @@
                     : 'Bluebird Network + Applicant';
         }
 
-        // === NETWORK SWITCHER ===
+        // === NETWORK SWITCHER — **FIX: ONLY IF currentAppNumber EXISTS** ===
         document.getElementById('network-select')?.addEventListener('change', async (e) => {
             const network = e.target.value;
             const memberSelect = document.getElementById('fna-member-select');
             currentNetwork = network;
 
-            if (network === 'fna') {
+            if (network === 'fna' && currentAppNumber) {
                 memberSelect.style.display = 'block';
                 memberSelect.disabled = true;
                 memberSelect.innerHTML = '<option>Loading members...</option>';
@@ -833,7 +835,7 @@
                         });
                         memberSelect.disabled = false;
                     }
-                } catch {
+                } catch (err) {
                     memberSelect.innerHTML = '<option>Error loading members</option>';
                 }
             } else {
