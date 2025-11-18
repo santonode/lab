@@ -880,17 +880,6 @@
             }
         });
 
-        memberSelect?.addEventListener('change', async (e) => {
-            currentFnaMember = e.target.value;
-            if (currentFnaMember) {
-                document.getElementById('map-loading').style.display = 'flex';
-                document.body.style.cursor = 'wait';
-                await loadMap(currentAppNumber, 'fna', currentFnaMember);
-                document.getElementById('map-loading').style.display = 'none';
-                document.body.style.cursor = 'default';
-            }
-        });
-
         document.getElementById('fna-member-select')?.addEventListener('change', async (e) => {
             const selected = e.target.value;
             currentFnaMember = selected;
