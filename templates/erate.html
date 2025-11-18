@@ -634,8 +634,6 @@
                 };
             });
 
-            // CRITICAL FIX — THIS LINE MUST BE HERE
-            window.memberSelect = document.getElementById('fna-member-select');
         });
 
         document.addEventListener('click', updatePoints);
@@ -717,9 +715,16 @@
             }
             mapDiv.innerHTML = '';
 
+            // CRITICAL: Get fresh reference to memberSelect
+            const memberSelect = document.getElementById('fna-member-select');
+
+            // Restore network preference
             document.getElementById('network-select').value = currentNetwork;
+
+            // Trigger the change event — this will handle everything
             document.getElementById('network-select').dispatchEvent(new Event('change'));
 
+            // Set title
             document.getElementById('map-title').textContent = 
                 currentNetwork === 'fna' ? 'FNA Network + Applicant' : 'Bluebird Network + Applicant';
 
@@ -835,9 +840,9 @@
             currentNetwork = network;
             localStorage.setItem('preferredNetwork', network);
 
-            console.log("Network switched to:", network);
+            const memberSelect = document.getElementById('fna-member-select');  // Fresh reference
 
-            document.getElementById('map-title').textContent = 
+            document.getElementById('map-title').textContent =
                 network === 'fna' ? 'FNA Network + Applicant' : 'Bluebird Network + Applicant';
 
             document.getElementById('map-loading').style.display = 'flex';
@@ -845,28 +850,26 @@
 
             try {
                 if (network === 'fna') {
-                    window.memberSelect.style.display = 'block';
-                    window.memberSelect.disabled = true;
-                    window.memberSelect.innerHTML = '<option>Loading members...</option>';
+                    memberSelect.style.display = 'block';
+                    memberSelect.disabled = true;
+                    memberSelect.innerHTML = '<option>Loading members...</option>';
 
                     const resp = await fetch(`/erate/bbmap/${currentAppNumber}?network=fna`);
                     const data = await resp.json();
 
                     if (data.fna_members?.length > 0) {
-                        window.memberSelect.innerHTML = '<option value="">— Select Member —</option>';
+                        memberSelect.innerHTML = '<option value="">— Select Member —</option>';
                         data.fna_members.forEach(text => {
                             const clean = text.replace(/^★\s*/, '').split(' (')[0].trim();
                             const opt = new Option(text, clean);
-                            window.memberSelect.appendChild(opt);
+                            memberSelect.appendChild(opt);
                         });
-                        window.memberSelect.disabled = false;
-                        currentFnaMember = window.memberSelect.options[1].value;
-                        window.memberSelect.value = currentFnaMember;
+                        memberSelect.disabled = false;
+                        currentFnaMember = memberSelect.options[1].value;
+                        memberSelect.value = currentFnaMember;
                     }
                 } else {
-                    if (window.memberSelect) {
-                        window.memberSelect.style.display = 'none';
-                    }
+                    memberSelect.style.display = 'none';
                     currentFnaMember = null;
                 }
 
