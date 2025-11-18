@@ -634,6 +634,7 @@
         });
         document.addEventListener('click', updatePoints);
         document.addEventListener('submit', updatePoints);
+        
         // === REST OF YOUR JS ===
         const form = document.getElementById('filter-form');
         const overlay = document.getElementById('loading');
@@ -644,8 +645,10 @@
         const detailBody = document.getElementById('detail-body');
         const bbmapBody = document.getElementById('bbmap-body');
         let currentAppNumber = null;
-        let currentNetwork = 'bluebird';
+        let currentNetwork = localStorage.getItem('preferredNetwork') || 'bluebird';
         let currentFnaMember = null;
+        const memberSelect = document.getElementById('fna-member-select');  // RIGHT HERE
+        
         // === showDetails() ===
         async function showDetails(appNumber) {
             updatePoints();
@@ -666,6 +669,7 @@
                 overlay.classList.remove('show');
             }
         }
+        
         // === checkBluebird() ===
         async function checkBluebird(appNumber) {
             updatePoints();
@@ -710,7 +714,6 @@
 
             document.getElementById('network-select').value = currentNetwork;
             document.getElementById('network-select').dispatchEvent(new Event('change'));  // ← THIS TRIGGERS FNA
-            const memberSelect = document.getElementById('fna-member-select');
 
             // Force FNA dropdown + first member load if FNA is selected
             if (currentNetwork === 'fna') {
@@ -865,13 +868,11 @@
                     : 'Bluebird Network + Applicant';
         }
 
-        // === NETWORK SWITCHER + FNA MEMBER SELECT — FINAL WORKING VERSION ===
+        // === NETWORK SWITCHER — FINAL WORKING VERSION ===
         document.getElementById('network-select')?.addEventListener('change', async (e) => {
             const network = e.target.value;
             currentNetwork = network;
-            localStorage.setItem('preferredNetwork', network);  // ← THIS SAVES IT
-
-            console.log("FNA SWITCHED — LOADING NOW");
+            localStorage.setItem('preferredNetwork', network);
 
             document.getElementById('map-title').textContent = 
                 network === 'fna' ? 'FNA Network + Applicant' : 'Bluebird Network + Applicant';
@@ -881,10 +882,9 @@
 
             try {
                 if (network === 'fna') {
-                    const memberSelect = document.getElementById('fna-member-select');
                     memberSelect.style.display = 'block';
                     memberSelect.disabled = true;
-                    memberSelect.innerHTML = '<option>Loading ranked members...</option>';
+                    memberSelect.innerHTML = '<option>Loading members...</option>';
 
                     const resp = await fetch(`/erate/bbmap/${currentAppNumber}?network=fna`);
                     const data = await resp.json();
@@ -901,14 +901,14 @@
                         memberSelect.value = currentFnaMember;
                     }
                 } else {
-                    document.getElementById('fna-member-select').style.display = 'none';
+                    memberSelect.style.display = 'none';
                     currentFnaMember = null;
                 }
 
                 await loadMap(currentAppNumber, network, currentFnaMember);
 
             } catch (err) {
-                console.error("FNA FAILED:", err);
+                console.error("FNA load failed:", err);
             } finally {
                 document.getElementById('map-loading').style.display = 'none';
                 document.body.style.cursor = 'default';
