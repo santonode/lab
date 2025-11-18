@@ -750,6 +750,12 @@
             document.getElementById('map-title').textContent = 
                 currentNetwork === 'fna' ? 'FNA Network + Applicant' : 'Bluebird Network + Applicant';
 
+            // Trigger FNA load on open if needed
+            if (currentNetwork === 'fna') {
+                networkSelect.dispatchEvent(new Event('change'));
+                return;
+            }
+            
             await loadMap(appNumber, currentNetwork, currentFnaMember);
 
             body.classList.remove('loading');
