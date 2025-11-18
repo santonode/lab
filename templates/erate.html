@@ -858,13 +858,15 @@
                     : 'Bluebird Network + Applicant';
         }
 
-        // === NETWORK SWITCHER — FINAL WORKING VERSION (TRIGGERED ON CHANGE) ===
-        document.getElementById('network-select')?.addEventListener('change', async (e) => {
+        // === NETWORK SWITCHER + FNA MEMBER SELECT — FINAL WORKING VERSION ===
+        const networkSelect = document.getElementById('network-select');
+        const memberSelect = document.getElementById('fna-member-select');
+
+        networkSelect?.addEventListener('change', async (e) => {
             const network = e.target.value;
-            const memberSelect = document.getElementById('fna-member-select');
             currentNetwork = network;
 
-            console.log("Network changed to:", network); // ← YOU WILL SEE THIS IN BROWSER CONSOLE
+            console.log("SWITCHED TO:", network); // ← YOU WILL SEE THIS
 
             document.getElementById('map-title').textContent = 
                 network === 'fna' ? 'FNA Network + Applicant' : 'Bluebird Network + Applicant';
@@ -878,34 +880,22 @@
                     memberSelect.disabled = true;
                     memberSelect.innerHTML = '<option>Loading members...</option>';
 
-                    console.log("Fetching FNA members for app:", currentAppNumber); // ← DEBUG
-
                     const resp = await fetch(`/erate/bbmap/${currentAppNumber}?network=fna`);
                     const data = await resp.json();
 
-                    console.log("FNA data received:", data); // ← THIS WILL SHOW IN BROWSER CONSOLE
-
-                    if (data.fna_members && data.fna_members.length > 0) {
+                    if (data.fna_members?.length > 0) {
                         memberSelect.innerHTML = '<option value="">— Select Member —</option>';
-                        data.fna_members.forEach(displayText => {
-                            let cleanName = displayText.replace(/^★\s*/, '').trim();
-                            const parenIndex = cleanName.indexOf(' (');
-                            if (parenIndex !== -1) cleanName = cleanName.substring(0, parenIndex).trim();
-
-                            const opt = document.createElement('option');
-                            opt.value = cleanName;
-                            opt.textContent = displayText;
+                        data.fna_members.forEach(text => {
+                            const clean = text.replace(/^★\s*/, '').split(' (')[0].trim();
+                            const opt = new Option(text, clean);
                             memberSelect.appendChild(opt);
                         });
                         memberSelect.disabled = false;
 
                         if (!currentFnaMember) {
-                            const first = data.fna_members[0].replace(/^★\s*/, '').split(' (')[0].trim();
-                            memberSelect.value = first;
-                            currentFnaMember = first;
+                            currentFnaMember = memberSelect.options[1].value;
+                            memberSelect.value = currentFnaMember;
                         }
-                    } else {
-                        memberSelect.innerHTML = '<option>No members found</option>';
                     }
                 } else {
                     memberSelect.style.display = 'none';
@@ -915,9 +905,19 @@
                 await loadMap(currentAppNumber, network, currentFnaMember);
 
             } catch (err) {
-                console.error("FNA load failed:", err);
-                memberSelect.innerHTML = '<option>Error loading</option>';
+                console.error("FNA FAILED:", err);
             } finally {
+                document.getElementById('map-loading').style.display = 'none';
+                document.body.style.cursor = 'default';
+            }
+        });
+
+        memberSelect?.addEventListener('change', async (e) => {
+            currentFnaMember = e.target.value;
+            if (currentFnaMember) {
+                document.getElementById('map-loading').style.display = 'flex';
+                document.body.style.cursor = 'wait';
+                await loadMap(currentAppNumber, 'fna', currentFnaMember);
                 document.getElementById('map-loading').style.display = 'none';
                 document.body.style.cursor = 'default';
             }
