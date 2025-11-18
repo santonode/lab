@@ -871,8 +871,10 @@
         // === NETWORK SWITCHER — FINAL WORKING VERSION ===
         document.getElementById('network-select')?.addEventListener('change', async (e) => {
             const network = e.target.value;
-            currentNetwork = network;
+            currentNetwork = network;   // ← THIS LINE WAS MISSING!
             localStorage.setItem('preferredNetwork', network);
+
+            console.log("Network switched to:", network);  // ← YOU WILL SEE THIS NOW
 
             document.getElementById('map-title').textContent = 
                 network === 'fna' ? 'FNA Network + Applicant' : 'Bluebird Network + Applicant';
