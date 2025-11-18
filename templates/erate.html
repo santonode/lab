@@ -611,6 +611,7 @@
                 updatePoints();
                 setInterval(updatePoints, 5000);
             }
+
             // === RESTORE CLICK HANDLERS ===
             document.querySelectorAll('.app-number').forEach(el => {
                 el.onclick = () => showDetails(el.textContent.trim());
@@ -631,7 +632,11 @@
                     openMapModal(appNumber, lat, lon);
                 };
             });
+
+            // === FIX: Define memberSelect AFTER DOM is ready ===
+            window.memberSelect = document.getElementById('fna-member-select');
         });
+
         document.addEventListener('click', updatePoints);
         document.addEventListener('submit', updatePoints);
         
@@ -712,55 +717,17 @@
             }
             mapDiv.innerHTML = '';
 
+            // Restore saved network
             document.getElementById('network-select').value = currentNetwork;
-            document.getElementById('network-select').dispatchEvent(new Event('change'));  // ← THIS TRIGGERS FNA
 
-            // Force FNA dropdown + first member load if FNA is selected
-            if (currentNetwork === 'fna') {
-                document.getElementById('map-loading').style.display = 'flex';
-                document.body.style.cursor = 'wait';
-                try {
-                    const resp = await fetch(`/erate/bbmap/${appNumber}?network=fna`);
-                    const data = await resp.json();
-                    if (data.fna_members && data.fna_members.length > 0) {
-                        memberSelect.style.display = 'block';
-                        memberSelect.innerHTML = '<option value="">— Select Member —</option>';
-                        data.fna_members.forEach(displayText => {
-                            let cleanName = displayText.replace(/^★\s*/, '').trim();
-                            const parenIndex = cleanName.indexOf(' (');
-                            if (parenIndex !== -1) cleanName = cleanName.substring(0, parenIndex).trim();
-                            const opt = document.createElement('option');
-                            opt.value = cleanName;
-                            opt.textContent = displayText;
-                            memberSelect.appendChild(opt);
-                        });
-                        memberSelect.disabled = false;
-                        if (!currentFnaMember) {
-                            const first = data.fna_members[0].replace(/^★\s*/, '').split(' (')[0].trim();
-                            memberSelect.value = first;
-                            currentFnaMember = first;
-                        }
-                    }
-                } catch (err) {
-                    console.error("FNA failed on open:", err);
-                } finally {
-                    document.getElementById('map-loading').style.display = 'none';
-                    document.body.style.cursor = 'default';
-                }
-            } else {
-                memberSelect.style.display = 'none';
-            }
+            // THIS IS THE ONLY THING THAT MATTERS:
+            document.getElementById('network-select').dispatchEvent(new Event('change'));
+
+            // DO NOT do manual FNA loading here — the change event already does it perfectly
+            // DO NOT call loadMap() here — the change event already calls it
 
             document.getElementById('map-title').textContent = 
                 currentNetwork === 'fna' ? 'FNA Network + Applicant' : 'Bluebird Network + Applicant';
-
-            // Trigger FNA load on open if needed
-            if (currentNetwork === 'fna') {
-                networkSelect.dispatchEvent(new Event('change'));
-                return;
-            }
-            
-            await loadMap(appNumber, currentNetwork, currentFnaMember);
 
             body.classList.remove('loading');
             overlay.classList.remove('show');
