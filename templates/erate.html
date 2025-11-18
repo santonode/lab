@@ -620,6 +620,55 @@
                     if (el) el.textContent = '(?)';
                 });
         }
+
+        // === showDetails() — THIS WAS MISSING ===
+        async function showDetails(appNumber) {
+            updatePoints();
+            currentAppNumber = appNumber;
+            body.classList.add('loading');
+            overlay.classList.add('show');
+            detailBody.innerHTML = 'Loading...';
+            detailModal.classList.add('show');
+            try {
+                const resp = await fetch(`/erate/details/${appNumber}`);
+                const data = await resp.json();
+                renderSection('basic', data);
+                activateTab('basic');
+            } catch (err) {
+                detailBody.innerHTML = '<strong>Error:</strong> Could not load details.';
+            } finally {
+                body.classList.remove('loading');
+                overlay.classList.remove('show');
+            }
+        }
+
+        // === checkBluebird() — ALSO MISSING ===
+        async function checkBluebird(appNumber) {
+            updatePoints();
+            body.classList.add('loading');
+            overlay.classList.add('show');
+            bbmapBody.innerHTML = 'Searching Bluebird Fiber...';
+            bbmapModal.classList.add('show');
+            try {
+                const resp = await fetch(`/erate/bbmap/${appNumber}`);
+                const data = await resp.json();
+                document.getElementById('address-text').textContent = data.address || 'N/A';
+                bbmapBody.innerHTML = `
+                    <strong>Applicant:</strong> ${data.entity_name || 'N/A'}<br>
+                    <strong>Address:</strong> ${data.address || 'N/A'}<br>
+                    <strong>Nearest PoP (223):</strong> ${data.pop_city || 'Unknown'}<br>
+                    <strong>Distance:</strong> ${data.distance || 'N/A'}<br>
+                    <strong>Coverage:</strong> ${data.coverage || 'Unknown'}
+                `;
+            } catch {
+                bbmapBody.innerHTML = '<strong>Error:</strong> Could not fetch data.';
+                document.getElementById('address-text').textContent = 'Error loading address';
+            } finally {
+                body.classList.remove('loading');
+                overlay.classList.remove('show');
+            }
+        }
+        
         // === RUN ALL JS ON LOAD ===
         window.addEventListener('load', () => {
             const isLoggedIn = {{ 'true' if session.username else 'false' }};
