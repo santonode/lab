@@ -709,6 +709,7 @@
             mapDiv.innerHTML = '';
 
             document.getElementById('network-select').value = currentNetwork;
+            document.getElementById('network-select').dispatchEvent(new Event('change'));  // ← THIS TRIGGERS FNA
             const memberSelect = document.getElementById('fna-member-select');
 
             // Force FNA dropdown + first member load if FNA is selected
@@ -865,14 +866,12 @@
         }
 
         // === NETWORK SWITCHER + FNA MEMBER SELECT — FINAL WORKING VERSION ===
-        const networkSelect = document.getElementById('network-select');
-        const memberSelect = document.getElementById('fna-member-select');
-
-        networkSelect?.addEventListener('change', async (e) => {
+        document.getElementById('network-select')?.addEventListener('change', async (e) => {
             const network = e.target.value;
             currentNetwork = network;
+            localStorage.setItem('preferredNetwork', network);  // ← THIS SAVES IT
 
-            console.log("SWITCHED TO:", network); // ← YOU WILL SEE THIS
+            console.log("FNA SWITCHED — LOADING NOW");
 
             document.getElementById('map-title').textContent = 
                 network === 'fna' ? 'FNA Network + Applicant' : 'Bluebird Network + Applicant';
@@ -882,9 +881,10 @@
 
             try {
                 if (network === 'fna') {
+                    const memberSelect = document.getElementById('fna-member-select');
                     memberSelect.style.display = 'block';
                     memberSelect.disabled = true;
-                    memberSelect.innerHTML = '<option>Loading members...</option>';
+                    memberSelect.innerHTML = '<option>Loading ranked members...</option>';
 
                     const resp = await fetch(`/erate/bbmap/${currentAppNumber}?network=fna`);
                     const data = await resp.json();
@@ -897,14 +897,11 @@
                             memberSelect.appendChild(opt);
                         });
                         memberSelect.disabled = false;
-
-                        if (!currentFnaMember) {
-                            currentFnaMember = memberSelect.options[1].value;
-                            memberSelect.value = currentFnaMember;
-                        }
+                        currentFnaMember = memberSelect.options[1].value;
+                        memberSelect.value = currentFnaMember;
                     }
                 } else {
-                    memberSelect.style.display = 'none';
+                    document.getElementById('fna-member-select').style.display = 'none';
                     currentFnaMember = null;
                 }
 
