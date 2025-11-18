@@ -605,7 +605,7 @@
         
         // === RUN ALL JS ON LOAD ===
         window.addEventListener('load', () => {
-           -const isLoggedIn = {{ 'true' if session.username else 'false' }};
+            const isLoggedIn = {{ 'true' if session.username else 'false' }};
             if (!isLoggedIn) {
                 document.getElementById('authModal').style.display = 'flex';
             } else {
@@ -634,7 +634,7 @@
                 };
             });
 
-            // THIS LINE FIXES EVERYTHING — DO NOT REMOVE
+            // CRITICAL FIX — THIS LINE MUST BE HERE
             window.memberSelect = document.getElementById('fna-member-select');
         });
 
