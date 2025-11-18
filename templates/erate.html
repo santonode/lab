@@ -715,16 +715,11 @@
             }
             mapDiv.innerHTML = '';
 
-            // CRITICAL: Get fresh reference to memberSelect
-            const memberSelect = document.getElementById('fna-member-select');
+            // Restore network and trigger change
+            const networkSelect = document.getElementById('network-select');
+            networkSelect.value = currentNetwork;
+            networkSelect.dispatchEvent(new Event('change'));
 
-            // Restore network preference
-            document.getElementById('network-select').value = currentNetwork;
-
-            // Trigger the change event — this will handle everything
-            document.getElementById('network-select').dispatchEvent(new Event('change'));
-
-            // Set title
             document.getElementById('map-title').textContent = 
                 currentNetwork === 'fna' ? 'FNA Network + Applicant' : 'Bluebird Network + Applicant';
 
@@ -1048,6 +1043,10 @@
                     overlay.classList.add('show');
                 }
             });
+        });
+        // ADD THIS BLOCK HERE — AT THE END
+        document.addEventListener('DOMContentLoaded', () => {
+            window.memberSelect = document.getElementById('fna-member-select');
         });
     </script>
 </body>
