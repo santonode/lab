@@ -6,7 +6,7 @@ from flask import (
     send_file, flash, current_app, jsonify, Markup, session
 )
 import csv
-import os
+import osf
 import logging
 import requests
 import threading
@@ -592,6 +592,36 @@ def bbmap(app_number):
         except:
             pass
     final_applicant_coords = [applicant_lat, applicant_lon] if applicant_lat and applicant_lon else None
+
+# === ADD THIS ENTIRE BLOCK HERE ===
+    if request.args.get('distance_only') == '1':
+        BLUEBIRD_STATES = {'IA', 'KS', 'IL', 'MO'}
+        FNA_STATES = {'MI', 'OH', 'PA', 'FL', 'GA', 'NC', 'SC', 'LA', 'TN', 'KY', 'VA', 'WV', 'MD', 'DE', 'NJ'}
+
+        current_state = state.upper() if 'state' in locals() and state else ''
+
+        if current_state in BLUEBIRD_STATES:
+            kmz_path = KMZ_PATH_BLUEBIRD
+        elif current_state in FNA_STATES:
+            # Find closest FNA member
+            closest_path = None
+            min_d = float('inf')
+            for name, path in FNA_MEMBERS.items():
+                if not os.path.exists(path):
+                    continue
+                d = get_nearest_fiber_distance(applicant_lat, applicant_lon, path)
+                if d is not None and d < min_d:
+                    min_d = d
+                    closest_path = path
+            kmz_path = closest_path or KMZ_PATH_BLUEBIRD
+        else:
+            kmz_path = KMZ_PATH_BLUEBIRD
+
+        dist = get_nearest_fiber_distance(applicant_lat, applicant_lon, kmz_path)
+        dist_str = "<1 mi" if dist and dist < 1 else f"{dist:.1f} mi" if dist else "—"
+
+        return jsonify({"nearest_fiber_distance": dist_str})
+    # === END NEW BLOCK ===    
 
     # === ACCURATE FNA RANKING — TOP 3 CLOSEST BY ACTUAL FIBER ===
     if network == "fna" and not fna_member:
