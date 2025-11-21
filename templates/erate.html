@@ -458,6 +458,7 @@
                     <th>Entity Name</th>
                     <th>State</th>
                     <th>Modified</th>
+                    <th class="distance-header" style="display:none; color:#dc3545; font-weight:600;">Distance</th>
                     <th>Map</th>
                 </tr>
             </thead>
@@ -469,9 +470,8 @@
                         <td><span class="entity-name">{{ row.entity_name|default('—') }}</span></td>
                         <td>{{ row.state|default('—') }}</td>
                         <td class="modified">{{ row.last_modified_datetime|strftime('%m/%d/%Y') if row.last_modified_datetime else '—' }}</td>
-                        <td>
-                            <button class="btn btn-primary btn-sm">Map</button>
-                        </td>
+                        <td class="distance-cell" style="display:none; color:#dc3545; font-weight:600;">—</td>
+                        <td><button class="btn btn-primary btn-sm">Map</button></td>
                     </tr>
                     {% endfor %}
                 {% else %}
@@ -1022,6 +1022,38 @@
                 }
             });
         });
+
+        // === AUTO-FETCH DISTANCES WHEN RESULTS ≤ 100 ===
+        function loadDistancesIfNeeded() {
+            const summaryText = document.querySelector('.summary')?.textContent || '';
+            const total = parseInt(summaryText.match(/of (\d+)/)?.[1] || '999');
+            if (total > 100) return;
+
+            document.querySelectorAll('.distance-header, .distance-cell').forEach(el => el.style.display = 'table-cell');
+            document.querySelectorAll('.distance-cell').forEach(cell => cell.textContent = '…');
+
+            document.querySelectorAll('.app-number').forEach(span => {
+                const appNumber = span.textContent.trim();
+                if (!appNumber || appNumber === '—') return;
+
+                fetch(`/erate/bbmap/${appNumber}?distance_only=1`)
+                    .then(r => r.json())
+                    .then(data => {
+                        const cell = span.closest('tr').querySelector('.distance-cell');
+                        if (cell) cell.textContent = data.nearest_fiber_distance || '—';
+                    })
+                    .catch(() => {
+                        const cell = span.closest('tr').querySelector('.distance-cell');
+                        if (cell) cell.textContent = '—';
+                    });
+            });
+        }
+
+        // Run after page load
+        window.addEventListener('load', () => {
+            setTimeout(loadDistancesIfNeeded, 1000);
+        });
+        
     </script>
 </body>
 </html>
