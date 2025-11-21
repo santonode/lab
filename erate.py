@@ -6,7 +6,7 @@ from flask import (
     send_file, flash, current_app, jsonify, Markup, session
 )
 import csv
-import osf
+import os
 import logging
 import requests
 import threading
