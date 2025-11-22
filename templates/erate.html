@@ -1051,73 +1051,76 @@
             });
         });
 
-        // === FINAL: Distances + REAL DM filtering + always fresh user settings ===
+        // === FINAL PRO: Distance filtering + correct "Showing X of Y" + keeps pagination ===
         let isLoadingDistances = false;
         let userFT = 100;
         let userDM = 5.0;
 
         function loadDistancesIfNeeded() {
-            // Always get fresh user settings first
             fetch('/erate/user_settings')
                 .then(r => r.json())
                 .then(settings => {
                     userFT = parseInt(settings.ft) || 100;
                     userDM = parseFloat(settings.dm) || 5.0;
 
-                    const summaryText = document.querySelector('.summary')?.textContent || '';
-                    const total = parseInt(summaryText.match(/of (\d+)/)?.[1] || '999');
-                    if (total > userFT || isLoadingDistances) return;
+                    const summaryEl = document.querySelector('.summary');
+                    const originalText = summaryEl?.textContent || '';
+                    const totalRecords = parseInt(originalText.match(/of (\d+)/)?.[1] || '999');
+
+                    if (totalRecords > userFT || isLoadingDistances) return;
 
                     isLoadingDistances = true;
                     document.body.style.cursor = 'wait';
                     document.querySelectorAll('button, a, input').forEach(el => el.style.pointerEvents = 'none');
                     document.querySelectorAll('.distance-header, .distance-cell').forEach(el => el.style.display = 'table-cell');
-                    document.querySelectorAll('.distance-cell').forEach(cell => cell.textContent = '…');
+                    document.querySelectorAll('.distance-cell').forEach(c => c.textContent = '…');
 
-                    const promises = [];
-                    document.querySelectorAll('.app-number').forEach(span => {
-                        const appNumber = span.textContent.trim();
-                        if (!appNumber || appNumber === '—') return;
+                    const rows = Array.from(document.querySelectorAll('tbody tr'));
+                    let visibleAfterFilter = 0;
 
-                        const row = span.closest('tr');
+                    const promises = rows.map(row => {
+                        const appSpan = row.querySelector('.app-number');
+                        if (!appSpan) return Promise.resolve();
+                        const appNumber = appSpan.textContent.trim();
+                        if (!appNumber || appNumber === '—') return Promise.resolve();
+
                         const cell = row.querySelector('.distance-cell');
 
-                        const p = fetch(`/erate/bbmap/${appNumber}?distance_only=1`)
+                        return fetch(`/erate/bbmap/${appNumber}?distance_only=1`)
                             .then(r => r.json())
                             .then(data => {
                                 const distText = data.nearest_fiber_distance || '—';
                                 if (cell) cell.textContent = distText;
 
-                                // APPLY DM FILTERING — hide rows farther than userDM
                                 const distNum = parseFloat(distText);
-                                if (!isNaN(distNum) && distNum > userDM) {
-                                    row.style.display = 'none';
+                                if (!isNaN(distNum) && distNum <= userDM) {
+                                    row.style.display = '';  // Show if within DM
+                                    visibleAfterFilter++;
+                                } else {
+                                    row.style.display = 'none';  // Hide if too far
                                 }
                             })
                             .catch(() => {
                                 if (cell) cell.textContent = '—';
+                                row.style.display = 'none';
                             });
-                        promises.push(p);
                     });
 
                     Promise.allSettled(promises).finally(() => {
+                        // Update summary to reflect actual visible count
+                        const showingNow = Math.min(visibleAfterFilter, 10); // only first 10 on screen
+                        summaryEl.textContent = `Showing ${showingNow} of ${visibleAfterFilter} records (≤ ${userDM} mi)`;
+
                         isLoadingDistances = false;
                         document.body.style.cursor = 'default';
                         document.querySelectorAll('button, a, input').forEach(el => el.style.pointerEvents = 'auto');
                     });
                 })
-                .catch(() => {
-                    // Fallback if settings fail
-                    console.warn("Could not load user settings — using defaults");
-                });
+                .catch(() => console.warn("Could not load user settings"));
         }
 
-        // Run after table loads
-        window.addEventListener('load', () => {
-            setTimeout(loadDistancesIfNeeded, 800);
-        });
+        window.addEventListener('load', () => setTimeout(loadDistancesIfNeeded, 800));
 
-        // Block Filter while loading
         document.getElementById('filter-form')?.addEventListener('submit', (e) => {
             if (isLoadingDistances) {
                 e.preventDefault();
