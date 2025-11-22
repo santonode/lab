@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- jinja2 -->
 <html>
 <head>
     <title>E-Rate</title>
@@ -451,6 +452,13 @@
             </form>
         </div>
         <p class="summary">Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</p>
+        {% if total_filtered <= (session.ft | default(100) | int) %}
+        <div style="text-align:center; margin:10px 0;">
+            <button id="toggle-distance-filter" class="btn btn-success" style="font-size:0.85rem;">
+                Distance filter: ON (≤ 5 mi) — click to disable
+            </button>
+        </div>
+        {% endif %}
         <table>
             <thead>
                 <tr>
