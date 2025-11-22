@@ -1059,29 +1059,29 @@
             });
         });
 
-        // === FINAL & PERFECT: Full-set distance filtering + toggle + correct counts ===
+        // === FINAL & PERFECT: Full accuracy + toggle + Load More works when filter OFF ===
         let isLoadingDistances = false;
         let userFT = 100;
         let userDM = 5.0;
         let distanceFilterEnabled = true;
+        let allRows = [];  // Store all rows for re-filtering
 
         const toggleBtn = document.getElementById('toggle-distance-filter');
+        const summaryEl = document.querySelector('.summary');
+        const loadMoreBtn = document.querySelector('.load-more');
 
         function updateToggleButton() {
             if (!toggleBtn) return;
-            if (distanceFilterEnabled) {
-                toggleBtn.textContent = `Distance filter: ON (≤ ${userDM} mi) — click to disable`;
-                toggleBtn.className = 'btn btn-success';
-            } else {
-                toggleBtn.textContent = 'Distance filter: OFF — click to enable';
-                toggleBtn.className = 'btn btn-secondary';
-            }
+            toggleBtn.textContent = distanceFilterEnabled 
+                ? `Distance filter: ON (≤ ${userDM} mi) — click to disable`
+                : 'Distance filter: OFF — click to enable';
+            toggleBtn.className = distanceFilterEnabled ? 'btn btn-success' : 'btn btn-secondary';
         }
 
         toggleBtn?.addEventListener('click', () => {
             distanceFilterEnabled = !distanceFilterEnabled;
             updateToggleButton();
-            loadDistancesIfNeeded(); // Re-apply immediately
+            applyCurrentFilter();  // Re-apply instantly
         });
 
         async function loadDistancesIfNeeded() {
@@ -1089,9 +1089,7 @@
             userFT = parseInt(settings.ft) || 100;
             userDM = parseFloat(settings.dm) || 5.0;
 
-            const summaryEl = document.querySelector('.summary');
-            const originalText = summaryEl?.textContent || '';
-            const totalRecords = parseInt(originalText.match(/of (\d+)/)?.[1] || '999');
+            const totalRecords = parseInt(summaryEl?.textContent.match(/of (\d+)/)?.[1] || '999');
             if (totalRecords > userFT || isLoadingDistances) return;
 
             isLoadingDistances = true;
@@ -1100,60 +1098,76 @@
             document.querySelectorAll('.distance-header, .distance-cell').forEach(el => el.style.display = 'table-cell');
             document.querySelectorAll('.distance-cell').forEach(c => c.textContent = '…');
 
-            const rows = Array.from(document.querySelectorAll('tbody tr'));
+            allRows = Array.from(document.querySelectorAll('tbody tr'));
             let visibleCount = 0;
 
-            const promises = rows.map(row => {
+            for (const row of allRows) {
                 const appSpan = row.querySelector('.app-number');
-                if (!appSpan) return Promise.resolve();
+                if (!appSpan) continue;
                 const appNumber = appSpan.textContent.trim();
-                if (!appNumber || appNumber === '—') return Promise.resolve();
+                if (!appNumber || appNumber === '—') continue;
 
                 const cell = row.querySelector('.distance-cell');
 
-                return fetch(`/erate/bbmap/${appNumber}?distance_only=1`)
-                    .then(r => r.json())
-                    .then(data => {
-                        const distText = data.nearest_fiber_distance || '—';
-                        if (cell) cell.textContent = distText;
+                try {
+                    const data = await fetch(`/erate/bbmap/${appNumber}`).then(r => r.json());
+                    const distText = data.nearest_fiber_distance || '—';
+                    if (cell) cell.textContent = distText;
 
-                        const distNum = parseFloat(distText);
-                        const passesFilter = !isNaN(distNum) && distNum <= userDM;
+                    const distNum = parseFloat(distText);
+                    const passes = !isNaN(distNum) && distNum <= userDM;
 
-                        if (distanceFilterEnabled && !passesFilter) {
-                            row.style.display = 'none';
-                        } else {
-                            row.style.display = '';
-                            visibleCount++;
-                        }
-                    })
-                    .catch(() => {
-                        if (cell) cell.textContent = '—';
-                        if (distanceFilterEnabled) row.style.display = 'none';
-                    });
-            });
-
-            await Promise.allSettled(promises);
-
-            // Update summary
-            const showingNow = Math.min(visibleCount, 10);
-            const suffix = distanceFilterEnabled ? ` (≤ ${userDM} mi)` : '';
-            summaryEl.textContent = `Showing ${showingNow} of ${visibleCount} records${suffix}`;
-
-            // Update Load More button
-            const loadMore = document.querySelector('.load-more');
-            if (loadMore) {
-                loadMore.style.display = visibleCount > 10 ? 'block' : 'none';
+                    if (distanceFilterEnabled && !passes) {
+                        row.style.display = 'none';
+                    } else {
+                        row.style.display = '';
+                        visibleCount++;
+                    }
+                } catch (e) {
+                    if (cell) cell.textContent = '—';
+                    row.style.display = distanceFilterEnabled ? 'none' : '';
+                    if (!distanceFilterEnabled) visibleCount++;
+                }
             }
 
+            updateSummaryAndPagination(visibleCount);
             isLoadingDistances = false;
             document.body.style.cursor = 'default';
             document.querySelectorAll('button, a, input').forEach(el => el.style.pointerEvents = 'auto');
             updateToggleButton();
         }
 
-        window.addEventListener('load', () => setTimeout(loadDistancesIfNeeded, 800));
+        function applyCurrentFilter() {
+            if (!allRows.length) return;
+            let visibleCount = 0;
+            allRows.forEach(row => {
+                const cell = row.querySelector('.distance-cell');
+                if (!cell) return;
+                const distText = cell.textContent.trim();
+                const distNum = parseFloat(distText);
+                const passes = distText === '—' || (!isNaN(distNum) && distNum <= userDM);
 
+                if (distanceFilterEnabled && !passes) {
+                    row.style.display = 'none';
+                } else {
+                    row.style.display = '';
+                    visibleCount++;
+                }
+            });
+            updateSummaryAndPagination(visibleCount);
+        }
+
+        function updateSummaryAndPagination(visibleCount) {
+            const showing = Math.min(visibleCount, 10);
+            const suffix = distanceFilterEnabled ? ` (≤ ${userDM} mi)` : '';
+            summaryEl.textContent = `Showing ${showing} of ${visibleCount} records${suffix}`;
+
+            if (loadMoreBtn) {
+                loadMoreBtn.style.display = visibleCount > 10 ? 'block' : 'none';
+            }
+        }
+
+        window.addEventListener('load', () => setTimeout(loadDistancesIfNeeded, 800));
         document.getElementById('filter-form')?.addEventListener('submit', e => {
             if (isLoadingDistances) {
                 e.preventDefault();
