@@ -454,8 +454,8 @@
         <p class="summary">Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</p>
         {% if total_filtered <= (session.ft | default(100) | int) %}
         <div style="text-align:center; margin:10px 0;">
-            <button id="toggle-distance-filter" class="btn btn-success" style="font-size:0.85rem;">
-                Distance filter: ON (≤ 5 mi) — click to disable
+            <button id="toggle-distance-filter" class="btn btn-secondary" style="font-size:0.85rem;">
+                Distance filter: OFF — click to enable
             </button>
         </div>
         {% endif %}
@@ -1063,7 +1063,7 @@
         let isLoadingDistances = false;
         let userFT = 100;
         let userDM = 5.0;
-        let distanceFilterEnabled = true;
+        let distanceFilterEnabled = false;
         let allRows = [];  // Store all rows for re-filtering
 
         const toggleBtn = document.getElementById('toggle-distance-filter');
