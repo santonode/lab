@@ -1023,7 +1023,7 @@
             });
         });
 
-        // === GLOBAL LOADING STATE — prevents double-filter chaos ===
+        // === FINAL: Distances with spinning cursor + Filter button protection ===
         let isLoadingDistances = false;
 
         function loadDistancesIfNeeded() {
@@ -1032,7 +1032,10 @@
             if (total > 100 || isLoadingDistances) return;
 
             isLoadingDistances = true;
+
+            // Spinning cursor + visual feedback
             document.body.style.cursor = 'wait';
+            document.querySelectorAll('button, a, input').forEach(el => el.style.pointerEvents = 'none');
             document.querySelectorAll('.distance-header, .distance-cell').forEach(el => el.style.display = 'table-cell');
             document.querySelectorAll('.distance-cell').forEach(cell => cell.textContent = '…');
 
@@ -1057,51 +1060,21 @@
             Promise.allSettled(promises).finally(() => {
                 isLoadingDistances = false;
                 document.body.style.cursor = 'default';
+                document.querySelectorAll('button, a, input').forEach(el => el.style.pointerEvents = 'auto');
             });
         }
 
-        // Run after page load
+        // Run after table loads
         window.addEventListener('load', () => {
             setTimeout(loadDistancesIfNeeded, 800);
         });
 
-        // Block Filter button while distances loading
+        // Block Filter while loading
         document.getElementById('filter-form')?.addEventListener('submit', (e) => {
             if (isLoadingDistances) {
                 e.preventDefault();
-                alert('Please wait — distances are still loading…');
+                alert('Please wait — calculating distances…');
             }
-        });
-
-        // === AUTO-FETCH DISTANCES WHEN RESULTS ≤ 100 ===
-        function loadDistancesIfNeeded() {
-            const summaryText = document.querySelector('.summary')?.textContent || '';
-            const total = parseInt(summaryText.match(/of (\d+)/)?.[1] || '999');
-            if (total > 100) return;
-
-            document.querySelectorAll('.distance-header, .distance-cell').forEach(el => el.style.display = 'table-cell');
-            document.querySelectorAll('.distance-cell').forEach(cell => cell.textContent = '…');
-
-            document.querySelectorAll('.app-number').forEach(span => {
-                const appNumber = span.textContent.trim();
-                if (!appNumber || appNumber === '—') return;
-
-                fetch(`/erate/bbmap/${appNumber}?distance_only=1`)
-                    .then(r => r.json())
-                    .then(data => {
-                        const cell = span.closest('tr').querySelector('.distance-cell');
-                        if (cell) cell.textContent = data.nearest_fiber_distance || '—';
-                    })
-                    .catch(() => {
-                        const cell = span.closest('tr').querySelector('.distance-cell');
-                        if (cell) cell.textContent = '—';
-                    });
-            });
-        }
-
-        // Run after page load
-        window.addEventListener('load', () => {
-            setTimeout(loadDistancesIfNeeded, 1000);
         });
         
     </script>
