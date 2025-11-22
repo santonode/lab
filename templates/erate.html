@@ -1059,12 +1059,11 @@
             });
         });
 
-        // === FINAL & PERFECT: Full accuracy + toggle + Load More works when filter OFF ===
+        // === FINAL & BULLETPROOF: Distance filter OFF = no filtering, no hiding, no pagination break ===
         let isLoadingDistances = false;
         let userFT = 100;
         let userDM = 5.0;
-        let distanceFilterEnabled = false;
-        let allRows = [];  // Store all rows for re-filtering
+        let distanceFilterEnabled = false;  // DEFAULT OFF
 
         const toggleBtn = document.getElementById('toggle-distance-filter');
         const summaryEl = document.querySelector('.summary');
@@ -1072,16 +1071,19 @@
 
         function updateToggleButton() {
             if (!toggleBtn) return;
-            toggleBtn.textContent = distanceFilterEnabled 
-                ? `Distance filter: ON (≤ ${userDM} mi) — click to disable`
-                : 'Distance filter: OFF — click to enable';
-            toggleBtn.className = distanceFilterEnabled ? 'btn btn-success' : 'btn btn-secondary';
+            if (distanceFilterEnabled) {
+                toggleBtn.textContent = `Distance filter: ON (≤ ${userDM} mi) — click to disable`;
+                toggleBtn.className = 'btn btn-success';
+            } rinsed {
+                toggleBtn.textContent = 'Distance filter: OFF — click to enable';
+                toggleBtn.className = 'btn btn-secondary';
+            }
         }
 
         toggleBtn?.addEventListener('click', () => {
             distanceFilterEnabled = !distanceFilterEnabled;
             updateToggleButton();
-            applyCurrentFilter();  // Re-apply instantly
+            applyDistanceFilter();  // Only re-filters when toggled
         });
 
         async function loadDistancesIfNeeded() {
@@ -1098,10 +1100,9 @@
             document.querySelectorAll('.distance-header, .distance-cell').forEach(el => el.style.display = 'table-cell');
             document.querySelectorAll('.distance-cell').forEach(c => c.textContent = '…');
 
-            allRows = Array.from(document.querySelectorAll('tbody tr'));
-            let visibleCount = 0;
+            const rows = Array.from(document.querySelectorAll('tbody tr'));
 
-            for (const row of allRows) {
+            for (const row of rows) {
                 const appSpan = row.querySelector('.app-number');
                 if (!appSpan) continue;
                 const appNumber = appSpan.textContent.trim();
@@ -1114,60 +1115,51 @@
                     const distText = data.nearest_fiber_distance || '—';
                     if (cell) cell.textContent = distText;
 
-                    const distNum = parseFloat(distText);
-                    const passes = !isNaN(distNum) && distNum <= userDM;
-
-                    if (distanceFilterEnabled && !passes) {
-                        row.style.display = 'none';
+                    // ONLY hide if filter is ON
+                    if (distanceFilterEnabled) {
+                        const distNum = parseFloat(distText);
+                        if (isNaN(distNum) || distNum > userDM) {
+                            row.style.display = 'none';
+                        } else {
+                            row.style.display = '';
+                        }
                     } else {
-                        row.style.display = '';
-                        visibleCount++;
+                        row.style.display = '';  // Always show when OFF
                     }
                 } catch (e) {
                     if (cell) cell.textContent = '—';
                     row.style.display = distanceFilterEnabled ? 'none' : '';
-                    if (!distanceFilterEnabled) visibleCount++;
                 }
             }
 
-            updateSummaryAndPagination(visibleCount);
+            // NEVER touch summary or Load More when filter is OFF
+            if (!distanceFilterEnabled) {
+                summaryEl.textContent = originalText;  // Restore original
+                if (loadMoreBtn) loadMoreBtn.style.display = '';  // Always show if existed
+            } else {
+                const visible = rows.filter(r => r.style.display !== 'none').length;
+                const showing = Math.min(visible, 10);
+                summaryEl.textContent = `Showing ${showing} of ${visible} records (≤ ${userDM} mi)`;
+                if (loadMoreBtn) loadMoreBtn.style.display = visible > 10 ? 'block' : 'none';
+            }
+
             isLoadingDistances = false;
             document.body.style.cursor = 'default';
             document.querySelectorAll('button, a, input').forEach(el => el.style.pointerEvents = 'auto');
             updateToggleButton();
         }
 
-        function applyCurrentFilter() {
-            if (!allRows.length) return;
-            let visibleCount = 0;
-            allRows.forEach(row => {
-                const cell = row.querySelector('.distance-cell');
-                if (!cell) return;
-                const distText = cell.textContent.trim();
-                const distNum = parseFloat(distText);
-                const passes = distText === '—' || (!isNaN(distNum) && distNum <= userDM);
-
-                if (distanceFilterEnabled && !passes) {
-                    row.style.display = 'none';
-                } else {
-                    row.style.display = '';
-                    visibleCount++;
-                }
-            });
-            updateSummaryAndPagination(visibleCount);
+        function applyDistanceFilter() {
+            loadDistancesIfNeeded();  // Re-run with current toggle state
         }
 
-        function updateSummaryAndPagination(visibleCount) {
-            const showing = Math.min(visibleCount, 10);
-            const suffix = distanceFilterEnabled ? ` (≤ ${userDM} mi)` : '';
-            summaryEl.textContent = `Showing ${showing} of ${visibleCount} records${suffix}`;
+        // Save original summary text on first load
+        let originalText = '';
+        window.addEventListener('load', () => {
+            originalText = summaryEl?.textContent || '';
+            setTimeout(loadDistancesIfNeeded, 800);
+        });
 
-            if (loadMoreBtn) {
-                loadMoreBtn.style.display = visibleCount > 10 ? 'block' : 'none';
-            }
-        }
-
-        window.addEventListener('load', () => setTimeout(loadDistancesIfNeeded, 800));
         document.getElementById('filter-form')?.addEventListener('submit', e => {
             if (isLoadingDistances) {
                 e.preventDefault();
