@@ -1132,10 +1132,10 @@
             });
         });
 
-        // Close modal when clicking outside
+        // Close modal when clicking outside or X
         document.getElementById('settings-modal')?.addEventListener('click', (e) => {
-            if (e.target.id === 'settings-modal') {
-                e.target.classList.remove('show');
+            if (e.target === document.getElementById('settings-modal') || e.target.classList.contains('modal-close')) {
+                document.getElementById('settings-modal').classList.remove('show');
             }
         });
         
