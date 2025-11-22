@@ -1044,34 +1044,28 @@
             });
         });
 
-        // Loading overlay on form submit / pagination
-        form.addEventListener('submit', () => {
+        // === FINAL LOADING OVERLAY — ONLY ONE BLOCK, NO DUPLICATES ===
+        // Show overlay on form submit AND pagination/filter links
+        const showLoading = () => {
             body.classList.add('loading');
             overlay.classList.add('show');
-        });
-        
-        // NO NEED to re-declare overlay — it's already declared above!
-        // Just use the existing variables
-        window.addEventListener('load', () => {
+        };
+
+        const hideLoading = () => {
             body.classList.remove('loading');
             overlay.classList.remove('show');
+        };
+
+        // Form submit (filter)
+        form.addEventListener('submit', showLoading);
+
+        // Pagination & filter links (Load More + any link with ?)
+        document.querySelectorAll('a[href*="?"], a.load-more').forEach(link => {
+            link.addEventListener('click', showLoading);
         });
 
-        // Optional: show loading overlay only on filter/pagination clicks
-        document.querySelectorAll('a[href*="?"], a.load-more').forEach(link => {
-            link.addEventListener('click', () => {
-                body.classList.add('loading');
-                overlay.classList.add('show');
-            });
-        });
-
-        // Safe loading overlay for pagination/filter links only
-        document.querySelectorAll('a[href*="?"], a.load-more').forEach(link => {
-            link.addEventListener('click', () => {
-                body.classList.add('loading');
-                overlay.classList.add('show');
-            });
-        });
+        // Remove loading overlay when page fully loads
+        window.addEventListener('load', hideLoading);
 
         // === FINAL & BULLETPROOF: Distance filter OFF = no filtering, no hiding, no pagination break ===
         let isLoadingDistances = false;
