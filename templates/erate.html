@@ -424,8 +424,8 @@
     <div class="container">
         <div class="header">
             {% if session.username %}
-                <span class="user-info">
-                    {{ session.username }}
+                <span class="user-info" id="user-settings-btn" style="cursor:pointer; text-decoration:underline;">
+                    {{ session.username }} 
                     <span class="points" id="points-display">Loading...</span>
                 </span>
             {% endif %}
@@ -574,6 +574,34 @@
             </div>
         </div>
     </div>
+
+    <!-- USER SETTINGS MODAL -->
+    <div class="modal" id="settings-modal">
+        <div class="modal-content" style="max-width:420px;">
+            <div class="modal-header">
+                <div class="modal-title">User Settings</div>
+                <button class="modal-close" onclick="closeModal('settings')">x</button>
+            </div>
+            <div class="modal-body">
+                <form id="settings-form">
+                    <label style="display:block;margin:15px 0 5px;">
+                        <strong>Password</strong> (leave blank to keep current)<br>
+                        <input type="password" name="password" placeholder="New password" style="width:100%;padding:10px;margin-top:5px;border:1px solid #ccc;border-radius:6px;">
+                    </label>
+                    <label style="display:block;margin:15px 0 5px;">
+                        <strong>Filter Threshold</strong> (max records to calculate distance)<br>
+                        <input type="number" name="ft" id="settings-ft" min="10" max="1000" value="100" style="width:100%;padding:10px;margin-top:5px;border:1px solid #ccc;border-radius:6px;">
+                    </label>
+                    <label style="display:block;margin:15px 0 5px;">
+                        <strong>Distance Minimum</strong> (miles) — hide farther results<br>
+                        <input type="number" name="dm" id="settings-dm" step="0.1" min="0" max="100" value="5.0" style="width:100%;padding:10px;margin-top:5px;border:1px solid #ccc;border-radius:6px;">
+                    </label>
+                    <button type="submit" class="btn btn-primary" style="margin-top:20px;width:100%;">Save Settings</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
     <script>
         // === AUTH MODAL LOGIC ===
         function continueAsGuest() {
@@ -1074,6 +1102,40 @@
             if (isLoadingDistances) {
                 e.preventDefault();
                 alert('Please wait — calculating distances…');
+            }
+        });
+
+        // === USER SETTINGS MODAL ===
+        document.getElementById('user-settings-btn')?.addEventListener('click', () => {
+            fetch('/erate/user_settings')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('settings-ft').value = data.ft || 100;
+                    document.getElementById('settings-dm').value = data.dm || 5.0;
+                    document.getElementById('settings-modal').classList.add('show');
+                })
+                .catch(() => {
+                    document.getElementById('settings-ft').value = 100;
+                    document.getElementById('settings-dm').value = 5.0;
+                    document.getElementById('settings-modal').classList.add('show');
+                });
+        });
+
+        document.getElementById('settings-form')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            fetch('/erate/user_settings', {
+                method: 'POST',
+                body: formData
+            }).then(() => {
+                location.reload();
+            });
+        });
+
+        // Close modal when clicking outside
+        document.getElementById('settings-modal')?.addEventListener('click', (e) => {
+            if (e.target.id === 'settings-modal') {
+                e.target.classList.remove('show');
             }
         });
         
