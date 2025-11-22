@@ -1044,8 +1044,7 @@
             });
         });
 
-        // === FINAL LOADING OVERLAY — ONLY ONE BLOCK, NO DUPLICATES ===
-        // Show overlay on form submit AND pagination/filter links
+        // === CLEAN & FINAL LOADING OVERLAY — NO DUPLICATES, NO ERRORS ===
         const showLoading = () => {
             body.classList.add('loading');
             overlay.classList.add('show');
@@ -1056,15 +1055,17 @@
             overlay.classList.remove('show');
         };
 
-        // Form submit (filter)
-        form.addEventListener('submit', showLoading);
+        // Form submit (filter button)
+        if (form) {
+            form.addEventListener('submit', showLoading);
+        }
 
-        // Pagination & filter links (Load More + any link with ?)
+        // Pagination + any link with ? in URL (Load More, filters, etc.)
         document.querySelectorAll('a[href*="?"], a.load-more').forEach(link => {
             link.addEventListener('click', showLoading);
         });
 
-        // Remove loading overlay when page fully loads
+        // Remove loading when page is fully ready
         window.addEventListener('load', hideLoading);
 
         // === FINAL & BULLETPROOF: Distance filter OFF = no filtering, no hiding, no pagination break ===
