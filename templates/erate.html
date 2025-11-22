@@ -1096,7 +1096,7 @@
 
             isLoadingDistances = true;
             document.body.style.cursor = 'wait';
-            document.querySelectorAll('button, a, input').forEach(el => el.style.pointerEvents = 'none');
+            // We no longer disable buttons/links — points can load freely
             document.querySelectorAll('.distance-header, .distance-cell').forEach(el => el.style.display = 'table-cell');
             document.querySelectorAll('.distance-cell').forEach(c => c.textContent = '…');
 
@@ -1145,7 +1145,7 @@
 
             isLoadingDistances = false;
             document.body.style.cursor = 'default';
-            document.querySelectorAll('button, a, input').forEach(el => el.style.pointerEvents = 'auto');
+            // Removed pointerEvents restore — we never disabled them!
             updateToggleButton();
         }
 
