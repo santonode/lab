@@ -1273,6 +1273,47 @@ def set_guest():
             conn.commit()
     return redirect(url_for('erate.dashboard'))
 
+# === USER SETTINGS API (FT = Filter Threshold, DM = Distance Minimum) ===
+@erate_bp.route('/user_settings', methods=['GET', 'POST'])
+def user_settings():
+    if not session.get('username'):
+        return jsonify({"ft": 100, "dm": 5.0})
+
+    username = session['username']
+
+    # Guest users get defaults
+    if username.startswith('guest_'):
+        return jsonify({"ft": 100, "dm": 5.0})
+
+    with psycopg.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cur:
+            if request.method == 'POST':
+                data = request.form
+                password = data.get('password')
+                ft = int(data.get('ft', 100))
+                dm = float(data.get('dm', 5.0))
+
+                if password:
+                    cur.execute(
+                        "UPDATE users SET ft=%s, dm=%s, password=%s WHERE username=%s",
+                        (ft, dm, hash_password(password), username)
+                    )
+                else:
+                    cur.execute(
+                        "UPDATE users SET ft=%s, dm=%s WHERE username=%s",
+                        (ft, dm, username)
+                    )
+                conn.commit()
+                flash("Settings saved!", "success")
+
+            # GET: return current values
+            cur.execute("SELECT ft, dm FROM users WHERE username=%s", (username,))
+            row = cur.fetchone()
+            return jsonify({
+                "ft": row[0] if row and row[0] is not None else 100,
+                "dm": float(row[1]) if row and row[1] is not None else 5.0
+            })
+
 @erate_bp.route('/logout')
 def logout():
     session.clear()
