@@ -612,7 +612,6 @@
     
     <script>
         const body = document.body;
-        const overlay = document.getElementById('loading');
         
         // === AUTH MODAL LOGIC ===
         function continueAsGuest() {
@@ -1052,13 +1051,19 @@
             overlay.classList.add('show');
         });
         
-        // Fix: Declare variables properly
-        const body = document.body;
-        const overlay = document.getElementById('loading');
-
+        // NO NEED to re-declare overlay — it's already declared above!
+        // Just use the existing variables
         window.addEventListener('load', () => {
             body.classList.remove('loading');
             overlay.classList.remove('show');
+        });
+
+        // Optional: show loading overlay only on filter/pagination clicks
+        document.querySelectorAll('a[href*="?"], a.load-more').forEach(link => {
+            link.addEventListener('click', () => {
+                body.classList.add('loading');
+                overlay.classList.add('show');
+            });
         });
 
         // Safe loading overlay for pagination/filter links only
