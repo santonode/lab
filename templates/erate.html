@@ -611,6 +611,9 @@
     </div>
     
     <script>
+        const body = document.body;
+        const overlay = document.getElementById('loading');
+        
         // === AUTH MODAL LOGIC ===
         function continueAsGuest() {
             fetch('/erate/set_guest', { method: 'POST' })
@@ -1048,14 +1051,21 @@
             body.classList.add('loading');
             overlay.classList.add('show');
         });
-        window.addEventListener('load', () => { body.classList.remove('loading'); overlay.classList.remove('show'); });
-        document.querySelectorAll('a').forEach(link => {
-            link.addEventListener('click', (e) => {
-                const href = link.getAttribute('href');
-                if (href && href.includes('?')) {
-                    body.classList.add('loading');
-                    overlay.classList.add('show');
-                }
+        
+        // Fix: Declare variables properly
+        const body = document.body;
+        const overlay = document.getElementById('loading');
+
+        window.addEventListener('load', () => {
+            body.classList.remove('loading');
+            overlay.classList.remove('show');
+        });
+
+        // Safe loading overlay for pagination/filter links only
+        document.querySelectorAll('a[href*="?"], a.load-more').forEach(link => {
+            link.addEventListener('click', () => {
+                body.classList.add('loading');
+                overlay.classList.add('show');
             });
         });
 
