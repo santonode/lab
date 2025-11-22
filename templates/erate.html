@@ -1023,6 +1023,56 @@
             });
         });
 
+        // === GLOBAL LOADING STATE — prevents double-filter chaos ===
+        let isLoadingDistances = false;
+
+        function loadDistancesIfNeeded() {
+            const summaryText = document.querySelector('.summary')?.textContent || '';
+            const total = parseInt(summaryText.match(/of (\d+)/)?.[1] || '999');
+            if (total > 100 || isLoadingDistances) return;
+
+            isLoadingDistances = true;
+            document.body.style.cursor = 'wait';
+            document.querySelectorAll('.distance-header, .distance-cell').forEach(el => el.style.display = 'table-cell');
+            document.querySelectorAll('.distance-cell').forEach(cell => cell.textContent = '…');
+
+            const promises = [];
+            document.querySelectorAll('.app-number').forEach(span => {
+                const appNumber = span.textContent.trim();
+                if (!appNumber || appNumber === '—') return;
+
+                const p = fetch(`/erate/bbmap/${appNumber}?distance_only=1`)
+                    .then(r => r.json())
+                    .then(data => {
+                        const cell = span.closest('tr').querySelector('.distance-cell');
+                        if (cell) cell.textContent = data.nearest_fiber_distance || '—';
+                    })
+                    .catch(() => {
+                        const cell = span.closest('tr').querySelector('.distance-cell');
+                        if (cell) cell.textContent = '—';
+                    });
+                promises.push(p);
+            });
+
+            Promise.allSettled(promises).finally(() => {
+                isLoadingDistances = false;
+                document.body.style.cursor = 'default';
+            });
+        }
+
+        // Run after page load
+        window.addEventListener('load', () => {
+            setTimeout(loadDistancesIfNeeded, 800);
+        });
+
+        // Block Filter button while distances loading
+        document.getElementById('filter-form')?.addEventListener('submit', (e) => {
+            if (isLoadingDistances) {
+                e.preventDefault();
+                alert('Please wait — distances are still loading…');
+            }
+        });
+
         // === AUTO-FETCH DISTANCES WHEN RESULTS ≤ 100 ===
         function loadDistancesIfNeeded() {
             const summaryText = document.querySelector('.summary')?.textContent || '';
