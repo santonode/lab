@@ -494,12 +494,12 @@
                 {% endif %}
             </tbody>
         </table>
-        <!-- FINAL PREV / NEXT — SAME SIZE AS MAP BUTTON, ALWAYS SIDE-BY-SIDE -->
+        <!-- FINAL PREV / NEXT + POINT DEDUCTION -->
         {% if has_more or next_offset|default(10) > 10 %}
         <div style="text-align:center; margin:40px 0;">
             <div style="display:inline-flex; gap:10px; flex-wrap:nowrap; justify-content:center;">
                 {% if next_offset|default(10) > 10 %}
-                    <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset - 20 }}"
+                    <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset - 20 }}&deduct=1"
                        class="btn btn-primary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px;">
                         ← Prev
                     </a>
@@ -510,7 +510,7 @@
                 {% endif %}
 
                 {% if has_more %}
-                    <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset|default(10) }}"
+                    <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset|default(10) }}&deduct=1"
                        class="btn btn-primary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px;">
                         Next →
                     </a>
@@ -521,7 +521,7 @@
                 {% endif %}
             </div>
         </div>
-        {% endif %}
+        {% endif %}}
     </div>
     <!-- FOOTER LINKS -->
     <div class="footer-links">
