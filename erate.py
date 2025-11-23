@@ -565,6 +565,9 @@ def _load_kmz(provider):
 # === FINAL WORKING BBMap API — FNA RANKING FIXED + TRUE DISTANCE + NO OOM ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
+    # DEDUCT 1 POINT WHEN MAP IS OPENED (via Map button, Prev, or Next)
+    if request.args.get('deduct') == '1':
+        deduct_point()
     network = request.args.get('network', 'bluebird')
     fna_member = request.args.get('fna_member')
     distance_only = request.args.get('distance_only') == '1'
