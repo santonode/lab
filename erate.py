@@ -562,14 +562,14 @@ def _load_kmz(provider):
         MAP_DATA[provider]["pops"] = []
         MAP_DATA[provider]["routes"] = []
 
-# === FINAL WORKING BBMap API — STARRED MEMBERS + TRUE DISTANCE + NO OOM ===
+# === FINAL WORKING BBMap API — FNA RANKING FIXED + TRUE DISTANCE + NO OOM ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
     network = request.args.get('network', 'bluebird')
     fna_member = request.args.get('fna_member')
-    distance_only = request.args.get('distance_only') == '1'  # For table
+    distance_only = request.args.get('distance_only') == '1'
 
-    log("bbmap request: app=%s network=%s member=%s distance_only=%s", 
+    log("bbmap request: app=%s network=%s member=%s distance_only=%s",
         app_number, network, fna_member, distance_only)
 
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
@@ -603,14 +603,12 @@ def bbmap(app_number):
 
     # === FAST PATH: Only return nearest fiber distance (for table) ===
     if distance_only:
-        # Determine which KMZ to use
         kmz_path = KMZ_PATH_BLUEBIRD
         if network == 'fna':
             if fna_member:
                 clean = fna_member.lstrip('★ ').split(' (')[0].strip()
                 kmz_path = FNA_MEMBERS.get(clean) or KMZ_PATH_BLUEBIRD
             else:
-                # Find closest FNA member
                 closest_path = KMZ_PATH_BLUEBIRD
                 min_d = float('inf')
                 for name, path in FNA_MEMBERS.items():
@@ -626,16 +624,61 @@ def bbmap(app_number):
         dist_str = "<1 mi" if dist and dist < 1 else f"{dist:.1f} mi" if dist else "—"
         return jsonify({"nearest_fiber_distance": dist_str})
 
-    # === ACCURATE FNA RANKING ===
+    # === FNA RANKING — THIS WAS MISSING! ===
     if network == "fna" and not fna_member:
-        # ... your existing FNA ranking code (unchanged) ...
+        log("Calculating true closest FNA members for %s", full_address)
+        def haversine(lat1, lon1, lat2, lon2):
+            R = 3958.8
+            dlat = radians(lat2 - lat1)
+            dlon = radians(lon2 - lon1)
+            a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+            c = 2 * atan2(sqrt(a), sqrt(1-a))
+            return R * c
+
+        rankings = []
+        for name, path in FNA_MEMBERS.items():
+            if not os.path.exists(path):
+                continue
+            try:
+                with zipfile.ZipFile(path, 'r') as kmz:
+                    kml_file = next((f for f in kmz.namelist() if f.lower().endswith('.kml')), None)
+                    if not kml_file:
+                        continue
+                    root = ET.fromstring(kmz.read(kml_file))
+                    ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+                    coords = []
+                    for c in root.findall('.//kml:coordinates', ns):
+                        if c.text:
+                            for pair in c.text.strip().split():
+                                p = pair.split(',')
+                                if len(p) >= 2:
+                                    try:
+                                        lon, lat = float(p[0]), float(p[1])
+                                        coords.append((lat, lon))
+                                    except: pass
+                    if coords and applicant_lat:
+                        distances = [haversine(applicant_lat, applicant_lon, lat, lon) for lat, lon in coords]
+                        rankings.append((name, min(distances)))
+                    else:
+                        rankings.append((name, 99999))
+            except:
+                rankings.append((name, 99999))
+
+        rankings.sort(key=lambda x: x[1])
+        display_list = []
+        for i, (name, dist) in enumerate(rankings):
+            if i < 3 and dist < 100:
+                display_list.append(f"★ {name} ({dist:.0f}mi)")
+            else:
+                display_list.append(name)
+
         return jsonify({
             "fna_members": display_list,
             "pops": [], "routes": [],
             "applicant_coords": final_applicant_coords,
             "address": full_address,
-            "nearest_kmz_coords": None, 
-            "nearest_fiber_distance": None,  # Will be calculated below
+            "nearest_kmz_coords": None,
+            "nearest_fiber_distance": None,
             "nearest_kmz_pop": None
         })
 
@@ -684,14 +727,14 @@ def bbmap(app_number):
                     if len(coords) > 1:
                         routes.append({"name": name, "coords": coords})
 
-    # === CALCULATE TRUE NEAREST FIBER DISTANCE (same as red line) ===
+    # === TRUE NEAREST FIBER DISTANCE (same as red line) ===
     if final_applicant_coords and routes:
         app_lat, app_lon = final_applicant_coords
         min_d = float('inf')
         nearest_point = None
         for r in routes:
             for lat, lon in r["coords"]:
-                d = ((app_lat - lat)**2 + (app_lon - lon)**2)**0.5 * 69  # approx miles
+                d = ((app_lat - lat)**2 + (app_lon - lon)**2)**0.5 * 69
                 if d < min_d:
                     min_d = d
                     nearest_point = [lat, lon]
@@ -710,7 +753,7 @@ def bbmap(app_number):
         "coverage": dist_info['coverage'],
         "nearest_kmz_pop": "Nearest fiber",
         "nearest_kmz_coords": nearest_kmz_coords,
-        "nearest_fiber_distance": nearest_fiber_distance,  # ← THIS IS THE ONE THE TABLE USES
+        "nearest_fiber_distance": nearest_fiber_distance,
         "pops": pops,
         "routes": routes,
         "network": network,
