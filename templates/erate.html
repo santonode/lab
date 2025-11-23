@@ -494,30 +494,32 @@
                 {% endif %}
             </tbody>
         </table>
-        <!-- NEW: Prev / Next Pagination — Clean, Beautiful, Perfect -->
-        {% if has_more|default(false) or offset|default(0) > 0 %}
-        <div class="pagination" style="text-align:center; margin:40px 0;">
-            {% if offset|default(0) > 0 %}
-                <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ offset - 10 if offset >= 10 else 0 }}"
-                   class="btn btn-primary" style="margin:0 12px; padding:10px 24px; font-size:0.9rem;">
-                    ← Prev
-                </a>
-            {% else %}
-                <span class="btn btn-secondary" style="margin:0 12px; padding:10px 24px; font-size:0.9rem; opacity:0.5; cursor:not-allowed;">
-                    ← Prev
-                </span>
-            {% endif %}
+        <!-- FINAL PREV / NEXT — WORKS PERFECTLY WITH YOUR CURRENT BACKEND -->
+        {% if has_more or next_offset|default(10) > 10 %}
+        <div style="text-align:center; margin:40px 0;">
+            <div style="display:inline-flex; gap:12px; flex-wrap:wrap; justify-content:center;">
+                {% if next_offset|default(10) > 10 %}
+                    <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset - 20 }}"
+                       class="btn btn-primary" style="padding:10px 20px; min-width:90px; font-size:0.9rem;">
+                        ← Prev
+                    </a>
+                {% else %}
+                    <span class="btn btn-secondary" style="padding:10px 20px; min-width:90px; font-size:0.9rem; opacity:0.5; cursor:not-allowed;">
+                        ← Prev
+                    </span>
+                {% endif %}
 
-            {% if has_more|default(false) %}
-                <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset|default(10) }}"
-                   class="btn btn-primary" style="margin:0 12px; padding:10px 24px; font-size:0.9rem;">
-                    Next →
-                </a>
-            {% else %}
-                <span class="btn btn-secondary" style="margin:0 12px; padding:10px 24px; font-size:0.9rem; opacity:0.5; cursor:not-allowed;">
-                    Next →
-                </span>
-            {% endif %}
+                {% if has_more %}
+                    <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset|default(10) }}"
+                       class="btn btn-primary" style="padding:10px 20px; min-width:90px; font-size:0.9rem;">
+                        Next →
+                    </a>
+                {% else %}
+                    <span class="btn btn-secondary" style="padding:10px 20px; min-width:90px; font-size:0.9rem; opacity:0.5; cursor:not-allowed;">
+                        Next →
+                    </span>
+                {% endif %}
+            </div>
         </div>
         {% endif %}
     </div>
