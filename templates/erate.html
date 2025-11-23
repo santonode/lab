@@ -494,28 +494,28 @@
                 {% endif %}
             </tbody>
         </table>
-        <!-- FINAL PREV / NEXT — WORKS PERFECTLY WITH YOUR CURRENT BACKEND -->
+        <!-- FINAL PREV / NEXT — SAME SIZE AS MAP BUTTON, ALWAYS SIDE-BY-SIDE -->
         {% if has_more or next_offset|default(10) > 10 %}
         <div style="text-align:center; margin:40px 0;">
-            <div style="display:inline-flex; gap:12px; flex-wrap:wrap; justify-content:center;">
+            <div style="display:inline-flex; gap:10px; flex-wrap:nowrap; justify-content:center;">
                 {% if next_offset|default(10) > 10 %}
                     <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset - 20 }}"
-                       class="btn btn-primary" style="padding:10px 20px; min-width:90px; font-size:0.9rem;">
+                       class="btn btn-primary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px;">
                         ← Prev
                     </a>
                 {% else %}
-                    <span class="btn btn-secondary" style="padding:10px 20px; min-width:90px; font-size:0.9rem; opacity:0.5; cursor:not-allowed;">
+                    <span class="btn btn-secondary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px; opacity:0.5; cursor:not-allowed;">
                         ← Prev
                     </span>
                 {% endif %}
 
                 {% if has_more %}
                     <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset|default(10) }}"
-                       class="btn btn-primary" style="padding:10px 20px; min-width:90px; font-size:0.9rem;">
+                       class="btn btn-primary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px;">
                         Next →
                     </a>
                 {% else %}
-                    <span class="btn btn-secondary" style="padding:10px 20px; min-width:90px; font-size:0.9rem; opacity:0.5; cursor:not-allowed;">
+                    <span class="btn btn-secondary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px; opacity:0.5; cursor:not-allowed;">
                         Next →
                     </span>
                 {% endif %}
