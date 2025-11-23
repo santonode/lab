@@ -1200,6 +1200,11 @@
                     document.getElementById('settings-modal').classList.add('show');
                 });
         });
+        {% else %}
+        // Guest users — do nothing (button exists but no action)
+        document.getElementById('user-settings-btn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+        });
         {% endif %}
 
         document.getElementById('settings-form')?.addEventListener('submit', (e) => {
