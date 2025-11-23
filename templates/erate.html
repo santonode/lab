@@ -304,7 +304,7 @@
             color: var(--accent);
             text-decoration: none;
             font-weight: 500;
-            padding: 4px 8 Summers;
+            padding: 4px 8px;
             border-radius: 4px;
             transition: all 0.2s;
         }
@@ -358,7 +358,7 @@
             table { font-size: 0.8rem; }
             th, td { padding: 6px 4px; }
             .btn { width: 100%; margin: 4px 0; font-size: 0.8rem; }
-            .load-more { padding: 8px 20px; font-size: 0.成年人85rem; }
+            .load-more { padding: 8px 20px; font-size: 0.85rem; }
             .footer-links { padding: 15px; }
             .footer-links a { display: block; margin: 8px 0; }
             #map-container { height: 300px; }
@@ -426,7 +426,7 @@
         <div class="header">
             {% if session.username %}
                 <span class="user-info" id="user-settings-btn" style="cursor:pointer; text-decoration:underline;">
-                    {{ session.username }} 
+                    {{ session.username }}
                     <span class="points" id="points-display">Loading...</span>
                 </span>
             {% endif %}
@@ -452,13 +452,18 @@
             </form>
         </div>
         <p class="summary">Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</p>
-        {% if total_filtered <= (session.ft | default(100) | int) %}
-        <div style="text-align:center; margin:10px 0;">
-            <button id="toggle-distance-filter" class="btn btn-secondary" style="font-size:0.85rem;">
-                Distance filter: OFF — click to enable
-            </button>
-        </div>
+
+        <!-- Distance Toggle — ONLY for registered users -->
+        {% if session.username and not session.username.startswith('guest_') %}
+            {% if total_filtered <= (session.ft | default(100) | int) %}
+            <div style="text-align:center; margin:10px 0;">
+                <button id="toggle-distance-filter" class="btn btn-secondary" style="font-size:0.85rem;">
+                    Distance filter: OFF — click to enable
+                </button>
+            </div>
+            {% endif %}
         {% endif %}
+
         <table>
             <thead>
                 <tr>
@@ -466,7 +471,9 @@
                     <th>Entity Name</th>
                     <th>State</th>
                     <th>Modified</th>
+                    {% if session.username and not session.username.startswith('guest_') %}
                     <th class="distance-header" style="display:none; color:#dc3545; font-weight:600;">Distance</th>
+                    {% endif %}
                     <th>Map</th>
                 </tr>
             </thead>
@@ -478,13 +485,15 @@
                         <td><span class="entity-name">{{ row.entity_name|default('—') }}</span></td>
                         <td>{{ row.state|default('—') }}</td>
                         <td class="modified">{{ row.last_modified_datetime|strftime('%m/%d/%Y') if row.last_modified_datetime else '—' }}</td>
+                        {% if session.username and not session.username.startswith('guest_') %}
                         <td class="distance-cell" style="display:none; color:#dc3545; font-weight:600;">—</td>
+                        {% endif %}
                         <td><button class="btn btn-primary btn-sm">Map</button></td>
                     </tr>
                     {% endfor %}
                 {% else %}
                 <tr>
-                    <td colspan="5" style="text-align:center; color:#999; padding:30px;">
+                    <td colspan="{% if session.username and not session.username.startswith('guest_') %}6{% else %}5{% endif %}" style="text-align:center; color:#999; padding:30px;">
                         No records found. Try adjusting filters or <a href="{{ url_for('erate.import_interactive') }}">import data</a>.
                     </td>
                 </tr>
@@ -582,7 +591,6 @@
             </div>
         </div>
     </div>
-
     <!-- USER SETTINGS MODAL -->
     <div class="modal" id="settings-modal">
         <div class="modal-content" style="max-width:420px;">
@@ -609,26 +617,37 @@
             </div>
         </div>
     </div>
-    
+
     <script>
-        
-        // === AUTH MODAL LOGIC ===
-        function continueAsGuest() {
-            fetch('/erate/set_guest', { method: 'POST' })
-                .then(() => location.reload());
-        }
-        function showRegister() {
-            document.getElementById('authModal').style.display = 'none';
-            document.getElementById('registerModal').style.display = 'flex';
-        }
-        function showLogin() {
-            document.getElementById('authModal').style.display = 'none';
-            document.getElementById('loginModal').style.display = 'flex';
-        }
-        function closeModal(type) {
-            document.getElementById(type + 'Modal').style.display = 'none';
-        }
-        // === POINT COUNTER + OUT-OF-POINTS POPUP ===
+        // === ALL VARIABLES ===
+        const body = document.body;
+        const overlay = document.getElementById('loading');
+        const form = document.getElementById('filter-form');
+        const detailModal = document.getElementById('detail-modal');
+        const bbmapModal = document.getElementById('bbmap-modal');
+        const mapModal = document.getElementById('map-modal');
+        const detailBody = document.getElementById('detail-body');
+        const bbmapBody = document.getElementById('bbmap-body');
+        const summaryEl = document.querySelector('.summary');
+        const loadMoreBtn = document.querySelector('.load-more');
+        const toggleBtn = document.getElementById('toggle-distance-filter');
+
+        let currentAppNumber = null;
+        let currentNetwork = localStorage.getItem('preferredNetwork') || 'bluebird';
+        let currentFnaMember = null;
+        let isLoadingDistances = false;
+        let userFT = 100;
+        let userDM = 5.0;
+        let distanceFilterEnabled = false;
+
+        // === LOADING OVERLAY ===
+        const showLoading = () => { body.classList.add('loading'); overlay.classList.add('show'); };
+        const hideLoading = () => { body.classList.remove('loading'); overlay.classList.remove('show'); };
+        if (form) form.addEventListener('submit', showLoading);
+        document.querySelectorAll('a[href*="?"], a.load-more').forEach(l => l.addEventListener('click', showLoading));
+        window.addEventListener('load', hideLoading);
+
+        // === POINT COUNTER ===
         function updatePoints() {
             fetch('/erate/points?' + Date.now())
                 .then(r => r.json())
@@ -637,19 +656,7 @@
                     if (el) {
                         el.textContent = `(${data.points} pts)`;
                         if (data.points <= 5) el.style.color = '#ffc107';
-                        if (data.points <= 0) {
-                            el.style.color = '#dc3545';
-                            fetch('/erate/out-of-points')
-                                .then(r => r.json())
-                                .then(msg => {
-                                    document.getElementById('out-of-points-message').textContent = msg.message;
-                                    document.getElementById('outOfPointsModal').classList.add('show');
-                                })
-                                .catch(() => {
-                                    document.getElementById('out-of-points-message').textContent = "You have run out of points.";
-                                    document.getElementById('outOfPointsModal').classList.add('show');
-                                });
-                        }
+                        if (data.points <= 0) el.style.color = '#dc3545';
                     }
                 })
                 .catch(() => {
@@ -657,526 +664,11 @@
                     if (el) el.textContent = '(?)';
                 });
         }
+        updatePoints();
+        setInterval(updatePoints, 5000);
 
-        // === showDetails() — THIS WAS MISSING ===
-        async function showDetails(appNumber) {
-            updatePoints();
-            currentAppNumber = appNumber;
-            body.classList.add('loading');
-            overlay.classList.add('show');
-            detailBody.innerHTML = 'Loading...';
-            detailModal.classList.add('show');
-            try {
-                const resp = await fetch(`/erate/details/${appNumber}`);
-                const data = await resp.json();
-                renderSection('basic', data);
-                activateTab('basic');
-            } catch (err) {
-                detailBody.innerHTML = '<strong>Error:</strong> Could not load details.';
-            } finally {
-                body.classList.remove('loading');
-                overlay.classList.remove('show');
-            }
-        }
-
-        // === checkBluebird() — ALSO MISSING ===
-        async function checkBluebird(appNumber) {
-            updatePoints();
-            body.classList.add('loading');
-            overlay.classList.add('show');
-            bbmapBody.innerHTML = 'Searching Bluebird Fiber...';
-            bbmapModal.classList.add('show');
-            try {
-                const resp = await fetch(`/erate/bbmap/${appNumber}`);
-                const data = await resp.json();
-                document.getElementById('address-text').textContent = data.address || 'N/A';
-                bbmapBody.innerHTML = `
-                    <strong>Applicant:</strong> ${data.entity_name || 'N/A'}<br>
-                    <strong>Address:</strong> ${data.address || 'N/A'}<br>
-                    <strong>Nearest PoP (223):</strong> ${data.pop_city || 'Unknown'}<br>
-                    <strong>Distance:</strong> ${data.distance || 'N/A'}<br>
-                    <strong>Coverage:</strong> ${data.coverage || 'Unknown'}
-                `;
-            } catch {
-                bbmapBody.innerHTML = '<strong>Error:</strong> Could not fetch data.';
-                document.getElementById('address-text').textContent = 'Error loading address';
-            } finally {
-                body.classList.remove('loading');
-                overlay.classList.remove('show');
-            }
-        }
-        
-        // === RUN ALL JS ON LOAD ===
-        window.addEventListener('load', () => {
-            const isLoggedIn = {{ 'true' if session.username else 'false' }};
-            if (!isLoggedIn) {
-                document.getElementById('authModal').style.display = 'flex';
-            } else {
-                updatePoints();
-                setInterval(updatePoints, 5000);
-            }
-            document.querySelectorAll('.app-number').forEach(el => {
-                el.onclick = () => showDetails(el.textContent.trim());
-            });
-            document.querySelectorAll('.entity-name').forEach(el => {
-                el.onclick = () => {
-                    const row = el.closest('tr');
-                    const appNumber = row.querySelector('.app-number').textContent.trim();
-                    checkBluebird(appNumber);
-                };
-            });
-            document.querySelectorAll('.btn-sm').forEach(btn => {
-                btn.onclick = () => {
-                    const row = btn.closest('tr');
-                    const appNumber = row.querySelector('.app-number').textContent.trim();
-                    const lat = row.dataset.lat ? parseFloat(row.dataset.lat) : null;
-                    const lon = row.dataset.lon ? parseFloat(row.dataset.lon) : null;
-                    openMapModal(appNumber, lat, lon);
-                };
-            });
-        });
-        document.addEventListener('click', updatePoints);
-        document.addEventListener('submit', updatePoints);
-
-        const form = document.getElementById('filter-form');
-        const overlay = document.getElementById('loading');
-        const body = document.body;
-        const detailModal = document.getElementById('detail-modal');
-        const bbmapModal = document.getElementById('bbmap-modal');
-        const mapModal = document.getElementById('map-modal');
-        const detailBody = document.getElementById('detail-body');
-        const bbmapBody = document.getElementById('bbmap-body');
-        let currentAppNumber = null;
-        let currentNetwork = localStorage.getItem('preferredNetwork') || 'bluebird';
-        let currentFnaMember = null;
-
-        // === openMapModal() — FINAL WORKING VERSION ===
-        async function openMapModal(appNumber, dbLat, dbLon) {
-            updatePoints();
-            currentAppNumber = appNumber;
-            body.classList.add('loading');
-            overlay.classList.add('show');
-            mapModal.classList.add('show');
-
-            const mapDiv = document.getElementById('map-container');
-            if (mapDiv._leaflet_map) {
-                mapDiv._leaflet_map.remove();
-                delete mapDiv._leaflet_map;
-            }
-            mapDiv.innerHTML = '';
-
-            document.getElementById('network-select').value = currentNetwork;
-            document.getElementById('network-select').dispatchEvent(new Event('change'));
-
-            document.getElementById('map-title').textContent = 
-                currentNetwork === 'fna' ? 'FNA Network + Applicant' : 'Bluebird Network + Applicant';
-
-            body.classList.remove('loading');
-            overlay.classList.remove('show');
-        }
-
-        // === NETWORK SWITCHER + FNA — FINAL WORKING VERSION ===
-        document.getElementById('network-select')?.addEventListener('change', async (e) => {
-            const network = e.target.value;
-            currentNetwork = network;
-            localStorage.setItem('preferredNetwork', network);
-
-            const memberSelect = document.getElementById('fna-member-select');
-
-            document.getElementById('map-title').textContent = 
-                network === 'fna' ? 'FNA Network + Applicant' : 'Bluebird Network + Applicant';
-
-            document.getElementById('map-loading').style.display = 'flex';
-            document.body.style.cursor = 'wait';
-
-            try {
-                if (network === 'fna') {
-                    memberSelect.style.display = 'block';
-                    memberSelect.disabled = true;
-                    memberSelect.innerHTML = '<option>Loading members...</option>';
-
-                    const resp = await fetch(`/erate/bbmap/${currentAppNumber}?network=fna`);
-                    const data = await resp.json();
-
-                    if (data.fna_members?.length > 0) {
-                        memberSelect.innerHTML = '<option value="">— Select Member —</option>';
-                        data.fna_members.forEach(text => {
-                            const clean = text.replace(/^★\s*/, '').split(' (')[0].trim();
-                            const opt = new Option(text, clean);
-                            memberSelect.appendChild(opt);
-                        });
-                        memberSelect.disabled = false;
-                        currentFnaMember = memberSelect.options[1].value;
-                        memberSelect.value = currentFnaMember;
-                    }
-                } else {
-                    memberSelect.style.display = 'none';
-                    currentFnaMember = null;
-                }
-
-                await loadMap(currentAppNumber, network, currentFnaMember);
-
-            } catch (err) {
-                console.error("FNA load failed:", err);
-            } finally {
-                document.getElementById('map-loading').style.display = 'none';
-                document.body.style.cursor = 'default';
-            }
-        });
-
-        // === FNA MEMBER CHANGE ===
-        document.getElementById('fna-member-select')?.addEventListener('change', async (e) => {
-            currentFnaMember = e.target.value;
-            if (currentFnaMember && currentAppNumber) {
-                document.getElementById('map-loading').style.display = 'flex';
-                document.body.style.cursor = 'wait';
-                await loadMap(currentAppNumber, 'fna', currentFnaMember);
-                document.getElementById('map-loading').style.display = 'none';
-                document.body.style.cursor = 'default';
-            }
-        });
-
-        // === loadMap() — FINAL FIXED VERSION (NO MORE "already initialized") ===
-        async function loadMap(appNumber, network, fna_member = null) {
-            const mapDiv = document.getElementById('map-container');
-
-            // DESTROY OLD MAP COMPLETELY — THIS IS THE KEY
-            if (mapDiv._leaflet_map) {
-                mapDiv._leaflet_map.remove();
-                mapDiv._leaflet_map = null;
-            }
-            mapDiv.innerHTML = '';
-
-            let url = `/erate/bbmap/${appNumber}?network=${network}`;
-            if (fna_member) url += `&fna_member=${encodeURIComponent(fna_member)}`;
-
-            const resp = await fetch(url);
-            const data = await resp.json();
-            if (data.error) throw new Error(data.error);
-
-            // CREATE NEW MAP — NOW SAFE
-            const map = L.map('map-container');
-            mapDiv._leaflet_map = map;
-
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap | ' + (network === 'fna' ? `FNA - ${fna_member || ''}` : 'Bluebird Fiber')
-            }).addTo(map);
-
-            // Routes
-            data.routes?.forEach(r => {
-                if (r.coords?.length > 1) {
-                    L.polyline(r.coords, {
-                        color: network === 'fna' ? '#dc3545' : '#007bff',
-                        weight: network === 'fna' ? 4 : 3,
-                        opacity: network === 'fna' ? 0.9 : 0.7
-                    }).addTo(map);
-                }
-            });
-
-            // PoPs
-            data.pops?.forEach(p => {
-                L.circleMarker([p.lat, p.lon], {
-                    radius: 6,
-                    color: network === 'fna' ? '#dc3545' : '#28a745',
-                    fillOpacity: 0.8
-                }).bindPopup(`<strong>${p.name}</strong>`).addTo(map);
-            });
-
-            // Applicant
-            if (data.applicant_coords) {
-                const [lat, lng] = data.applicant_coords;
-                const icon = L.divIcon({
-                    className: '',
-                    html: '<div style="background:#007bff;width:16px;height:16px;border-radius:50%;border:3px solid white;"></div>',
-                    iconSize: [16,16]
-                });
-                L.marker([lat, lng], { icon })
-                    .bindPopup(`<strong>${data.entity_name}</strong><br>${data.address}`)
-                    .addTo(map);
-                map.setView([lat, lng], 12);
-            } else {
-                map.setView([39.8, -92.5], 7);
-            }
-
-            // Distance line
-            if (data.nearest_kmz_coords && data.applicant_coords) {
-                const [lat1, lng1] = data.applicant_coords;
-                const [lat2, lng2] = data.nearest_kmz_coords;
-                L.polyline([[lat1, lng1], [lat2, lng2]], {
-                    color: '#dc3545', weight: 4, dashArray: '10, 10', opacity: 0.8
-                }).bindPopup(`<strong>${data.distance}</strong> to ${data.nearest_kmz_pop}`)
-                  .addTo(map);
-            }
-        }
-
-        // === closeModal() ===
-        function closeModal(type) {
-            if (type === 'detail') detailModal.classList.remove('show');
-            if (type === 'bbmap') bbmapModal.classList.remove('show');
-            if (type === 'map') {
-                mapModal.classList.remove('show');
-                const mapDiv = document.getElementById('map-container');
-                if (mapDiv._leaflet_map) {
-                    mapDiv._leaflet_map.remove();
-                    delete mapDiv._leaflet_map;
-                }
-                mapDiv.innerHTML = '';
-            }
-            if (type === 'outOfPoints') {
-                document.getElementById('outOfPointsModal').classList.remove('show');
-            }
-            body.classList.remove('loading');
-            overlay.classList.remove('show');
-        }
-
-        // === renderSection(), activateTab(), copyAddress() — ALL FULLY INCLUDED ===
-        function renderSection(section, data) {
-            let html = '';
-            if (section === 'basic') {
-                html = `
-                    <strong>Form Nickname:</strong> ${data.form_nickname || ''}<br>
-                    <strong>Form PDF:</strong> ${data.form_pdf || ''}<br>
-                    <strong>Funding Year:</strong> ${data.funding_year || ''}<br>
-                    <strong>FCC Status:</strong> ${data.fcc_status || ''}<br>
-                    <strong>Allowable Contract Date:</strong> ${data.allowable_contract_date || ''}<br>
-                    <strong>Created:</strong> ${data.created_datetime || ''} by ${data.created_by || ''}<br>
-                    <strong>Certified:</strong> ${data.certified_datetime || ''} by ${data.certified_by || ''}<br>
-                    <strong>Last Modified:</strong> ${data.last_modified_datetime || ''} by ${data.last_modified_by || ''}
-                `;
-            } else if (section === 'billed') {
-                html = `
-                    <strong>Billed Entity #:</strong> ${data.ben || ''}<br>
-                    <strong>Entity Name:</strong> ${data.entity_name || ''}<br>
-                    <strong># of Eligible Entities:</strong> ${data.num_eligible || ''}<br>
-                    <strong>Org Status:</strong> ${data.org_status || ''}<br>
-                    <strong>Org Type:</strong> ${data.org_type || ''}<br>
-                    <strong>Applicant Type:</strong> ${data.applicant_type || ''}<br>
-                    <strong>Website:</strong> ${data.website ? `<a href="${data.website}" target="_blank">${data.website}</a>` : ''}<br>
-                    <strong>FCC Reg #:</strong> ${data.fcc_reg_num || ''}<br>
-                    <strong>Address:</strong> ${data.address1 || ''} ${data.address2 || ''}<br>
-                    <strong>City/State/ZIP:</strong> ${data.city || ''}, ${data.state || ''} ${data.zip_code || ''}${data.zip_ext ? '-' + data.zip_ext : ''}<br>
-                    <strong>Email:</strong> ${data.email || ''}<br>
-                    <strong>Phone:</strong> ${data.phone || ''}${data.phone_ext ? ' x' + data.phone_ext : ''}
-                `;
-            } else if (section === 'contact') {
-                html = `
-                    <strong>Contact Name:</strong> ${data.contact_name || ''}<br>
-                    <strong>Address:</strong> ${data.contact_address1 || ''} ${data.contact_address2 || ''}<br>
-                    <strong>City/State/ZIP:</strong> ${data.contact_city || ''}, ${data.contact_state || ''} ${data.contact_zip || ''}${data.contact_zip_ext ? '-' + data.contact_zip_ext : ''}<br>
-                    <strong>Phone:</strong> ${data.contact_phone || ''}${data.contact_phone_ext ? ' x' + data.contact_phone_ext : ''}<br>
-                    <strong>Email:</strong> ${data.contact_email || ''}
-                `;
-            } else if (section === 'tech') {
-                html = `
-                    <strong>Name:</strong> ${data.tech_name || ''}<br>
-                    <strong>Title:</strong> ${data.tech_title || ''}<br>
-                    <strong>Phone:</strong> ${data.tech_phone || ''}${data.tech_phone_ext ? ' x' + data.tech_phone_ext : ''}<br>
-                    <strong>Email:</strong> ${data.tech_email || ''}
-                `;
-            } else if (section === 'auth') {
-                html = `
-                    <strong>Name:</strong> ${data.auth_name || ''}<br>
-                    <strong>Title:</strong> ${data.auth_title || ''}<br>
-                    <strong>Employer:</strong> ${data.auth_employer || ''}<br>
-                    <strong>Address:</strong> ${data.auth_address || ''}<br>
-                    <strong>City/State/ZIP:</strong> ${data.auth_city || ''}, ${data.auth_state || ''} ${data.auth_zip || ''}${data.auth_zip_ext ? '-' + data.auth_zip_ext : ''}<br>
-                    <strong>Phone:</strong> ${data.auth_phone || ''}${data.auth_phone_ext ? ' x' + data.auth_phone_ext : ''}<br>
-                    <strong>Email:</strong> ${data.auth_email || ''}
-                `;
-            } else if (section === 'services') {
-                html = `
-                    <strong>Category 1:</strong> ${data.cat1_desc || ''}<br>
-                    <strong>Category 2:</strong> ${data.cat2_desc || ''}<br>
-                    <strong>Installment Type:</strong> ${data.installment_type || ''}<br>
-                    <strong>Min/Max Years:</strong> ${data.installment_min || ''} / ${data.installment_max || ''}<br>
-                    <strong>RFP ID:</strong> ${data.rfp_id || ''}<br>
-                    <strong>State Restrictions:</strong> ${data.state_restrictions || ''}<br>
-                    <strong>Restriction Desc:</strong> ${data.restriction_desc || ''}<br>
-                    <strong>Statewide:</strong> ${data.statewide || ''}<br>
-                    <strong>All Public:</strong> ${data.all_public || ''}<br>
-                    <strong>All Non-Public:</strong> ${data.all_nonpublic || ''}<br>
-                    <strong>All Libraries:</strong> ${data.all_libraries || ''}<br>
-                    <strong>Form Version:</strong> ${data.form_version || ''}
-                `;
-            }
-            detailBody.innerHTML = html;
-        }
-
-        function activateTab(section) {
-            document.querySelectorAll('.tab-link').forEach(link => {
-                link.classList.remove('active');
-                if (link.dataset.section === section) link.classList.add('active');
-            });
-        }
-
-        document.querySelectorAll('.tab-link').forEach(link => {
-            link.addEventListener('click', async (e) => {
-                e.preventDefault();
-                const section = link.dataset.section;
-                activateTab(section);
-                if (currentAppNumber) {
-                    body.classList.add('loading');
-                    overlay.classList.add('show');
-                    try {
-                        const resp = await fetch(`/erate/details/${currentAppNumber}`);
-                        const data = await resp.json();
-                        renderSection(section, data);
-                    } catch {}
-                    body.classList.remove('loading');
-                    overlay.classList.remove('show');
-                }
-            });
-        });
-
-        function copyAddress() {
-            const address = document.getElementById('address-text').textContent;
-            navigator.clipboard.writeText(address).then(() => {
-                const btn = event.target;
-                const originalText = btn.textContent;
-                btn.textContent = 'Copied!';
-                setTimeout(() => btn.textContent = originalText, 1500);
-            });
-        }
-
-        [detailModal, bbmapModal, mapModal, document.getElementById('outOfPointsModal')].forEach(modal => {
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) modal.classList.remove('show');
-            });
-        });
-
-        // === CLEAN & FINAL LOADING OVERLAY — NO DUPLICATES, NO ERRORS ===
-        const showLoading = () => {
-            body.classList.add('loading');
-            overlay.classList.add('show');
-        };
-
-        const hideLoading = () => {
-            body.classList.remove('loading');
-            overlay.classList.remove('show');
-        };
-
-        // Form submit (filter button)
-        if (form) {
-            form.addEventListener('submit', showLoading);
-        }
-
-        // Pagination + any link with ? in URL (Load More, filters, etc.)
-        document.querySelectorAll('a[href*="?"], a.load-more').forEach(link => {
-            link.addEventListener('click', showLoading);
-        });
-
-        // Remove loading when page is fully ready
-        window.addEventListener('load', hideLoading);
-
-        // === FINAL & BULLETPROOF: Distance filter OFF = no filtering, no hiding, no pagination break ===
-        let isLoadingDistances = false;
-        let userFT = 100;
-        let userDM = 5.0;
-        let distanceFilterEnabled = false;  // DEFAULT OFF
-
-        const toggleBtn = document.getElementById('toggle-distance-filter');
-        const summaryEl = document.querySelector('.summary');
-        const loadMoreBtn = document.querySelector('.load-more');
-
-        function updateToggleButton() {
-            if (!toggleBtn) return;
-            if (distanceFilterEnabled) {
-                toggleBtn.textContent = `Distance filter: ON (≤ ${userDM} mi) — click to disable`;
-                toggleBtn.className = 'btn btn-success';
-            } else {
-                toggleBtn.textContent = 'Distance filter: OFF — click to enable';
-                toggleBtn.className = 'btn btn-secondary';
-            }
-        }
-
-        toggleBtn?.addEventListener('click', () => {
-            distanceFilterEnabled = !distanceFilterEnabled;
-            updateToggleButton();
-            applyDistanceFilter();  // Only re-filters when toggled
-        });
-
-        async function loadDistancesIfNeeded() {
-            const settings = await fetch('/erate/user_settings').then(r => r.json());
-            userFT = parseInt(settings.ft) || 100;
-            userDM = parseFloat(settings.dm) || 5.0;
-
-            const totalRecords = parseInt(summaryEl?.textContent.match(/of (\d+)/)?.[1] || '999');
-            if (totalRecords > userFT || isLoadingDistances) return;
-
-            isLoadingDistances = true;
-            document.body.style.cursor = 'wait';
-            // We no longer disable buttons/links — points can load freely
-            document.querySelectorAll('.distance-header, .distance-cell').forEach(el => el.style.display = 'table-cell');
-            document.querySelectorAll('.distance-cell').forEach(c => c.textContent = '…');
-
-            const rows = Array.from(document.querySelectorAll('tbody tr'));
-
-            for (const row of rows) {
-                const appSpan = row.querySelector('.app-number');
-                if (!appSpan) continue;
-                const appNumber = appSpan.textContent.trim();
-                if (!appNumber || appNumber === '—') continue;
-
-                const cell = row.querySelector('.distance-cell');
-
-                try {
-                    const data = await fetch(`/erate/bbmap/${appNumber}`).then(r => r.json());
-                    const distText = data.nearest_fiber_distance || '—';
-                    if (cell) cell.textContent = distText;
-
-                    // ONLY hide if filter is ON
-                    if (distanceFilterEnabled) {
-                        const distNum = parseFloat(distText);
-                        if (isNaN(distNum) || distNum > userDM) {
-                            row.style.display = 'none';
-                        } else {
-                            row.style.display = '';
-                        }
-                    } else {
-                        row.style.display = '';  // Always show when OFF
-                    }
-                } catch (e) {
-                    if (cell) cell.textContent = '—';
-                    row.style.display = distanceFilterEnabled ? 'none' : '';
-                }
-            }
-
-            // NEVER touch summary or Load More when filter is OFF
-            if (!distanceFilterEnabled) {
-                summaryEl.textContent = originalText;  // Restore original
-                if (loadMoreBtn) loadMoreBtn.style.display = '';  // Always show if existed
-            } else {
-                const visible = rows.filter(r => r.style.display !== 'none').length;
-                const showing = Math.min(visible, 10);
-                summaryEl.textContent = `Showing ${showing} of ${visible} records (≤ ${userDM} mi)`;
-                if (loadMoreBtn) loadMoreBtn.style.display = visible > 10 ? 'block' : 'none';
-            }
-
-            isLoadingDistances = false;
-            document.body.style.cursor = 'default';
-            // Removed pointerEvents restore — we never disabled them!
-            updateToggleButton();
-        }
-
-        function applyDistanceFilter() {
-            loadDistancesIfNeeded();  // Re-run with current toggle state
-        }
-
-        // Save original summary text on first load
-        let originalText = '';
-        window.addEventListener('load', () => {
-            originalText = summaryEl?.textContent || '';
-            setTimeout(loadDistancesIfNeeded, 800);
-        });
-
-        document.getElementById('filter-form')?.addEventListener('submit', e => {
-            if (isLoadingDistances) {
-                e.preventDefault();
-                alert('Please wait — calculating distances…');
-            }
-        });
-
-        // === USER SETTINGS MODAL ===
+        // === USER SETTINGS MODAL — ONLY REGISTERED USERS ===
+        {% if session.username and not session.username.startswith('guest_') %}
         document.getElementById('user-settings-btn')?.addEventListener('click', () => {
             fetch('/erate/user_settings')
                 .then(r => r.json())
@@ -1191,25 +683,75 @@
                     document.getElementById('settings-modal').classList.add('show');
                 });
         });
-
-        document.getElementById('settings-form')?.addEventListener('submit', (e) => {
+        document.getElementById('settings-form')?.addEventListener('submit', e => {
             e.preventDefault();
-            const formData = new FormData(e.target);
-            fetch('/erate/user_settings', {
-                method: 'POST',
-                body: formData
-            }).then(() => {
-                location.reload();
-            });
+            fetch('/erate/user_settings', { method: 'POST', body: new FormData(e.target) })
+                .then(() => location.reload());
+        });
+        {% endif %}
+
+        // === DISTANCE FILTERING — FINAL & PERFECT ===
+        function updateToggleButton() {
+            if (!toggleBtn) return;
+            toggleBtn.textContent = distanceFilterEnabled 
+                ? `Distance filter: ON (≤ ${userDM} mi) — click to disable`
+                : 'Distance filter: OFF — click to enable';
+            toggleBtn.className = distanceFilterEnabled ? 'btn btn-success' : 'btn btn-secondary';
+        }
+        toggleBtn?.addEventListener('click', () => {
+            distanceFilterEnabled = !distanceFilterEnabled;
+            updateToggleButton();
+            applyDistanceFilter();
         });
 
-        // Close modal when clicking outside or X
-        document.getElementById('settings-modal')?.addEventListener('click', (e) => {
-            if (e.target === document.getElementById('settings-modal') || e.target.classList.contains('modal-close')) {
-                document.getElementById('settings-modal').classList.remove('show');
+        async function loadDistancesIfNeeded() {
+            const settings = await fetch('/erate/user_settings').then(r => r.json()).catch(() => ({}));
+            userFT = parseInt(settings.ft) || 100;
+            userDM = parseFloat(settings.dm) || 5.0;
+
+            const total = parseInt(summaryEl.textContent.match(/of (\d+)/)?.[1] || '999');
+            if (total > userFT || isLoadingDistances) return;
+
+            isLoadingDistances = true;
+            document.body.style.cursor = 'wait';
+            document.querySelectorAll('.distance-header, .distance-cell').forEach(el => el.style.display = 'table-cell');
+            document.querySelectorAll('.distance-cell').forEach(c => c.textContent = '...');
+
+            const rows = Array.from(document.querySelectorAll('tbody tr'));
+            for (const row of rows) {
+                const appNumber = row.querySelector('.app-number')?.textContent.trim();
+                if (!appNumber || appNumber === '—') continue;
+                const cell = row.querySelector('.distance-cell');
+                try {
+                    const data = await fetch(`/erate/bbmap/${appNumber}`).then(r => r.json());
+                    const dist = data.nearest_fiber_distance || '—';
+                    if (cell) cell.textContent = dist;
+                    if (distanceFilterEnabled) {
+                        const num = parseFloat(dist);
+                        row.style.display = (!isNaN(num) && num <= userDM) ? '' : 'none';
+                    } else {
+                        row.style.display = '';
+                    }
+                } catch { if (cell) cell.textContent = '—'; }
             }
+
+            const visible = rows.filter(r => r.style.display !== 'none').length;
+            const showing = Math.min(visible, 10);
+            summaryEl.textContent = `Showing ${showing} of ${visible} records${distanceFilterEnabled ? ` (≤ ${userDM} mi)` : ''}`;
+            if (loadMoreBtn) loadMoreBtn.style.display = visible > 10 ? 'block' : 'none';
+
+            isLoadingDistances = false;
+            document.body.style.cursor = 'default';
+            updateToggleButton();
+        }
+
+        function applyDistanceFilter() { loadDistancesIfNeeded(); }
+
+        window.addEventListener('load', () => {
+            {% if session.username and not session.username.startswith('guest_') %}
+            setTimeout(loadDistancesIfNeeded, 800);
+            {% endif %}
         });
-        
     </script>
 </body>
 </html>
