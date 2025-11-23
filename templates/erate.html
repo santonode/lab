@@ -1111,8 +1111,24 @@
                 document.querySelectorAll('.distance-header, .distance-cell').forEach(el => el.style.display = 'table-cell');
                 document.querySelectorAll('.distance-cell').forEach(c => c.textContent = '...');
 
-                // USE CURRENT USER NETWORK (from localStorage or default)
-                const currentNetwork = localStorage.getItem('preferredNetwork') || 'bluebird';
+                // DETERMINE NETWORK: 1. Map modal → 2. State filter → 3. Default Bluebird
+                let currentNetwork = localStorage.getItem('preferredNetwork') || 'bluebird';
+
+                const urlParams = new URLSearchParams(window.location.search);
+                const state = urlParams.get('state')?.toUpperCase() || '';
+                const bluebirdStates = ['IA','KS','IL','MO','OK'];
+                const fnaStates = ['MI','OH','PA','FL','GA','NC','SC','LA','TN','KY','VA','WV','MD','DE','NJ'];
+
+                if (fnaStates.includes(state)) {
+                        currentNetwork = 'fna';
+                } else if (bluebirdStates.includes(state)) {
+                        currentNetwork = 'bluebird';
+                }
+                // else keep user’s manual choice from map
+
+                // Update the label
+                document.getElementById('current-network-display').textContent = 
+                        currentNetwork === 'fna' ? 'FNA Network' : 'Bluebird Network';
 
                 const rows = Array.from(document.querySelectorAll('tbody tr'));
                 for (const row of rows) {
