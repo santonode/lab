@@ -751,7 +751,7 @@
                     checkBluebird(appNumber);
                 };
             });
-            // BLUE MAP BUTTON — NOW AUTO-SELECTS CORRECT NETWORK FROM STATE FILTER
+            // BLUE MAP BUTTON — AUTO-SELECTS NETWORK + DEDUCTS 1 POINT
             document.querySelectorAll('.btn-sm').forEach(btn => {
                 btn.onclick = function () {
                     const row = this.closest('tr');
@@ -764,7 +764,6 @@
                     const state = urlParams.get('state')?.toUpperCase() || '';
                     const bluebirdStates = ['IA','KS','IL','MO','OK'];
                     const fnaStates = ['MI','OH','PA','FL','GA','NC','SC','LA','TN','KY','VA','WV','MD','DE','NJ'];
-
                     let network = localStorage.getItem('preferredNetwork') || 'bluebird';
                     if (fnaStates.includes(state)) {
                         network = 'fna';
@@ -776,8 +775,12 @@
                     const select = document.getElementById('network-select');
                     if (select) {
                         select.value = network;
-                        select.dispatchEvent(new Event('change')); // Triggers map reload with correct network
+                        select.dispatchEvent(new Event('change'));
                     }
+
+                    // DEDUCT 1 POINT FOR MAP CLICK
+                    fetch(`/erate/bbmap/${appNumber}?deduct=1`, { method: 'HEAD' })
+                        .catch(() => {}); // Silent — we don't care about response
 
                     openMapModal(appNumber, lat, lon);
                 };
