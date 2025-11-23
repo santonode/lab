@@ -748,6 +748,40 @@
         function applyDistanceFilter() { loadDistancesIfNeeded(); }
 
         window.addEventListener('load', () => {
+            const isLoggedIn = {{ 'true' if session.username else 'false' }};
+            if (!isLoggedIn) {
+                document.getElementById('authModal').style.display = 'flex';
+            } else {
+                updatePoints();
+                setInterval(updatePoints, 5000);
+            }
+
+            // Applicant # click → details
+            document.querySelectorAll('.app-number').forEach(el => {
+                el.onclick = () => showDetails(el.textContent.trim());
+            });
+
+            // Entity name click → Bluebird distance
+            document.querySelectorAll('.entity-name').forEach(el => {
+                el.onclick = () => {
+                    const row = el.closest('tr');
+                    const appNumber = row.querySelector('.app-number').textContent.trim();
+                    checkBluebird(appNumber);
+                };
+            });
+
+            // BLUE MAP BUTTON — THIS WAS MISSING!
+            document.querySelectorAll('.btn-sm').forEach(btn => {
+                btn.onclick = () => {
+                    const row = btn.closest('tr');
+                    const appNumber = row.querySelector('.app-number').textContent.trim();
+                    const lat = row.dataset.lat ? parseFloat(row.dataset.lat) : null;
+                    const lon = row.dataset.lon ? parseFloat(row.dataset.lon) : null;
+                    openMapModal(appNumber, lat, lon);
+                };
+            });
+
+            // Distance loading — only for registered users
             {% if session.username and not session.username.startswith('guest_') %}
             setTimeout(loadDistancesIfNeeded, 800);
             {% endif %}
