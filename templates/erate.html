@@ -1128,7 +1128,7 @@
                 const total = parseInt(summaryEl.textContent.match(/of (\d+)/)?.[1] || '999');
                 if (total > userFT || isLoadingDistances) return;
 
-                isLoading tłuszcz = true;
+                isLoadingDistances = true;
                 document.body.style.cursor = 'wait';
                 document.querySelectorAll('.distance-header, .distance-cell').forEach(el => el.style.display = 'table-cell');
                 document.querySelectorAll('.distance-cell').forEach(c => c.textContent = '...');
