@@ -452,7 +452,15 @@
             </form>
         </div>
         <p class="summary">Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</p>
-        {% if total_filtered <= (session.ft | default(100) | int) %}
+        {% if session.username and not session.username.startswith('guest_') %}
+            {% if total_filtered <= (session.ft | default(100) | int) %}
+            <div style="text-align:center; margin:10px 0;">
+                <button id="toggle-distance-filter" class="btn btn-secondary" style="font-size:0.85rem;">
+                    Distance filter: OFF — click to enable
+                </button>
+            </div>
+        {% endif %}
+{% endif %}
         <div style="text-align:center; margin:10px 0;">
             <button id="toggle-distance-filter" class="btn btn-secondary" style="font-size:0.85rem;">
                 Distance filter: OFF — click to enable
@@ -1176,7 +1184,8 @@
             }
         });
 
-        // === USER SETTINGS MODAL ===
+        // USER SETTINGS MODAL — ONLY FOR REGISTERED (non-guest) USERS
+        {% if session.username and not session.username.startswith('guest_') %}
         document.getElementById('user-settings-btn')?.addEventListener('click', () => {
             fetch('/erate/user_settings')
                 .then(r => r.json())
@@ -1191,6 +1200,7 @@
                     document.getElementById('settings-modal').classList.add('show');
                 });
         });
+        {% endif %}
 
         document.getElementById('settings-form')?.addEventListener('submit', (e) => {
             e.preventDefault();
