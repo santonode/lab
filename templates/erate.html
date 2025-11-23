@@ -1130,10 +1130,12 @@
 
                 isLoadingDistances = true;
                 document.body.style.cursor = 'wait';
+
+                // Always show distance column/header when calculating
                 document.querySelectorAll('.distance-header, .distance-cell').forEach(el => el.style.display = 'table-cell');
                 document.querySelectorAll('.distance-cell').forEach(c => c.textContent = '...');
 
-                // AUTO DETECT NETWORK FROM STATE FILTER
+                // AUTO DETECT NETWORK
                 const urlParams = new URLSearchParams(window.location.search);
                 const state = urlParams.get('state')?.toUpperCase() || '';
                 const bluebirdStates = ['IA','KS','IL','MO','OK'];
@@ -1146,16 +1148,12 @@
                     currentNetwork === 'fna' ? 'FNA Network' : 'Bluebird Network';
 
                 const rows = Array.from(document.querySelectorAll('tbody tr'));
-                let visibleCount = 0;
 
-                for (const row of rows) {
-                        const appNumber = row.querySelector('.app-number')?.textContent.trim();
-                        const cell = row.querySelector('.distance-cell');
-
-                        // Always show row when filter is OFF
-                        if (!distanceFilterEnabled) {
-                                row.style.display = '';
-                                visibleCount++;
+                // WHEN FILTER IS OFF: populate distances but DO NOT touch visibility or count
+                if (!distanceFilterEnabled) {
+                        for (const row of rows) {
+                                const appNumber = row.querySelector('.app-number')?.textContent.trim();
+                                const cell = row.querySelector('.distance-cell');
                                 if (appNumber && appNumber !== '—' && cell) {
                                         try {
                                                 const data = await fetch(`/erate/bbmap/${appNumber}?network=${currentNetwork}&distance_only=1`)
@@ -1165,10 +1163,20 @@
                                                 cell.textContent = '—';
                                         }
                                 }
-                                continue;
                         }
+                        // DO NOT modify any row display or summary
+                        isLoadingDistances = false;
+                        document.body.style.cursor = 'default';
+                        updateToggleButton();
+                        return;
+                }
 
-                        // Filter is ON — only show rows that pass distance check
+                // WHEN FILTER IS ON: apply distance filter and update count
+                let visibleCount = 0;
+                for (const row of rows) {
+                        const appNumber = row.querySelector('.app-number')?.textContent.trim();
+                        const cell = row.querySelector('.distance-cell');
+
                         if (!appNumber || appNumber === '—') {
                                 row.style.display = 'none';
                                 continue;
@@ -1193,11 +1201,8 @@
                         }
                 }
 
-                // CORRECT SUMMARY + LOAD MORE
                 const showing = Math.min(visibleCount, 10);
-                const suffix = distanceFilterEnabled ? ` (≤ ${userDM} mi)` : '';
-                summaryEl.textContent = `Showing ${showing} of ${visibleCount} records${suffix}`;
-
+                summaryEl.textContent = `Showing ${showing} of ${visibleCount} records (≤ ${userDM} mi)`;
                 if (loadMoreBtn) {
                         loadMoreBtn.style.display = visibleCount > 10 ? 'block' : 'none';
                 }
