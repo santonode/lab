@@ -1040,9 +1040,9 @@ def _import_all_background(app):
     global CSV_HEADERS_LOGGED, ROW_DEBUG_COUNT
     CSV_HEADERS_LOGGED = False
     ROW_DEBUG_COUNT = 0
-    log("=== IMPORT STARTED — HASH-BASED UPDATES ENABLED ===")
+    log("=== IMPORT STARTED — SMART HASH + NORMALIZATION (NO FALSE UPDATES) ===")
     try:
-        log("Bulk import started with update detection")
+        log("Bulk import started with intelligent update detection")
         with app.app_context():
             total = app.config['import_total']
             start_index = app.config['import_index']
@@ -1053,9 +1053,23 @@ def _import_all_background(app):
         cur.execute("ALTER TABLE erate ADD COLUMN IF NOT EXISTS content_hash TEXT")
         conn.commit()
 
-        # Define column names from INSERT_SQL (without the INSERT part)
+        # Extract column names from INSERT_SQL
         columns_part = INSERT_SQL.split('(')[1].split(') VALUES')[0]
         columns = [c.strip() for c in columns_part.split(',')]
+
+        def normalize_for_hash(values):
+            """Remove noise that changes every CSV export but isn't real data change"""
+            norm = list(values)
+            # 2: form_pdf — strip query params and fragments
+            if norm[2]:
+                norm[2] = norm[2].split('?')[0].split('#')[0]
+            # 18 & 19: lat/lon — round to 6 decimals (USAC standard)
+            if norm[18] is not None:
+                norm[18] = round(float(norm[18]), 6)
+            if norm[19] is not None:
+                norm[19] = round(float(norm[19]), 6)
+            # Convert empty strings to None (consistent with DB)
+            return tuple(None if (isinstance(v, str) and v == '') else v for v in norm)
 
         with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
             reader = csv.DictReader(f, dialect='excel')
@@ -1065,12 +1079,13 @@ def _import_all_background(app):
 
             batch_insert = []
             batch_update = []
-            imported = updated = 0
+            imported = updated = skipped = 0
             last_heartbeat = time.time()
 
             for row in reader:
                 if time.time() - last_heartbeat > 5:
-                    log("HEARTBEAT: %s processed (%s new, %s updated)", imported + updated, imported, updated)
+                    log("HEARTBEAT: %s processed (%s new, %s updated, %s skipped)",
+                        imported + updated + skipped, imported, updated, skipped)
                     last_heartbeat = time.time()
 
                 app_number = row.get('Application Number', '').strip()
@@ -1078,20 +1093,21 @@ def _import_all_background(app):
                     continue
 
                 values = _row_to_tuple(row)
-                row_str = '|'.join(str(v) if v is not None else '' for v in values)
-                content_hash = hashlib.sha256(row_str.encode('utf-8')).hexdigest()
+                normalized = normalize_for_hash(values)
+                content_hash = hashlib.sha256(
+                    '|'.join(str(v) if v is not None else '' for v in normalized).encode('utf-8')
+                ).hexdigest()
 
                 cur.execute("SELECT content_hash FROM erate WHERE app_number = %s", (app_number,))
                 existing = cur.fetchone()
 
                 if existing and existing[0] == content_hash:
+                    skipped += 1
                     continue
                 elif existing:
-                    # UPDATE
                     batch_update.append(values + (content_hash, app_number))
                     updated += 1
                 else:
-                    # INSERT
                     batch_insert.append(values + (content_hash,))
                     imported += 1
 
@@ -1107,11 +1123,8 @@ def _import_all_background(app):
                         update_sql = f"UPDATE erate SET {set_clause}, content_hash = %s WHERE app_number = %s"
                         cur.executemany(update_sql, batch_update)
                         conn.commit()
-                        log("UPDATED %s existing records", len(batch_update))
+                        log("UPDATED %s changed records", len(batch_update))
                         batch_update.clear()
-                    with app.app_context():
-                        app.config['import_index'] += len(batch_insert) + len(batch_update)
-                        app.config['import_success'] = imported + updated
 
             # Final batch
             if batch_insert:
@@ -1126,13 +1139,14 @@ def _import_all_background(app):
                 conn.commit()
                 log("FINAL UPDATE: %s records", len(batch_update))
 
+            total_processed = imported + updated + skipped
             with app.app_context():
                 app.config['import_index'] = total + 1
-                app.config['import_success'] = imported + updated
+                app.config['import_success'] = total_processed
 
-        log("Bulk import complete: %s new, %s updated", imported, updated)
+        log("IMPORT COMPLETE: %s new, %s updated, %s skipped (unchanged)", imported, updated, skipped)
     except Exception as e:
-        log("IMPORT thread CRASHED: %s", e)
+        log("IMPORT FAILED: %s", e)
         log(traceback.format_exc())
         conn.rollback()
     finally:
