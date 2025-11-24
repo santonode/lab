@@ -1049,25 +1049,23 @@ def _import_all_background(app):
         conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
         cur = conn.cursor()
 
-        # Add a content_hash column if it doesn't exist
-        try:
-            cur.execute("ALTER TABLE erate ADD COLUMN IF NOT EXISTS content_hash TEXT")
-            conn.commit()
-        except:
-            conn.rollback()
+        # Add content_hash column if missing
+        cur.execute("ALTER TABLE erate ADD COLUMN IF NOT EXISTS content_hash TEXT")
+        conn.commit()
+
+        # Define column names from INSERT_SQL (without the INSERT part)
+        columns_part = INSERT_SQL.split('(')[1].split(') VALUES')[0]
+        columns = [c.strip() for c in columns_part.split(',')]
 
         with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
             reader = csv.DictReader(f, dialect='excel')
-            log("CSV reader created with excel dialect")
             for _ in range(start_index - 1):
                 try: next(reader)
                 except StopIteration: break
-            log("Skipped to record %s", start_index)
 
             batch_insert = []
             batch_update = []
-            imported = 0
-            updated = 0
+            imported = updated = 0
             last_heartbeat = time.time()
 
             for row in reader:
@@ -1079,72 +1077,63 @@ def _import_all_background(app):
                 if not app_number:
                     continue
 
-                # Create tuple for INSERT and compute hash
                 values = _row_to_tuple(row)
                 row_str = '|'.join(str(v) if v is not None else '' for v in values)
                 content_hash = hashlib.sha256(row_str.encode('utf-8')).hexdigest()
 
-                # Check if record exists and hash matches
                 cur.execute("SELECT content_hash FROM erate WHERE app_number = %s", (app_number,))
                 existing = cur.fetchone()
 
                 if existing and existing[0] == content_hash:
-                    # No change — skip
                     continue
                 elif existing:
-                    # Record changed — UPDATE
+                    # UPDATE
                     batch_update.append(values + (content_hash, app_number))
                     updated += 1
                 else:
-                    # New record — INSERT
+                    # INSERT
                     batch_insert.append(values + (content_hash,))
+                    imported += 1
 
-                imported += 1
-
-                # Process in batches
                 if len(batch_insert) + len(batch_update) >= 1000:
                     if batch_insert:
-                        cur.executemany(INSERT_SQL + ", content_hash) VALUES (%s" + ", %s" * 69 + ", %s)", batch_insert)
+                        insert_sql = INSERT_SQL.rstrip(')') + ', content_hash) VALUES (' + '%s,' * 70 + '%s)'
+                        cur.executemany(insert_sql, batch_insert)
                         conn.commit()
                         log("INSERTED %s new records", len(batch_insert))
-                        batch_insert = []
+                        batch_insert.clear()
                     if batch_update:
-                        update_sql = INSERT_SQL.replace("INSERT INTO erate", "UPDATE erate SET") \
-                            .replace("VALUES (", "") \
-                            .replace(")", "") + ", content_hash = %s WHERE app_number = %s"
-                        update_sql = update_sql.replace(" (%s" + ", %s" * 69, "")
+                        set_clause = ', '.join(f"{col} = %s" for col in columns)
+                        update_sql = f"UPDATE erate SET {set_clause}, content_hash = %s WHERE app_number = %s"
                         cur.executemany(update_sql, batch_update)
                         conn.commit()
                         log("UPDATED %s existing records", len(batch_update))
-                        batch_update = []
+                        batch_update.clear()
                     with app.app_context():
-                        app.config['import_index'] += imported
-                        app.config['import_success'] = imported
-                        imported = 0
+                        app.config['import_index'] += len(batch_insert) + len(batch_update)
+                        app.config['import_success'] = imported + updated
 
             # Final batch
-            if batch_insert or batch_update:
-                if batch_insert:
-                    cur.executemany(INSERT_SQL + ", content_hash) VALUES (%s" + ", %s" * 69 + ", %s)", batch_insert)
-                    conn.commit()
-                    log("FINAL INSERT: %s records", len(batch_insert))
-                if batch_update:
-                    update_sql = INSERT_SQL.replace("INSERT INTO erate", "UPDATE erate SET") \
-                        .replace("VALUES (", "") \
-                        .replace(")", "") + ", content_hash = %s WHERE app_number = %s"
-                    update_sql = update_sql.replace(" (%s" + ", %s" * 69, "")
-                    cur.executemany(update_sql, batch_update)
-                    conn.commit()
-                    log("FINAL UPDATE: %s records", len(batch_update))
+            if batch_insert:
+                insert_sql = INSERT_SQL.rstrip(')') + ', content_hash) VALUES (' + '%s,' * 70 + '%s)'
+                cur.executemany(insert_sql, batch_insert)
+                conn.commit()
+                log("FINAL INSERT: %s records", len(batch_insert))
+            if batch_update:
+                set_clause = ', '.join(f"{col} = %s" for col in columns)
+                update_sql = f"UPDATE erate SET {set_clause}, content_hash = %s WHERE app_number = %s"
+                cur.executemany(update_sql, batch_update)
+                conn.commit()
+                log("FINAL UPDATE: %s records", len(batch_update))
 
             with app.app_context():
                 app.config['import_index'] = total + 1
-                app.config['import_success'] = updated + imported
+                app.config['import_success'] = imported + updated
 
         log("Bulk import complete: %s new, %s updated", imported, updated)
     except Exception as e:
         log("IMPORT thread CRASHED: %s", e)
-        log("Traceback: %s", traceback.format_exc())
+        log(traceback.format_exc())
         conn.rollback()
     finally:
         try: conn.close()
