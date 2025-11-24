@@ -1424,7 +1424,7 @@ def coverage_report():
     for filename in os.listdir(FNA_MEMBERS_DIR):
         if not filename.lower().endswith('.kmz'):
             continue
-        member_name = os.path.splitext(filename)[0].replace('_', ' ')
+        member_name = os.path.splitext(filename)[0].replace('_', ' ').strip()
         path = os.path.join(FNA_MEMBERS_DIR, filename)
         if not os.path.exists(path):
             continue
