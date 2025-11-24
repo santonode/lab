@@ -1,3 +1,3 @@
-SantoLabs vMeme 1.0
-Video Meme Content Mananagement System
-For Meme users and creators
+Santo E-Rate Query Tool
+Data Sync Daily with USAC
+Mobile Friendly Postgres DB
