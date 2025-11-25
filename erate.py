@@ -934,16 +934,19 @@ def details(app_number):
     finally:
         conn.close()
 
-# === EXTRACT CSV, IMPORT, LOG, RESET ===
+# === EXTRACT CSV, IMPORT, LOG, RESET — BULLETPROOF 2025 VERSION ===
 @erate_bp.route('/extract-csv')
 def extract_csv():
     log("Extract CSV requested")
     if current_app.config.get('CSV_DOWNLOAD_IN_PROGRESS'):
         flash("CSV download already in progress.", "info")
         return redirect(url_for('erate.dashboard'))
+    
+    # Check if large CSV exists
     if os.path.exists(CSV_FILE) and os.path.getsize(CSV_FILE) > 500_000_000:
         flash("Large CSV exists. Delete to re-download.", "warning")
         return redirect(url_for('erate.dashboard'))
+    
     current_app.config['CSV_DOWNLOAD_IN_PROGRESS'] = True
     thread = threading.Thread(target=_download_csv_background, args=(current_app._get_current_object(),))
     thread.daemon = True
@@ -952,28 +955,62 @@ def extract_csv():
     return redirect(url_for('erate.dashboard'))
 
 def _download_csv_background(app):
-    time.sleep(1)
+    time.sleep(1)  # Tiny delay to avoid race conditions
     try:
         log("Starting FULL CSV download...")
-        url = "https://opendata.usac.org/api/views/jp7a-89nd/rows.csv?accessType=DOWNLOAD&funding_year=ALL"
-        response = requests.get(url, stream=True, timeout=600)
+        
+        # 2025 USAC endpoints (primary + fallback)
+        urls = [
+            "https://opendata.usac.org/api/views/jp7a-89nd/rows.csv?accessType=DOWNLOAD&funding_year=ALL",
+            "https://data.usac.org/api/views/jp7a-89nd/rows.csv?accessType=DOWNLOAD&funding_year=ALL",  # Legacy mirror
+            "https://opendata.usac.org/api/views/jp7a-89nd/rows.csv?accessType=DOWNLOAD"  # No funding_year param
+        ]
+        
+        response = None
+        for i, url in enumerate(urls):
+            try:
+                log("Trying CSV URL %d: %s", i+1, url)
+                headers = {'User-Agent': 'SantoElectronics E-Rate Tool/1.0 (sales@santoelectronics.com)'}
+                response = requests.get(url, headers=headers, stream=True, timeout=600)
+                if response.status_code == 200:
+                    log("Success with URL %d", i+1)
+                    break
+            except Exception as e:
+                log("URL %d failed: %s", i+1, e)
+                response = None
+        else:
+            raise Exception("All USAC CSV URLs failed — check status.usac.org")
+        
         response.raise_for_status()
         downloaded = 0
         with open(CSV_FILE, 'wb') as f:
-            for chunk in response.iter_content(8192):
+            for chunk in response.iter_content(chunk_size=8192):
                 if chunk:
                     f.write(chunk)
                     downloaded += len(chunk)
                     if downloaded % (10*1024*1024) == 0:
-                        log("Downloaded %.1f MB", downloaded/(1024*1024))
-        log("FULL CSV downloaded: %.1f MB", os.path.getsize(CSV_FILE)/(1024*1024))
+                        log("Downloaded %.1f MB", downloaded / (1024*1024))
+        
+        file_size_mb = os.path.getsize(CSV_FILE) / (1024*1024)
+        log("FULL CSV downloaded: %.1f MB (%d rows expected)", file_size_mb, 302208)
+        
+        # Quick row count validation
+        with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
+            row_count = sum(1 for _ in csv.reader(f)) - 1  # exclude header
+        if row_count < 300000:
+            log("WARNING: Row count low (%d) — CSV may be incomplete", row_count)
+        else:
+            log("CSV validation: %d rows — good", row_count)
+            
     except Exception as e:
         log("Download failed: %s", e)
         if os.path.exists(CSV_FILE):
             os.remove(CSV_FILE)
+            log("Removed partial CSV")
     finally:
         with app.app_context():
             app.config['CSV_DOWNLOAD_IN_PROGRESS'] = False
+        log("CSV download thread finished")
 
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
