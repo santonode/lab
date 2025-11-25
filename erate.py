@@ -1037,127 +1037,149 @@ def _import_all_background(app):
             start_index = app.config['import_index']
         conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
         cur = conn.cursor()
-
-        # Add content_hash column if missing
         cur.execute("ALTER TABLE erate ADD COLUMN IF NOT EXISTS content_hash TEXT")
         conn.commit()
 
-        # Extract column names from INSERT_SQL
-        # FINAL: Hard-coded column list — matches your 71-column table exactly
-        columns = [
-            'app_number', 'form_nickname', 'form_pdf', 'funding_year', 'fcc_status',
-            'allowable_contract_date', 'created_datetime', 'created_by', 'certified_datetime',
-            'certified_by', 'last_modified_datetime', 'last_modified_by', 'ben', 'entity_name',
-            'org_status', 'org_type', 'applicant_type', 'website', 'latitude', 'longitude',
-            'fcc_reg_num', 'address1', 'address2', 'city', 'state', 'zip_code', 'zip_ext',
-            'email', 'phone', 'phone_ext', 'num_eligible', 'contact_name', 'contact_address1',
-            'contact_address2', 'contact_city', 'contact_state', 'contact_zip', 'contact_zip_ext',
-            'contact_phone', 'contact_phone_ext', 'contact_email', 'tech_name', 'tech_title',
-            'tech_phone', 'tech_phone_ext', 'tech_email', 'auth_name', 'auth_address',
-            'auth_city', 'auth_state', 'auth_zip', 'auth_zip_ext', 'auth_phone', 'auth_phone_ext',
-            'auth_email', 'auth_title', 'auth_employer', 'cat1_desc', 'cat2_desc',
-            'installment_type', 'installment_min', 'installment_max', 'rfp_id',
-            'state_restrictions', 'restriction_desc', 'statewide', 'all_public',
-            'all_nonpublic', 'all_libraries', 'form_version'
-        ]
+        # === ORIGINAL WORKING _row_to_tuple FROM 11/24 ===
+        def _row_to_tuple(row):
+            form_pdf_raw = (row.get('Form PDF', '') or row.get('Form PDF Link', '') or
+                          row.get('PDF', '') or row.get('Form PDF Path', '') or '').strip()
+            base = 'http://publicdata.usac.org/'
+            while form_pdf_raw.startswith(base):
+                form_pdf_raw = form_pdf_raw[len(base):]
+            form_pdf = f"http://publicdata.usac.org{form_pdf_raw}" if form_pdf_raw else ''
 
-        def normalize_for_hash(values):
-            """Remove noise that changes every CSV export but isn't real data change"""
-            norm = list(values)
-            
-            # 2: form_pdf — strip query params and fragments
-            if len(norm) > 2 and norm[2]:
-                norm[2] = norm[2].split('?')[0].split('#')[0]
-            
-            # Latitude (index 19) and Longitude (index 20) — safe float + round
-            if len(norm) > 20:
-                try:
-                    if norm[19] not in (None, '', 'None'):
-                        norm[19] = round(float(norm[19]), 6)
-                except (ValueError, TypeError):
-                    norm[19] = None
-                try:
-                    if norm[20] not in (None, '', 'None'):
-                        norm[20] = round(float(norm[20]), 6)
-                except (ValueError, TypeError):
-                    norm[20] = None
-            
-            # Convert empty strings to None (consistent with DB)
-            return tuple(None if (isinstance(v, str) and v.strip() == '') else v for v in norm)
+            return (
+                row.get('Application Number', ''),
+                row.get('Form Nickname', ''),
+                form_pdf,
+                row.get('Funding Year', ''),
+                row.get('FCC Form 470 Status', ''),
+                parse_datetime(row.get('Allowable Contract Date')),
+                parse_datetime(row.get('Created Date/Time')),
+                row.get('Created By', ''),
+                parse_datetime(row.get('Certified Date/Time')),
+                row.get('Certified By', ''),
+                parse_datetime(row.get('Last Modified Date/Time')),
+                row.get('Last Modified By', ''),
+                row.get('Billed Entity Number', ''),
+                row.get('Billed Entity Name', ''),
+                row.get('Organization Status', ''),
+                row.get('Organization Type', ''),
+                row.get('Applicant Type', ''),
+                row.get('Website URL', ''),
+                float(row.get('Latitude') or 0),
+                float(row.get('Longitude') or 0),
+                row.get('Billed Entity FCC Registration Number', ''),
+                row.get('Billed Entity Address 1', ''),
+                row.get('Billed Entity Address 2', ''),
+                row.get('Billed Entity City', ''),
+                row.get('Billed Entity State', ''),
+                row.get('Billed Entity Zip Code', ''),
+                row.get('Billed Entity Zip Code Ext', ''),
+                row.get('Billed Entity Email', ''),
+                row.get('Billed Entity Phone', ''),
+                row.get('Billed Entity Phone Ext', ''),
+                int(row.get('Number of Eligible Entities') or 0),
+                row.get('Contact Name', ''),
+                row.get('Contact Address 1', ''),
+                row.get('Contact Address 2', ''),
+                row.get('Contact City', ''),
+                row.get('Contact State', ''),
+                row.get('Contact Zip', ''),
+                row.get('Contact Zip Ext', ''),
+                row.get('Contact Phone', ''),
+                row.get('Contact Phone Ext', ''),
+                row.get('Contact Email', ''),
+                row.get('Technical Contact Name', ''),
+                row.get('Technical Contact Title', ''),
+                row.get('Technical Contact Phone', ''),
+                row.get('Technical Contact Phone Ext', ''),
+                row.get('Technical Contact Email', ''),
+                row.get('Authorized Person Name', ''),
+                row.get('Authorized Person Address', ''),
+                row.get('Authorized Person City', ''),
+                row.get('Authorized Person State', ''),
+                row.get('Authorized Person Zip', ''),
+                row.get('Authorized Person Zip Ext', ''),
+                row.get('Authorized Person Phone Number', ''),
+                row.get('Authorized Person Phone Number Ext', ''),
+                row.get('Authorized Person Email', ''),
+                row.get('Authorized Person Title', ''),
+                row.get('Authorized Person Employer', ''),
+                row.get('Category One Description', ''),
+                row.get('Category Two Description', ''),
+                row.get('Installment Type', ''),
+                int(row.get('Installment Min Range Years') or 0),
+                int(row.get('Installment Max Range Years') or 0),
+                row.get('Request for Proposal Identifier', ''),
+                row.get('State or Local Restrictions', ''),
+                row.get('State or Local Restrictions Description', ''),
+                row.get('Statewide State', ''),
+                row.get('All Public Schools Districts', ''),
+                row.get('All Non-Public schools', ''),
+                row.get('All Libraries', ''),
+                row.get('Form Version', '')
+            )
 
+        # === ORIGINAL WORKING IMPORT LOGIC FROM 11/24 ===
         with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
             reader = csv.DictReader(f, dialect='excel')
             for _ in range(start_index - 1):
                 try: next(reader)
                 except StopIteration: break
-
+                
             batch_insert = []
             batch_update = []
             imported = updated = skipped = 0
             last_heartbeat = time.time()
-
+            
             for row in reader:
                 if time.time() - last_heartbeat > 5:
                     log("HEARTBEAT: %s processed (%s new, %s updated, %s skipped)",
                         imported + updated + skipped, imported, updated, skipped)
                     last_heartbeat = time.time()
-
+                    
                 app_number = row.get('Application Number', '').strip()
-                if not app_number:
-                    continue
-
+                if not app_number: continue
+                
                 values = _row_to_tuple(row)
                 normalized = normalize_for_hash(values)
                 content_hash = hashlib.sha256(
                     '|'.join(str(v) if v is not None else '' for v in normalized).encode('utf-8')
                 ).hexdigest()
-
+                
                 cur.execute("SELECT content_hash FROM erate WHERE app_number = %s", (app_number,))
                 existing = cur.fetchone()
-
+                
                 if existing and existing[0] == content_hash:
                     skipped += 1
                     continue
                 elif existing:
-                    batch_update.append(tuple(values[1:71]) + (content_hash, app_number))
+                    batch_update.append(values + (content_hash, app_number))
                     updated += 1
                 else:
-                    batch_insert.append((*values[1:71], content_hash))  # 70 columns + hash = 71
+                    batch_insert.append(values + (content_hash,))
                     imported += 1
-
+                    
                 if len(batch_insert) + len(batch_update) >= 1000:
+                    # Original working batch logic
                     if batch_insert:
-                        placeholders = ', '.join(['%s'] * 71)
-                        insert_sql = f"""
-                            INSERT INTO erate VALUES ({placeholders})
-                            ON CONFLICT (app_number) DO UPDATE SET
-                                content_hash = EXCLUDED.content_hash
-                        """
-                        try:
-                            cur.executemany(insert_sql, batch_insert)
-                            conn.commit()
-                            log("INSERTED/UPDATED %d records (batch)", len(batch_insert))
-                        except Exception as e:
-                            conn.rollback()
-                            log("BATCH INSERT FAILED: %s", e)
-                            raise
-                        finally:
-                            batch_insert.clear()
-
+                        cur.executemany(INSERT_SQL + ", content_hash) VALUES (" + "%s," * 70 + "%s)", batch_insert)
+                        conn.commit()
+                        log("INSERTED %s new records", len(batch_insert))
+                        batch_insert.clear()
                     if batch_update:
-                        # your existing update code — leave it
                         set_clause = ', '.join(f"{col} = %s" for col in columns)
                         update_sql = f"UPDATE erate SET {set_clause}, content_hash = %s WHERE app_number = %s"
                         cur.executemany(update_sql, batch_update)
                         conn.commit()
                         log("UPDATED %s changed records", len(batch_update))
                         batch_update.clear()
-
+                        
             # Final batch
             if batch_insert:
-                placeholders = ', '.join(['%s'] * 71)  # 71 columns exactly
-                insert_sql = f"INSERT INTO erate VALUES ({placeholders}) ON CONFLICT (app_number) DO UPDATE SET content_hash = EXCLUDED.content_hash"
-                cur.executemany(insert_sql, batch_insert)
+                cur.executemany(INSERT_SQL + ", content_hash) VALUES (" + "%s," * 70 + "%s)", batch_insert)
                 conn.commit()
                 log("FINAL INSERT: %s records", len(batch_insert))
             if batch_update:
@@ -1166,13 +1188,8 @@ def _import_all_background(app):
                 cur.executemany(update_sql, batch_update)
                 conn.commit()
                 log("FINAL UPDATE: %s records", len(batch_update))
-
-            total_processed = imported + updated + skipped
-            with app.app_context():
-                app.config['import_index'] = total + 1
-                app.config['import_success'] = total_processed
-
-        log("IMPORT COMPLETE: %s new, %s updated, %s skipped (unchanged)", imported, updated, skipped)
+                
+        log("IMPORT COMPLETE: %s new, %s updated, %s skipped", imported, updated, skipped)
     except Exception as e:
         log("IMPORT FAILED: %s", e)
         log(traceback.format_exc())
