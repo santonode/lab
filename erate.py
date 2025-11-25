@@ -1023,8 +1023,9 @@ def import_interactive():
         thread.start()
         flash("Bulk import started. Check /erate/view-log", "success")
         return redirect(url_for('erate.import_interactive'))
-    return render_template('erate_import.html', progress=progress, is_importing=is_importing)
+        return render_template('erate_import.html', progress=progress, is_importing=is_importing)
 
+# === IMPORT ALL BACKGROUND ===
 def _import_all_background(app):
     global CSV_HEADERS_LOGGED, ROW_DEBUG_COUNT
     CSV_HEADERS_LOGGED = False
@@ -1040,118 +1041,139 @@ def _import_all_background(app):
         cur.execute("ALTER TABLE erate ADD COLUMN IF NOT EXISTS content_hash TEXT")
         conn.commit()
 
-        # === ORIGINAL WORKING _row_to_tuple FROM 11/24 ===
+        # === normalize_for_hash — REQUIRED AND WORKING ===
+        def normalize_for_hash(values):
+            norm = list(values)
+            # Strip query params from form_pdf (index 2)
+            if len(norm) > 2 and norm[2]:
+                norm[2] = norm[2].split('?')[0].split('#')[0]
+            # Round lat/lon to 6 decimals (index 18 & 19)
+            if len(norm) > 19:
+                try:
+                    if norm[18] not in (None, '', 'None'):
+                        norm[18] = round(float(norm[18]), 6)
+                except:
+                    norm[18] = None
+                try:
+                    if norm[19] not in (None, '', 'None'):
+                        norm[19] = round(float(norm[19]), 6)
+                except:
+                    norm[19] = None
+            return tuple(None if (isinstance(v, str) and v.strip() == '') else v for v in norm)
+
+        # === _row_to_tuple — 70 VALUES ONLY (no id, no content_hash) ===
         def _row_to_tuple(row):
-            form_pdf_raw = (row.get('Form PDF', '') or row.get('Form PDF Link', '') or
-                          row.get('PDF', '') or row.get('Form PDF Path', '') or '').strip()
+            form_pdf_raw = (
+                row.get('Form PDF', '') or row.get('Form PDF Link', '') or
+                row.get('PDF', '') or row.get('Form PDF Path', '') or ''
+            ).strip()
             base = 'http://publicdata.usac.org/'
             while form_pdf_raw.startswith(base):
                 form_pdf_raw = form_pdf_raw[len(base):]
             form_pdf = f"http://publicdata.usac.org{form_pdf_raw}" if form_pdf_raw else ''
 
             return (
-                row.get('Application Number', ''),
-                row.get('Form Nickname', ''),
+                row.get('Application Number', '').strip(),
+                row.get('Form Nickname', '').strip(),
                 form_pdf,
-                row.get('Funding Year', ''),
-                row.get('FCC Form 470 Status', ''),
+                row.get('Funding Year', '').strip(),
+                row.get('FCC Form 470 Status', '').strip(),
                 parse_datetime(row.get('Allowable Contract Date')),
                 parse_datetime(row.get('Created Date/Time')),
-                row.get('Created By', ''),
+                row.get('Created By', '').strip(),
                 parse_datetime(row.get('Certified Date/Time')),
-                row.get('Certified By', ''),
+                row.get('Certified By', '').strip(),
                 parse_datetime(row.get('Last Modified Date/Time')),
-                row.get('Last Modified By', ''),
-                row.get('Billed Entity Number', ''),
-                row.get('Billed Entity Name', ''),
-                row.get('Organization Status', ''),
-                row.get('Organization Type', ''),
-                row.get('Applicant Type', ''),
+                row.get('Last Modified By', '').strip(),
+                row.get('Billed Entity Number', '').strip(),
+                row.get('Billed Entity Name', '').strip(),
+                row.get('Organization Status', '').strip(),
+                row.get('Organization Type', '').strip(),
+                row.get('Applicant Type', '').strip(),
                 row.get('Website URL', ''),
                 float(row.get('Latitude') or 0),
                 float(row.get('Longitude') or 0),
-                row.get('Billed Entity FCC Registration Number', ''),
+                row.get('Billed Entity FCC Registration Number', '').strip(),
                 row.get('Billed Entity Address 1', ''),
                 row.get('Billed Entity Address 2', ''),
-                row.get('Billed Entity City', ''),
-                row.get('Billed Entity State', ''),
-                row.get('Billed Entity Zip Code', ''),
-                row.get('Billed Entity Zip Code Ext', ''),
-                row.get('Billed Entity Email', ''),
-                row.get('Billed Entity Phone', ''),
-                row.get('Billed Entity Phone Ext', ''),
+                row.get('Billed Entity City', '').strip(),
+                row.get('Billed Entity State', '').strip(),
+                row.get('Billed Entity Zip Code', '').strip(),
+                row.get('Billed Entity Zip Code Ext', '').strip(),
+                row.get('Billed Entity Email', '').strip(),
+                row.get('Billed Entity Phone', '').strip(),
+                row.get('Billed Entity Phone Ext', '').strip(),
                 int(row.get('Number of Eligible Entities') or 0),
-                row.get('Contact Name', ''),
+                row.get('Contact Name', '').strip(),
                 row.get('Contact Address 1', ''),
                 row.get('Contact Address 2', ''),
-                row.get('Contact City', ''),
-                row.get('Contact State', ''),
-                row.get('Contact Zip', ''),
-                row.get('Contact Zip Ext', ''),
-                row.get('Contact Phone', ''),
-                row.get('Contact Phone Ext', ''),
-                row.get('Contact Email', ''),
-                row.get('Technical Contact Name', ''),
-                row.get('Technical Contact Title', ''),
-                row.get('Technical Contact Phone', ''),
-                row.get('Technical Contact Phone Ext', ''),
-                row.get('Technical Contact Email', ''),
-                row.get('Authorized Person Name', ''),
+                row.get('Contact City', '').strip(),
+                row.get('Contact State', '').strip(),
+                row.get('Contact Zip', '').strip(),
+                row.get('Contact Zip Ext', '').strip(),
+                row.get('Contact Phone', '').strip(),
+                row.get('Contact Phone Ext', '').strip(),
+                row.get('Contact Email', '').strip(),
+                row.get('Technical Contact Name', '').strip(),
+                row.get('Technical Contact Title', '').strip(),
+                row.get('Technical Contact Phone', '').strip(),
+                row.get('Technical Contact Phone Ext', '').strip(),
+                row.get('Technical Contact Email', '').strip(),
+                row.get('Authorized Person Name', '').strip(),
                 row.get('Authorized Person Address', ''),
-                row.get('Authorized Person City', ''),
-                row.get('Authorized Person State', ''),
-                row.get('Authorized Person Zip', ''),
-                row.get('Authorized Person Zip Ext', ''),
-                row.get('Authorized Person Phone Number', ''),
-                row.get('Authorized Person Phone Number Ext', ''),
-                row.get('Authorized Person Email', ''),
-                row.get('Authorized Person Title', ''),
-                row.get('Authorized Person Employer', ''),
+                row.get('Authorized Person City', '').strip(),
+                row.get('Authorized Person State', '').strip(),
+                row.get('Authorized Person Zip', '').strip(),
+                row.get('Authorized Person Zip Ext', '').strip(),
+                row.get('Authorized Person Phone Number', '').strip(),
+                row.get('Authorized Person Phone Number Ext', '').strip(),
+                row.get('Authorized Person Email', '').strip(),
+                row.get('Authorized Person Title', '').strip(),
+                row.get('Authorized Person Employer', '').strip(),
                 row.get('Category One Description', ''),
                 row.get('Category Two Description', ''),
-                row.get('Installment Type', ''),
+                row.get('Installment Type', '').strip(),
                 int(row.get('Installment Min Range Years') or 0),
                 int(row.get('Installment Max Range Years') or 0),
-                row.get('Request for Proposal Identifier', ''),
-                row.get('State or Local Restrictions', ''),
+                row.get('Request for Proposal Identifier', '').strip(),
+                row.get('State or Local Restrictions', '').strip(),
                 row.get('State or Local Restrictions Description', ''),
-                row.get('Statewide State', ''),
-                row.get('All Public Schools Districts', ''),
-                row.get('All Non-Public schools', ''),
-                row.get('All Libraries', ''),
-                row.get('Form Version', '')
+                row.get('Statewide State', '').strip(),
+                row.get('All Public Schools Districts', '').strip(),
+                row.get('All Non-Public schools', '').strip(),
+                row.get('All Libraries', '').strip(),
+                row.get('Form Version', '').strip()
             )
 
-        # === ORIGINAL WORKING IMPORT LOGIC FROM 11/24 ===
+        # === IMPORT LOOP ===
         with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
             reader = csv.DictReader(f, dialect='excel')
             for _ in range(start_index - 1):
                 try: next(reader)
                 except StopIteration: break
-                
+
             batch_insert = []
             batch_update = []
             imported = updated = skipped = 0
             last_heartbeat = time.time()
-            
+
             for row in reader:
                 if time.time() - last_heartbeat > 5:
                     log("HEARTBEAT: %s processed (%s new, %s updated, %s skipped)",
                         imported + updated + skipped, imported, updated, skipped)
                     last_heartbeat = time.time()
-                    
+
                 app_number = row.get('Application Number', '').strip()
-                if not app_number: continue
-                
-                values = _row_to_tuple(row)
+                if not app_number:
+                    continue
+
+                values = _row_to_tuple(row)  # 70 values
                 normalized = normalize_for_hash(values)
-                content_hash = hashlib.sha256(
-                    '|'.join(str(v) if v is not None else '' for v in normalized).encode('utf-8')
-                ).hexdigest()
-                
+                content_hash = hashlib.sha256('|'.join(str(v) if v is not None else '' for v in normalized).encode()).hexdigest()
+
                 cur.execute("SELECT content_hash FROM erate WHERE app_number = %s", (app_number,))
                 existing = cur.fetchone()
-                
+
                 if existing and existing[0] == content_hash:
                     skipped += 1
                     continue
@@ -1159,11 +1181,10 @@ def _import_all_background(app):
                     batch_update.append(values + (content_hash, app_number))
                     updated += 1
                 else:
-                    batch_insert.append(values + (content_hash,))
+                    batch_insert.append(values + (content_hash,))  # 70 + 1 = 71
                     imported += 1
-                    
+
                 if len(batch_insert) + len(batch_update) >= 1000:
-                    # Original working batch logic
                     if batch_insert:
                         cur.executemany(INSERT_SQL + ", content_hash) VALUES (" + "%s," * 70 + "%s)", batch_insert)
                         conn.commit()
@@ -1176,27 +1197,24 @@ def _import_all_background(app):
                         conn.commit()
                         log("UPDATED %s changed records", len(batch_update))
                         batch_update.clear()
-                        
+
             # Final batch
             if batch_insert:
                 cur.executemany(INSERT_SQL + ", content_hash) VALUES (" + "%s," * 70 + "%s)", batch_insert)
                 conn.commit()
-                log("FINAL INSERT: %s records", len(batch_insert))
             if batch_update:
                 set_clause = ', '.join(f"{col} = %s" for col in columns)
                 update_sql = f"UPDATE erate SET {set_clause}, content_hash = %s WHERE app_number = %s"
                 cur.executemany(update_sql, batch_update)
                 conn.commit()
-                log("FINAL UPDATE: %s records", len(batch_update))
-                
+
         log("IMPORT COMPLETE: %s new, %s updated, %s skipped", imported, updated, skipped)
     except Exception as e:
         log("IMPORT FAILED: %s", e)
         log(traceback.format_exc())
         conn.rollback()
     finally:
-        try: conn.close()
-        except: pass
+        conn.close()
         with app.app_context():
             app.config['BULK_IMPORT_IN_PROGRESS'] = False
         log("Import thread finished")
