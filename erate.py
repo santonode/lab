@@ -1045,7 +1045,25 @@ def _import_all_background(app):
         cur.execute("ALTER TABLE erate ADD COLUMN IF NOT EXISTS content_hash TEXT")
         conn.commit()
 
-        # === normalize_for_hash — THIS WAS MISSING ===
+        # === columns LIST — REQUIRED FOR UPDATE BATCHES ===
+        columns = [
+            'app_number', 'form_nickname', 'form_pdf', 'funding_year', 'fcc_status',
+            'allowable_contract_date', 'created_datetime', 'created_by', 'certified_datetime',
+            'certified_by', 'last_modified_datetime', 'last_modified_by', 'ben', 'entity_name',
+            'org_status', 'org_type', 'applicant_type', 'website', 'latitude', 'longitude',
+            'fcc_reg_num', 'address1', 'address2', 'city', 'state', 'zip_code', 'zip_ext',
+            'email', 'phone', 'phone_ext', 'num_eligible', 'contact_name', 'contact_address1',
+            'contact_address2', 'contact_city', 'contact_state', 'contact_zip', 'contact_zip_ext',
+            'contact_phone', 'contact_phone_ext', 'contact_email', 'tech_name', 'tech_title',
+            'tech_phone', 'tech_phone_ext', 'tech_email', 'auth_name', 'auth_address',
+            'auth_city', 'auth_state', 'auth_zip', 'auth_zip_ext', 'auth_phone', 'auth_phone_ext',
+            'auth_email', 'auth_title', 'auth_employer', 'cat1_desc', 'cat2_desc',
+            'installment_type', 'installment_min', 'installment_max', 'rfp_id',
+            'state_restrictions', 'restriction_desc', 'statewide', 'all_public',
+            'all_nonpublic', 'all_libraries', 'form_version'
+        ]
+
+        # === normalize_for_hash ===
         def normalize_for_hash(values):
             norm = list(values)
             if len(norm) > 2 and norm[2]:
@@ -1057,7 +1075,7 @@ def _import_all_background(app):
                 except: norm[19] = None
             return tuple(None if (isinstance(v, str) and v.strip() == '') else v for v in norm)
 
-        # === _row_to_tuple — 70 VALUES (NO id, NO content_hash) ===
+        # === _row_to_tuple — 70 VALUES ===
         def _row_to_tuple(row):
             form_pdf_raw = (row.get('Form PDF', '') or row.get('Form PDF Link', '') or '').strip()
             base = 'http://publicdata.usac.org/'
