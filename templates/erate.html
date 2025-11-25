@@ -11,9 +11,6 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        .distance-minimum-controls label { user-select: none; }
-        #dm-status.on { color: #27ae60; }
-        #dm-status.off { color: #d63384; }
         :root {
             --primary: #1a5d57;
             --accent: #007bff;
@@ -455,23 +452,14 @@
             </form>
         </div>
         <p class="summary">Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</p>
-        {% if total_filtered >= (session.ft | default(100) | int) %}
-        <div class="distance-minimum-controls" style="margin:15px 0; padding:12px; background:#f0f8ff; border-radius:8px; text-align:center; font-size:0.95rem; border:1px solid #b8daff;">
-            <label style="font-weight:600; color:#1a5d57; cursor:pointer;">
-                <input type="checkbox" id="enable-dm"> 
-                <strong>Distance Minimum:</strong> <span id="dm-value">5.0</span> miles
-            </label>
-            <div style="margin-top:6px;">
-                Only show applicants with fiber ≤ <span id="dm-value-inline">5.0</span> miles 
-                <span id="dm-status" style="color:#d63384; font-weight:bold;"> (OFF)</span>
-            </div>
-            <small style="color:#666; font-size:0.85rem;">
-                Applies only when results ≥ {{ session.ft|default(100) }} • Auto-disables if no matches found
-            </small>
-        </div>
-        {% else %}
-        <div style="text-align:center; margin:15px 0; color:#666; font-size:0.9rem;">
-            Distance Minimum disabled — need ≥ {{ session.ft|default(100) }} results (current: {{ total_filtered|default(0) }})
+        {% if total_filtered <= (session.ft | default(100) | int) %}
+        <div style="text-align:center; margin:10px 0; font-size:0.9rem; color:#1a5d57;">
+            <strong>Current Network:</strong> 
+            <span id="current-network-display">Bluebird Network</span>
+            &nbsp;&nbsp;|&nbsp;&nbsp;
+            <button id="toggle-distance-filter" class="btn btn-secondary" style="font-size:0.85rem;">
+                Distance filter: OFF — click to enable
+            </button>
         </div>
         {% endif %}
         <table>
@@ -481,7 +469,7 @@
                     <th>Entity Name</th>
                     <th>State</th>
                     <th>Modified</th>
-                    <th class="distance-header" style="display:none; color:#dc3545; font-weight:600;">Dist</th>
+                    <th class="distance-header" style="display:none; color:#dc3545; font-weight:600;">Distance</th>
                     <th>Map</th>
                 </tr>
             </thead>
@@ -1179,105 +1167,141 @@
         // Remove loading when page is fully ready
         window.addEventListener('load', hideLoading);
 
-        // === NEW & FINAL: DISTANCE MINIMUM (OFF BY DEFAULT, SAFE, CLEAN) ===
-        let userFT = {{ session.ft|default(100) }};
-        let userDM = parseFloat({{ session.dm|default(5.0) }});
-        let dmEnabled = false;
+        // === FINAL & BULLETPROOF: Distance filter OFF = no filtering, no hiding, no pagination break ===
+        let isLoadingDistances = false;
+        let userFT = 100;
+        let userDM = 5.0;
+        let distanceFilterEnabled = false;  // DEFAULT OFF
 
-        const dmCheckbox = document.getElementById('enable-dm');
-        const dmValueSpan = document.getElementById('dm-value');
-        const dmValueInline = document.getElementById('dm-value-inline');
-        const dmStatus = document.getElementById('dm-status');
+        const toggleBtn = document.getElementById('toggle-distance-filter');
         const summaryEl = document.querySelector('.summary');
+        const loadMoreBtn = document.querySelector('.load-more');
 
-        function updateDMUI() {
-            if (dmValueSpan) dmValueSpan.textContent = userDM.toFixed(1);
-            if (dmValueInline) dmValueInline.textContent = userDM.toFixed(1);
-            if (dmStatus) {
-                dmStatus.textContent = dmEnabled ? ' (ON)' : ' (OFF)';
-                dmStatus.className = dmEnabled ? 'on' : 'off';
+        function updateToggleButton() {
+            if (!toggleBtn) return;
+            if (distanceFilterEnabled) {
+                toggleBtn.textContent = `Distance filter: ON (≤ ${userDM} mi) — click to disable`;
+                toggleBtn.className = 'btn btn-success';
+            } else {
+                toggleBtn.textContent = 'Distance filter: OFF — click to enable';
+                toggleBtn.className = 'btn btn-secondary';
             }
-            if (dmCheckbox) dmCheckbox.checked = dmEnabled;
         }
 
-        async function applyDistanceMinimum() {
-            if (!dmCheckbox || document.querySelectorAll('tbody tr').length === 0) return;
-
-            document.body.style.cursor = 'wait';
-            document.querySelectorAll('.distance-header, .distance-cell').forEach(el => el.style.display = 'table-cell');
-
-            let visible = 0;
-            let hasMatch = false;
-            const rows = document.querySelectorAll('tbody tr');
-
-            // Auto-detect current network
-            const saved = localStorage.getItem('preferredNetwork') || 'bluebird';
-            const state = new URLSearchParams(window.location.search).get('state')?.toUpperCase() || '';
-            const bluebirdStates = ['IA','KS','IL','MO','OK'];
-            const fnaStates = ['MI','OH','PA','FL','GA','NC','SC','LA','TN','KY','VA','WV','MD','DE','NJ'];
-            let network = fnaStates.includes(state) ? 'fna' : (bluebirdStates.includes(state) ? 'bluebird' : saved);
-
-            for (const row of rows) {
-                const appCell = row.querySelector('.app-number');
-                if (!appCell || appCell.textContent.trim() === '—') {
-                    row.style.display = 'none';
-                    continue;
-                }
-                const appNumber = appCell.textContent.trim();
-                const distCell = row.querySelector('.distance-cell');
-
-                try {
-                    const data = await fetch(`/erate/bbmap/${appNumber}?network=${network}&distance_only=1`).then(r => r.json());
-                    const dist = parseFloat(data.nearest_fiber_distance);
-                    distCell.textContent = isNaN(dist) ? '—' : dist.toFixed(2);
-
-                    if (!dmEnabled || (dist <= userDM)) {
-                        row.style.display = '';
-                        visible++;
-                        if (dist <= userDM) hasMatch = true;
-                    } else {
-                        row.style.display = 'none';
-                    }
-                } catch (e) {
-                    distCell.textContent = '—';
-                    row.style.display = dmEnabled ? 'none' : '';
-                }
-            }
-
-            // Auto-disable if no matches
-            if (dmEnabled && !hasMatch && visible === 0) {
-                dmEnabled = false;
-                dmCheckbox.checked = false;
-                alert(`No applicants within ${userDM} miles — Distance Minimum auto-disabled.`);
-            }
-
-            const showing = Math.min(visible, 10);
-            summaryEl.textContent = `Showing ${showing} of ${visible} record${visible !== 1 ? 's' : ''}${dmEnabled ? ` (≤ ${userDM.toFixed(1)} mi)` : ''}`;
-
-            updateDMUI();
-            document.body.style.cursor = 'default';
-        }
-
-        // Toggle handler
-        if (dmCheckbox) {
-            dmCheckbox.addEventListener('change', () => {
-                dmEnabled = dmCheckbox.checked;
-                applyDistanceMinimum();
-            });
-        }
-
-        // Run on load
-        window.addEventListener('load', () => {
-            setTimeout(() => {
-                userDM = parseFloat({{ session.dm|default(5.0) }});
-                updateDMUI();
-                applyDistanceMinimum();
-            }, 1000);
+        toggleBtn?.addEventListener('click', () => {
+            distanceFilterEnabled = !distanceFilterEnabled;
+            updateToggleButton();
+            applyDistanceFilter();  // Only re-filters when toggled
         });
 
-        // Re-run when network changes
-        document.getElementById('network-select')?.addEventListener('change', () => {
-            if (dmEnabled) applyDistanceMinimum();
+        async function loadDistancesIfNeeded() {
+                const settings = await fetch('/erate/user_settings').then(r => r.json()).catch(() => ({}));
+                userFT = parseInt(settings.ft) || 100;
+                userDM = parseFloat(settings.dm) || 5.0;
+
+                const total = parseInt(summaryEl.textContent.match(/of (\d+)/)?.[1] || '999');
+                if (total > userFT || isLoadingDistances) return;
+
+                isLoadingDistances = true;
+                document.body.style.cursor = 'wait';
+
+                // Always show distance column/header when calculating
+                document.querySelectorAll('.distance-header, .distance-cell').forEach(el => el.style.display = 'table-cell');
+                document.querySelectorAll('.distance-cell').forEach(c => c.textContent = '...');
+
+                // AUTO DETECT NETWORK
+                const urlParams = new URLSearchParams(window.location.search);
+                const state = urlParams.get('state')?.toUpperCase() || '';
+                const bluebirdStates = ['IA','KS','IL','MO','OK'];
+                const fnaStates = ['MI','OH','PA','FL','GA','NC','SC','LA','TN','KY','VA','WV','MD','DE','NJ'];
+                let currentNetwork = localStorage.getItem('preferredNetwork') || 'bluebird';
+                if (fnaStates.includes(state)) currentNetwork = 'fna';
+                else if (bluebirdStates.includes(state)) currentNetwork = 'bluebird';
+
+                document.getElementById('current-network-display').textContent = 
+                    currentNetwork === 'fna' ? 'FNA Network' : 'Bluebird Network';
+
+                const rows = Array.from(document.querySelectorAll('tbody tr'));
+
+                // WHEN FILTER IS OFF: populate distances but DO NOT touch visibility or count
+                if (!distanceFilterEnabled) {
+                        for (const row of rows) {
+                                const appNumber = row.querySelector('.app-number')?.textContent.trim();
+                                const cell = row.querySelector('.distance-cell');
+                                if (appNumber && appNumber !== '—' && cell) {
+                                        try {
+                                                const data = await fetch(`/erate/bbmap/${appNumber}?network=${currentNetwork}&distance_only=1`)
+                                                        .then(r => r.json());
+                                                cell.textContent = data.nearest_fiber_distance || '—';
+                                        } catch {
+                                                cell.textContent = '—';
+                                        }
+                                }
+                        }
+                        // DO NOT modify any row display or summary
+                        isLoadingDistances = false;
+                        document.body.style.cursor = 'default';
+                        updateToggleButton();
+                        return;
+                }
+
+                // WHEN FILTER IS ON: apply distance filter and update count
+                let visibleCount = 0;
+                for (const row of rows) {
+                        const appNumber = row.querySelector('.app-number')?.textContent.trim();
+                        const cell = row.querySelector('.distance-cell');
+
+                        if (!appNumber || appNumber === '—') {
+                                row.style.display = 'none';
+                                continue;
+                        }
+
+                        try {
+                                const data = await fetch(`/erate/bbmap/${appNumber}?network=${currentNetwork}&distance_only=1`)
+                                        .then(r => r.json());
+                                const dist = data.nearest_fiber_distance || '—';
+                                if (cell) cell.textContent = dist;
+
+                                const num = parseFloat(dist);
+                                if (!isNaN(num) && num <= userDM) {
+                                        row.style.display = '';
+                                        visibleCount++;
+                                } else {
+                                        row.style.display = 'none';
+                                }
+                        } catch {
+                                if (cell) cell.textContent = '—';
+                                row.style.display = 'none';
+                        }
+                }
+
+                const showing = Math.min(visibleCount, 10);
+                summaryEl.textContent = `Showing ${showing} of ${visibleCount} records (≤ ${userDM} mi)`;
+                if (loadMoreBtn) {
+                        loadMoreBtn.style.display = visibleCount > 10 ? 'block' : 'none';
+                }
+
+                isLoadingDistances = false;
+                document.body.style.cursor = 'default';
+                updateToggleButton();
+        }
+
+        function applyDistanceFilter() {
+            loadDistancesIfNeeded();  // Re-run with current toggle state
+        }
+
+        // Save original summary text on first load
+        let originalText = '';
+        window.addEventListener('load', () => {
+            originalText = summaryEl?.textContent || '';
+            setTimeout(loadDistancesIfNeeded, 800);
+        });
+
+        document.getElementById('filter-form')?.addEventListener('submit', e => {
+            if (isLoadingDistances) {
+                e.preventDefault();
+                alert('Please wait — calculating distances…');
+            }
         });
 
         // === USER SETTINGS MODAL ===
