@@ -183,9 +183,7 @@ def parse_datetime(value):
             continue
     return None
 
-# === CSV ROW → TUPLE ===
-CSV_HEADERS_LOGGED = False
-ROW_DEBUG_COUNT = 0
+# === FINAL CORRECT ROW TO TUPLE – 71 VALUES, EXACT ORDER ===
 def _row_to_tuple(row):
     global CSV_HEADERS_LOGGED, ROW_DEBUG_COUNT
     if not CSV_HEADERS_LOGGED:
@@ -194,6 +192,7 @@ def _row_to_tuple(row):
     if ROW_DEBUG_COUNT < 3:
         log("DEBUG ROW %s: %s", ROW_DEBUG_COUNT + 1, dict(row))
         ROW_DEBUG_COUNT += 1
+
     form_pdf_raw = (
         row.get('Form PDF', '') or row.get('Form PDF Link', '') or
         row.get('PDF', '') or row.get('Form PDF Path', '') or ''
@@ -202,77 +201,93 @@ def _row_to_tuple(row):
     while form_pdf_raw.startswith(base):
         form_pdf_raw = form_pdf_raw[len(base):]
     form_pdf = f"http://publicdata.usac.org{form_pdf_raw}" if form_pdf_raw else ''
+
+    def safe_float(v): 
+        try: return float(v) if v and str(v).strip() else None 
+        except: return None
+    def safe_int(v): 
+        try: return int(v) if v and str(v).strip() else None 
+        except: return None
+    def safe_date(v): 
+        if not v or not str(v).strip(): return None
+        try: return datetime.strptime(str(v).strip(), '%m/%d/%Y %I:%M %p')
+        except: 
+            try: return datetime.strptime(str(v).strip(), '%m/%d/%Y')
+            except: return None
+
     return (
-        row.get('Application Number', ''),
-        row.get('Form Nickname', ''),
-        form_pdf,
-        row.get('Funding Year', ''),
-        row.get('FCC Form 470 Status', ''),
-        parse_datetime(row.get('Allowable Contract Date')),
-        parse_datetime(row.get('Created Date/Time')),
-        row.get('Created By', ''),
-        parse_datetime(row.get('Certified Date/Time')),
-        row.get('Certified By', ''),
-        parse_datetime(row.get('Last Modified Date/Time')),
-        row.get('Last Modified By', ''),
-        row.get('Billed Entity Number', ''),
-        row.get('Billed Entity Name', ''),
-        row.get('Organization Status', ''),
-        row.get('Organization Type', ''),
-        row.get('Applicant Type', ''),
-        row.get('Website URL', ''),
-        float(row.get('Latitude') or 0),
-        float(row.get('Longitude') or 0),
-        row.get('Billed Entity FCC Registration Number', ''),
-        row.get('Billed Entity Address 1', ''),
-        row.get('Billed Entity Address 2', ''),
-        row.get('Billed Entity City', ''),
-        row.get('Billed Entity State', ''),
-        row.get('Billed Entity Zip Code', ''),
-        row.get('Billed Entity Zip Code Ext', ''),
-        row.get('Billed Entity Email', ''),
-        row.get('Billed Entity Phone', ''),
-        row.get('Billed Entity Phone Ext', ''),
-        int(row.get('Number of Eligible Entities') or 0),
-        row.get('Contact Name', ''),
-        row.get('Contact Address 1', ''),
-        row.get('Contact Address 2', ''),
-        row.get('Contact City', ''),
-        row.get('Contact State', ''),
-        row.get('Contact Zip', ''),
-        row.get('Contact Zip Ext', ''),
-        row.get('Contact Phone', ''),
-        row.get('Contact Phone Ext', ''),
-        row.get('Contact Email', ''),
-        row.get('Technical Contact Name', ''),
-        row.get('Technical Contact Title', ''),
-        row.get('Technical Contact Phone', ''),
-        row.get('Technical Contact Phone Ext', ''),
-        row.get('Technical Contact Email', ''),
-        row.get('Authorized Person Name', ''),
-        row.get('Authorized Person Address', ''),
-        row.get('Authorized Person City', ''),
-        row.get('Authorized Person State', ''),
-        row.get('Authorized Person Zip', ''),
-        row.get('Authorized Person Zip Ext', ''),
-        row.get('Authorized Person Phone Number', ''),
-        row.get('Authorized Person Phone Number Ext', ''),
-        row.get('Authorized Person Email', ''),
-        row.get('Authorized Person Title', ''),
-        row.get('Authorized Person Employer', ''),
-        row.get('Category One Description', ''),
-        row.get('Category Two Description', ''),
-        row.get('Installment Type', ''),
-        int(row.get('Installment Min Range Years') or 0),
-        int(row.get('Installment Max Range Years') or 0),
-        row.get('Request for Proposal Identifier', ''),
-        row.get('State or Local Restrictions', ''),
-        row.get('State or Local Restrictions Description', ''),
-        row.get('Statewide State', ''),
-        row.get('All Public Schools Districts', ''),
-        row.get('All Non-Public schools', ''),
-        row.get('All Libraries', ''),
-        row.get('Form Version', '')
+        None,  # id — auto-generated
+        row.get('Application Number', '').strip() or None,
+        row.get('Form Nickname', '').strip() or None,
+        form_pdf or None,
+        row.get('Funding Year', '').strip() or None,
+        row.get('FCC Form 470 Status', '').strip() or None,
+        safe_date(row.get('Allowable Contract Date')),
+        safe_date(row.get('Created Date/Time')),
+        row.get('Created By', '').strip() or None,
+        safe_date(row.get('Certified Date/Time')),
+        row.get('Certified By', '').strip() or None,
+        safe_date(row.get('Last Modified Date/Time')),
+        row.get('Last Modified By', '').strip() or None,
+        row.get('Billed Entity Number', '').strip() or None,
+        row.get('Billed Entity Name', '').strip() or None,
+        row.get('Organization Status', '').strip() or None,
+        row.get('Organization Type', '').strip() or None,
+        row.get('Applicant Type', '').strip() or None,
+        row.get('Website URL', '') or None,
+        safe_float(row.get('Latitude')),
+        safe_float(row.get('Longitude')),
+        row.get('Billed Entity FCC Registration Number', '').strip() or None,
+        row.get('Billed Entity Address 1', '') or None,
+        row.get('Billed Entity Address 2', '') or None,
+        row.get('Billed Entity City', '').strip() or None,
+        row.get('Billed Entity State', '').strip() or None,
+        row.get('Billed Entity Zip Code', '').strip() or None,
+        row.get('Billed Entity Zip Code Ext', '').strip() or None,
+        row.get('Billed Entity Email', '').strip() or None,
+        row.get('Billed Entity Phone', '').strip() or None,
+        row.get('Billed Entity Phone Ext', '').strip() or None,
+        safe_int(row.get('Number of Eligible Entities')),
+        row.get('Contact Name', '').strip() or None,
+        row.get('Contact Address 1', '') or None,
+        row.get('Contact Address 2', '') or None,
+        row.get('Contact City', '').strip() or None,
+        row.get('Contact State', '').strip() or None,
+        row.get('Contact Zip', '').strip() or None,
+        row.get('Contact Zip Ext', '').strip() or None,
+        row.get('Contact Phone', '').strip() or None,
+        row.get('Contact Phone Ext', '').strip() or None,
+        row.get('Contact Email', '').strip() or None,
+        row.get('Technical Contact Name', '').strip() or None,
+        row.get('Technical Contact Title', '').strip() or None,
+        row.get('Technical Contact Phone', '').strip() or None,
+        row.get('Technical Contact Phone Ext', '').strip() or None,
+        row.get('Technical Contact Email', '').strip() or None,
+        row.get('Authorized Person Name', '').strip() or None,
+        row.get('Authorized Person Address', '') or None,
+        row.get('Authorized Person City', '').strip() or None,
+        row.get('Authorized Person State', '').strip() or None,
+        row.get('Authorized Person Zip', '').strip() or None,
+        row.get('Authorized Person Zip Ext', '').strip() or None,
+        row.get('Authorized Person Phone Number', '').strip() or None,
+        row.get('Authorized Person Phone Number Ext', '').strip() or None,
+        row.get('Authorized Person Email', '').strip() or None,
+        row.get('Authorized Person Title', '').strip() or None,
+        row.get('Authorized Person Employer', '').strip() or None,
+        row.get('Category One Description', '') or None,
+        row.get('Category Two Description', '') or None,
+        row.get('Installment Type', '').strip() or None,
+        safe_int(row.get('Installment Min Range Years')),
+        safe_int(row.get('Installment Max Range Years')),
+        row.get('Request for Proposal Identifier', '').strip() or None,
+        row.get('State or Local Restrictions', '').strip() or None,
+        row.get('State or Local Restrictions Description', '') or None,
+        row.get('Statewide State', '').strip() or None,
+        row.get('All Public Schools Districts', '').strip() or None,
+        row.get('All Non-Public schools', '').strip() or None,
+        row.get('All Libraries', '').strip() or None,
+        row.get('Form Version', '').strip() or None,
+        None  # content_hash — added later
     )
 
 # === BLUEBIRD POP LIST (223) ===
