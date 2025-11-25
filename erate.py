@@ -183,7 +183,7 @@ def parse_datetime(value):
             continue
     return None
 
-# === FINAL CORRECT ROW TO TUPLE – 71 VALUES, EXACT ORDER ===
+# FINAL BULLETPROOF ROW TO TUPLE — MATCHES CSV HEADERS 100%
 def _row_to_tuple(row):
     global CSV_HEADERS_LOGGED, ROW_DEBUG_COUNT
     if not CSV_HEADERS_LOGGED:
@@ -202,21 +202,21 @@ def _row_to_tuple(row):
         form_pdf_raw = form_pdf_raw[len(base):]
     form_pdf = f"http://publicdata.usac.org{form_pdf_raw}" if form_pdf_raw else ''
 
-    def safe_float(v): 
-        try: return float(v) if v and str(v).strip() else None 
+    def safe_float(v):
+        try: return float(v) if v and str(v).strip() else None
         except: return None
-    def safe_int(v): 
-        try: return int(v) if v and str(v).strip() else None 
+    def safe_int(v):
+        try: return int(v) if v and str(v).strip() else None
         except: return None
-    def safe_date(v): 
+    def safe_date(v):
         if not v or not str(v).strip(): return None
         try: return datetime.strptime(str(v).strip(), '%m/%d/%Y %I:%M %p')
-        except: 
+        except:
             try: return datetime.strptime(str(v).strip(), '%m/%d/%Y')
             except: return None
 
     return (
-        None,  # id — auto-generated
+        None,  # id
         row.get('Application Number', '').strip() or None,
         row.get('Form Nickname', '').strip() or None,
         form_pdf or None,
@@ -286,8 +286,8 @@ def _row_to_tuple(row):
         row.get('All Public Schools Districts', '').strip() or None,
         row.get('All Non-Public schools', '').strip() or None,
         row.get('All Libraries', '').strip() or None,
-        row.get('Form Version', '').strip() or None,
-        None  # content_hash — added later
+        row.get('Form Version', '').strip() or None
+        # content_hash added later
     )
 
 # === BLUEBIRD POP LIST (223) ===
