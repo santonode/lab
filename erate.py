@@ -1119,7 +1119,7 @@ def _import_all_background(app):
                     skipped += 1
                     continue
                 elif existing:
-                    batch_update.append(values + (content_hash, app_number))
+                    batch_update.append(values[1:] + (content_hash, app_number))  # Skip the first None (id)
                     updated += 1
                 else:
                     batch_insert.append(values + (content_hash,))
