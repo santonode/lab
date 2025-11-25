@@ -1128,7 +1128,8 @@ def _import_all_background(app):
 
             # Final batch
             if batch_insert:
-                insert_sql = INSERT_SQL.rstrip(')') + ', content_hash) VALUES (' + '%s,' * 70 + '%s)'
+                placeholders = ', '.join(['%s'] * 71)  # 71 columns exactly
+                insert_sql = f"INSERT INTO erate VALUES ({placeholders}) ON CONFLICT (app_number) DO UPDATE SET content_hash = EXCLUDED.content_hash"
                 cur.executemany(insert_sql, batch_insert)
                 conn.commit()
                 log("FINAL INSERT: %s records", len(batch_insert))
