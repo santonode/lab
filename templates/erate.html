@@ -375,7 +375,7 @@
     <div class="modal" id="authModal">
         <div class="modal-content">
             <div class="modal-header">
-                <div class="modal-title">Welcome to E-Rate Query Tool</div>
+                <div class="modal-title">Welcome to E-Rate</div>
             </div>
             <div class="modal-body" style="text-align:center;">
                 <button class="btn btn-secondary" onclick="continueAsGuest()" style="margin:8px 0;">Continue as Guest</button>
@@ -389,7 +389,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <div class="modal-title">Register</div>
-                <button class="modal-close" onclick="closeModal('registerModal')">x</button>
+                <button class="modal-close" onclick="closeModal('register')">x</button>
             </div>
             <div class="modal-body">
                 <form method="POST" action="{{ url_for('erate.admin') }}">
@@ -406,7 +406,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <div class="modal-title">Login</div>
-                <button class="modal-close" onclick="closeModal('loginModal')">x</button>
+                <button class="modal-close" onclick="closeModal('login')">x</button>
             </div>
             <div class="modal-body">
                 <form method="POST" action="{{ url_for('erate.admin') }}">
@@ -538,7 +538,7 @@
         <div class="modal-content" style="max-width:900px; width:95%;">
             <div class="modal-header">
                 <div class="modal-title">National Fiber Coverage (Live from KMZ)</div>
-                <button class="modal-close" onclick="document.getElementById('coverage-modal').classList.remove('coverage-modal')">x</button>
+                <button class="modal-close" onclick="document.getElementById('coverage-modal').classList.remove('show')">x</button>
             </div>
             <div class="modal-body" style="position:relative; min-height:200px;">
                 <div id="coverage-loading" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; color:#1a5d57; font-weight:600;">
@@ -581,7 +581,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <div class="modal-title">470 Form Details</div>
-                <button class="modal-close" onclick="closeModal('detail-modal')">x</button>
+                <button class="modal-close" onclick="closeModal('detail')">x</button>
             </div>
             <div class="modal-body" id="detail-body">Loading...</div>
             <div class="modal-footer">
@@ -599,7 +599,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <div class="modal-title">Bluebird Fiber Distance</div>
-                <button class="modal-close" onclick="closeModal('bbmap-modal')">x</button>
+                <button class="modal-close" onclick="closeModal('bbmap')">x</button>
             </div>
             <div class="modal-body" id="bbmap-body">Loading...</div>
             <div style="margin-top:15px; text-align:center; font-size:0.9rem;">
@@ -631,7 +631,7 @@
                         <option>Loading members...</option>
                     </select>
                 </div>
-                <button class="modal-close" onclick="closeModal('map-modal')">x</button>
+                <button class="modal-close" onclick="closeModal('map')">x</button>
             </div>
             <div class="modal-body">
                 <div id="map-loading">
@@ -642,12 +642,11 @@
             </div>
         </div>
     </div>
-    
-    <!-- OUT OF POINTS MODAL – click outside → go to Register -->
+    <!-- OUT OF POINTS MODAL -->
     <div class="modal" id="outOfPointsModal">
         <div class="modal-content">
             <div class="modal-header">
-                <div class="modal-title">Out of Points - Email sales@santoelectronics.com</div>
+                <div class="modal-title">Out of Points</div>
             </div>
             <div class="modal-body" id="out-of-points-message" style="text-align:center; font-size:1rem;">
                 Loading...
@@ -663,7 +662,7 @@
         <div class="modal-content" style="max-width:420px;">
             <div class="modal-header">
                 <div class="modal-title">User Settings</div>
-                <button class="modal-close" onclick="closeModal('settings-modal')">x</button>
+                <button class="modal-close" onclick="closeModal('settings')">x</button>
             </div>
             <div class="modal-body">
                 <form id="settings-form">
@@ -686,54 +685,6 @@
     </div>
     
     <script>
-
-        // FINAL 100% WORKING CLOSE MODAL – WORKS FOR EVERY MODAL INCLUDING LOGIN
-        function closeModal(id) {
-            const modal = document.getElementById(id);
-            if (modal) {
-                modal.style.display = 'none';
-                modal.classList.remove('show');
-            }
-
-            // Map cleanup
-            if (id === 'map-modal') {
-                const mapDiv = document.getElementById('map-container');
-                if (mapDiv?._leaflet_map) {
-                    mapDiv._leaflet_map.remove();
-                    delete mapDiv._leaflet_map;
-                    mapDiv.innerHTML = '';
-                }
-            }
-
-            // Clean loading overlay
-            document.body.classList.remove('loading');
-            document.getElementById('loading')?.classList.remove('show');
-        }
-
-        // Click outside OR X button → close modal (with special Out-of-Points behavior)
-        document.addEventListener('click', e => {
-            // If click is on the modal background (outside content)
-            if (e.target.classList.contains('modal')) {
-                const modalId = e.target.id;
-
-                if (modalId === 'outOfPointsModal') {
-                    closeModal('outOfPointsModal');
-                    document.getElementById('registerModal').style.display = 'flex';
-                } else {
-                    closeModal(modalId);
-                }
-            }
-
-            // If click is directly on an X button with onclick="closeModal('someId')"
-            if (e.target.classList.contains('modal-close')) {
-                e.stopPropagation(); // Prevent double-trigger
-                const onclick = e.target.getAttribute('onclick');
-                if (onclick && onclick.includes('closeModal')) {
-                    const match = onclick.match(/closeModal\(['"]([^'"]+)['"]\)/);
-                    if (match) closeModal(match[1]);
-                }
-            }
-        });
         
         // === AUTH MODAL LOGIC ===
         function continueAsGuest() {
@@ -1055,6 +1006,26 @@
                 }).bindPopup(`<strong>${data.distance}</strong> to ${data.nearest_kmz_pop}`)
                   .addTo(map);
             }
+        }
+
+        // === closeModal() ===
+        function closeModal(type) {
+            if (type === 'detail') detailModal.classList.remove('show');
+            if (type === 'bbmap') bbmapModal.classList.remove('show');
+            if (type === 'map') {
+                mapModal.classList.remove('show');
+                const mapDiv = document.getElementById('map-container');
+                if (mapDiv._leaflet_map) {
+                    mapDiv._leaflet_map.remove();
+                    delete mapDiv._leaflet_map;
+                }
+                mapDiv.innerHTML = '';
+            }
+            if (type === 'outOfPoints') {
+                document.getElementById('outOfPointsModal').classList.remove('show');
+            }
+            body.classList.remove('loading');
+            overlay.classList.remove('show');
         }
 
         // === renderSection(), activateTab(), copyAddress() — ALL FULLY INCLUDED ===
@@ -1388,7 +1359,7 @@
                 display.textContent = saved === 'fna' ? 'FNA Network' : 'Bluebird Network';
             }
         });
-       
+        
     </script>
 </body>
 </html>
