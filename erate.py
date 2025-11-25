@@ -164,32 +164,6 @@ def out_of_points():
     else:
         return jsonify({"message": "You have run out of click points. Email sales@santoelectronics.com to top up your account."})
 
-# === SQL INSERT (70 columns) ===
-INSERT_SQL = '''
-    INSERT INTO erate (
-        app_number, form_nickname, form_pdf, funding_year, fcc_status,
-        allowable_contract_date, created_datetime, created_by,
-        certified_datetime, certified_by, last_modified_datetime, last_modified_by,
-        ben, entity_name, org_status, org_type, applicant_type, website,
-        latitude, longitude, fcc_reg_num, address1, address2, city, state,
-        zip_code, zip_ext, email, phone, phone_ext, num_eligible,
-        contact_name, contact_address1, contact_address2, contact_city,
-        contact_state, contact_zip, contact_zip_ext, contact_phone,
-        contact_phone_ext, contact_email, tech_name, tech_title,
-        tech_phone, tech_phone_ext, tech_email, auth_name, auth_address,
-        auth_city, auth_state, auth_zip, auth_zip_ext, auth_phone,
-        auth_phone_ext, auth_email, auth_title, auth_employer,
-        cat1_desc, cat2_desc, installment_type, installment_min,
-        installment_max, rfp_id, state_restrictions, restriction_desc,
-        statewide, all_public, all_nonpublic, all_libraries, form_version
-    ) VALUES (
-        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-    )
-'''
-
 # === PARSE DATETIME ===
 def parse_datetime(value):
     if not value or not str(value).strip():
@@ -1113,12 +1087,25 @@ def _import_all_background(app):
 
                 if len(batch_insert) + len(batch_update) >= 1000:
                     if batch_insert:
-                        insert_sql = INSERT_SQL.rstrip(')') + ', content_hash) VALUES (' + '%s,' * 70 + '%s)'
-                        cur.executemany(insert_sql, batch_insert)
-                        conn.commit()
-                        log("INSERTED %s new records", len(batch_insert))
-                        batch_insert.clear()
+                        placeholders = ', '.join(['%s'] * 71)
+                        insert_sql = f"""
+                            INSERT INTO erate VALUES ({placeholders})
+                            ON CONFLICT (app_number) DO UPDATE SET
+                                content_hash = EXCLUDED.content_hash
+                        """
+                        try:
+                            cur.executemany(insert_sql, batch_insert)
+                            conn.commit()
+                            log("INSERTED/UPDATED %d records (batch)", len(batch_insert))
+                        except Exception as e:
+                            conn.rollback()
+                            log("BATCH INSERT FAILED: %s", e)
+                            raise
+                        finally:
+                            batch_insert.clear()
+
                     if batch_update:
+                        # your existing update code — leave it
                         set_clause = ', '.join(f"{col} = %s" for col in columns)
                         update_sql = f"UPDATE erate SET {set_clause}, content_hash = %s WHERE app_number = %s"
                         cur.executemany(update_sql, batch_update)
