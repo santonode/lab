@@ -1122,7 +1122,7 @@ def _import_all_background(app):
                     batch_update.append(tuple(values[1:71]) + (content_hash, app_number))
                     updated += 1
                 else:
-                    batch_insert.append((*values[1:], content_hash))
+                    batch_insert.append((*values[1:71], content_hash))  # 70 columns + hash = 71
                     imported += 1
 
                 if len(batch_insert) + len(batch_update) >= 1000:
