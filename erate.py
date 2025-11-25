@@ -1195,8 +1195,8 @@ def _import_all_background(app):
 
                 if len(batch_insert) + len(batch_update) >= 1000:
                     if batch_insert:
-                        placeholders = ', '.join(['%s'] * 70)
-                        insert_sql = f"INSERT INTO erate ({', '.join(columns)}, content_hash) VALUES ({placeholders}) ON CONFLICT (app_number) DO UPDATE SET content_hash = EXCLUDED.content_hash"
+                        placeholders = ', '.join(['%s'] * 69)  # 69 real columns
+                        insert_sql = f"INSERT INTO erate ({', '.join(columns)}, content_hash) VALUES ({placeholders}, %s) ON CONFLICT (app_number) DO UPDATE SET content_hash = EXCLUDED.content_hash"
                         cur.executemany(insert_sql, batch_insert)
                         conn.commit()
                         log("INSERTED/UPDATED %d records (batch)", len(batch_insert))
