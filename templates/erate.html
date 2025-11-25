@@ -685,6 +685,18 @@
     </div>
     
     <script>
+
+        // === CLOSE ANY MODAL BY ID (used by X buttons) ===
+        function closeModal(modalId) {
+            const modal = document.getElementById(modalId + 'Modal') || 
+                          document.getElementById(modalId + '-modal') ||
+                          document.getElementById(modalId);
+            if (modal) {
+                modal.style.display = 'none';
+                // Also remove .show class if you ever switch to that method
+                modal.classList.remove('show');
+            }
+        }
         
         // === AUTH MODAL LOGIC ===
         function continueAsGuest() {
@@ -1358,6 +1370,16 @@
             if (display) {
                 display.textContent = saved === 'fna' ? 'FNA Network' : 'Bluebird Network';
             }
+        });
+
+        // Close modal when clicking outside the content
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.style.display = 'none';
+                    modal.classList.remove('show');
+                }
+            });
         });
         
     </script>
