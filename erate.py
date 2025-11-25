@@ -1064,16 +1064,26 @@ def _import_all_background(app):
         def normalize_for_hash(values):
             """Remove noise that changes every CSV export but isn't real data change"""
             norm = list(values)
+            
             # 2: form_pdf — strip query params and fragments
-            if norm[2]:
+            if len(norm) > 2 and norm[2]:
                 norm[2] = norm[2].split('?')[0].split('#')[0]
-            # 18 & 19: lat/lon — round to 6 decimals (USAC standard)
-            if norm[18] is not None:
-                norm[18] = round(float(norm[18]), 6)
-            if norm[19] is not None:
-                norm[19] = round(float(norm[19]), 6)
+            
+            # Latitude (index 19) and Longitude (index 20) — safe float + round
+            if len(norm) > 20:
+                try:
+                    if norm[19] not in (None, '', 'None'):
+                        norm[19] = round(float(norm[19]), 6)
+                except (ValueError, TypeError):
+                    norm[19] = None
+                try:
+                    if norm[20] not in (None, '', 'None'):
+                        norm[20] = round(float(norm[20]), 6)
+                except (ValueError, TypeError):
+                    norm[20] = None
+            
             # Convert empty strings to None (consistent with DB)
-            return tuple(None if (isinstance(v, str) and v == '') else v for v in norm)
+            return tuple(None if (isinstance(v, str) and v.strip() == '') else v for v in norm)
 
         with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
             reader = csv.DictReader(f, dialect='excel')
