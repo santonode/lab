@@ -1184,18 +1184,18 @@
         let userDM = parseFloat({{ session.dm|default(5.0) }});
         let dmEnabled = false;
 
-        const dmCheckbox   = document.getElementById('enable-dm');
-        const dmValueSpan  = document.getElementById('dm-value');
+        const dmCheckbox    = document.getElementById('enable-dm');
+        const dmValueSpan   = document.getElementById('dm-value');
         const dmValueInline = document.getElementById('dm-value-inline');
-        const dmStatus     = document.getElementById('dm-status');
-        const summaryEl    = document.querySelector('.summary');
+        const dmStatus      = document.getElementById('dm-status');
+        const summaryEl     = document.querySelector('.summary');
 
         function updateDMUI() {
-            if (dmValueSpan)  dmValueSpan.textContent  = userDM.toFixed(1);
+            if (dmValueSpan)   dmValueSpan.textContent   = userDM.toFixed(1);
             if (dmValueInline) dmValueInline.textContent = userDM.toFixed(1);
             if (dmStatus) {
                 dmStatus.textContent = dmEnabled ? ' (ON)' : ' (OFF)';
-                dmStatus.className = dmEnabled ? 'on' : 'off';
+                dmStatus.className   = dmEnabled ? 'on' : 'off';
             }
         }
 
@@ -1211,7 +1211,7 @@
             document.querySelectorAll('.distance-header, .distance-cell')
                     .forEach(el => el.style.display = 'table-cell');
 
-            // Auto-detect correct network
+            // Auto-detect network
             const saved = localStorage.getItem('preferredNetwork') || 'bluebird';
             const state = new URLSearchParams(window.location.search).get('state')?.toUpperCase() || '';
             const network = ['MI','OH','PA','FL','GA','NC','SC','LA','TN','KY','VA','WV','MD','DE','NJ'].includes(state) ? 'fna' :
@@ -1235,8 +1235,8 @@
                                          .then(r => r.json());
                     const dist = parseFloat(data.nearest_fiber_distance);
 
-                    distCell.textContent = isNaN(dist) 
-                        ? '—' 
+                    distCell.textContent = isNaN(dist)
+                        ? '—'
                         : (dist < 1 ? '<1 mi' : dist.toFixed(1) + ' mi');
 
                     const withinDM = !isNaN(dist) && dist <= userDM;
@@ -1253,13 +1253,15 @@
                 }
             }
 
-            // Now enable the checkbox
+            // Enable the checkbox now that distances are loaded
             if (dmCheckbox) {
                 dmCheckbox.disabled = false;
-                dmCheckbox.checked = dmEnabled;
-                dmStatus.textContent = ' (OFF)';
-                dmStatus.className = 'off';
-                dmStatus.style.color = '#d63384';
+                dmCheckbox.checked  = dmEnabled;
+                if (dmStatus) {
+                    dmStatus.textContent = ' (OFF)';
+                    dmStatus.className   = 'off';
+                    dmStatus.style.color = '#d63384';
+                }
             }
 
             // Auto-disable if nothing matches
@@ -1269,7 +1271,9 @@
                 alert(`No applicants within ${userDM} miles — Distance Minimum turned off`);
             }
 
-            summaryEl.textContent = `Showing ${Math.min(visible, 10)} of ${visible} record${visible !== 1 ? 's' : ''}${dmEnabled ? \` (≤ ${userDM.toFixed(1)} mi)\` : ''}`;
+            // FIXED LINE – proper string concatenation, no back-ticks
+            const suffix = dmEnabled ? ' (≤ ' + userDM.toFixed(1) + ' mi)' : '';
+            summaryEl.textContent = `Showing ${Math.min(visible, 10)} of ${visible} record${visible !== 1 ? 's' : ''}${suffix}`;
 
             updateDMUI();
             document.body.style.cursor = 'default';
@@ -1283,7 +1287,7 @@
             });
         }
 
-        // Run on page load
+        // Run on load
         window.addEventListener('load', () => {
             setTimeout(calculateAndShowDistances, 800);
         });
