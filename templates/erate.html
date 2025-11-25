@@ -452,14 +452,24 @@
             </form>
         </div>
         <p class="summary">Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</p>
-        {% if total_filtered <= (session.ft | default(100) | int) %}
-        <div style="text-align:center; margin:10px 0; font-size:0.9rem; color:#1a5d57;">
-            <strong>Current Network:</strong> 
-            <span id="current-network-display">Bluebird Network</span>
-            &nbsp;&nbsp;|&nbsp;&nbsp;
-            <button id="toggle-distance-filter" class="btn btn-secondary" style="font-size:0.85rem;">
-                Distance filter: OFF — click to enable
-            </button>
+        {% if total_filtered < (session.ft | default(100) | int) %}
+        <!-- DISTANCE MINIMUM AVAILABLE ONLY WHEN RESULTS ARE SMALL ENOUGH -->
+        <div class="distance-minimum-controls" style="margin:15px 0; padding:12px; background:#f0f8ff; border-radius:8px; text-align:center; font-size:0.95rem; border:1px solid #b8daff;">
+            <div style="margin-bottom:8px; color:#1a5d57; font-weight:600;">
+                Calculating distances for {{ total_filtered }} records...
+            </div>
+            <label style="font-weight:600; color:#1a5d57; cursor:pointer; user-select:none;">
+                <input type="checkbox" id="enable-dm" disabled>
+                <strong>Distance Minimum:</strong> <span id="dm-value">5.0</span> miles
+            </label>
+            <div style="margin-top:6px;">
+                Only show applicants with fiber ≤ <span id="dm-value-inline">5.0</span> miles 
+                <span id="dm-status" style="color:#999; font-weight:bold;"> (available after distances load)</span>
+            </div>
+        </div>
+        {% else %}
+        <div style="text-align:center; margin:15px 0; color:#666; font-size:0.9rem;">
+            Distance features disabled — {{ total_filtered }} results (need fewer than {{ session.ft|default(100) }})
         </div>
         {% endif %}
         <table>
