@@ -978,52 +978,58 @@ def _download_csv_background(app):
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     log("Import interactive page accessed")
+    
     if not os.path.exists(CSV_FILE):
         log("CSV not found")
         return "<h2>CSV not found: 470schema.csv</h2>", 404
+
     with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
         total = sum(1 for _ in csv.reader(f)) - 1
     log("CSV has %s rows (excluding header)", total)
-    if 'import_total' not in current_app.config:
-        current_app.config['import_total'] = total
-        current_app.config['import_index'] = 1
-        current_app.config['import_success'] = 0
-        current_app.config['import_error'] = 0
-    elif current_app.config['import_total'] != total:
-        log("CSV changed, resetting progress")
+
+    # Initialize or reset config
+    if 'import_total' not in current_app.config or current_app.config['import_total'] != total:
+        log("Resetting import progress")
         current_app.config.update({
             'import_total': total,
             'import_index': 1,
             'import_success': 0,
-            'import_error': 0
+            'import_error': 0,
+            'BULK_IMPORT_IN_PROGRESS': False
         })
+
     progress = {
         'index': current_app.config['import_index'],
         'total': current_app.config['import_total'],
         'success': current_app.config['import_success'],
         'error': current_app.config['import_error']
     }
+
     is_importing = current_app.config.get('BULK_IMPORT_IN_PROGRESS', False)
+
+    # Show complete page if import finished
     if is_importing or progress['index'] > progress['total']:
         log("Import complete page shown")
         return render_template('erate_import_complete.html', progress=progress)
+
+    # Handle POST — start import
     if request.method == 'POST' and request.form.get('action') == 'import_all':
         if is_importing:
             flash("Import already running.", "info")
-            return redirect(url_for('erate.import_interactive'))
-        current_app.config.update({
-            'BULK_IMPORT_IN_PROGRESS': True,
-            'import_index': 1,
-            'import_success': 0,
-            'import_error': 0
-        })
-        thread = threading.Thread(target=_import_all_background, args=(current_app._get_current_object(),))
-        thread.daemon = True
-        current_app.config['IMPORT_THREAD'] = thread
-        thread.start()
-        flash("Bulk import started. Check /erate/view-log", "success")
+        else:
+            current_app.config['BULK_IMPORT_IN_PROGRESS'] = True
+            thread = threading.Thread(
+                target=_import_all_background,
+                args=(current_app._get_current_object(),),
+                daemon=True
+            )
+            current_app.config['IMPORT_THREAD'] = thread
+            thread.start()
+            flash("Bulk import started. Check /erate/view-log", "success")
         return redirect(url_for('erate.import_interactive'))
-        return render_template('erate_import.html', progress=progress, is_importing=is_importing)
+
+    # Default: show import page
+    return render_template('erate_import.html', progress=progress, is_importing=is_importing)
 
 # === IMPORT ALL BACKGROUND ===
 def _import_all_background(app):
