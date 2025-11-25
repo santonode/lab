@@ -1045,14 +1045,25 @@ def _import_all_background(app):
         cur.execute("ALTER TABLE erate ADD COLUMN IF NOT EXISTS content_hash TEXT")
         conn.commit()
 
-        # ORIGINAL WORKING _row_to_tuple — 70 values (no id, no content_hash)
+        # === normalize_for_hash — THIS WAS MISSING ===
+        def normalize_for_hash(values):
+            norm = list(values)
+            if len(norm) > 2 and norm[2]:
+                norm[2] = norm[2].split('?')[0].split('#')[0]
+            if len(norm) > 19:
+                try: norm[18] = round(float(norm[18] or 0), 6) if norm[18] not in ('', None) else None
+                except: norm[18] = None
+                try: norm[19] = round(float(norm[19] or 0), 6) if norm[19] not in ('', None) else None
+                except: norm[19] = None
+            return tuple(None if (isinstance(v, str) and v.strip() == '') else v for v in norm)
+
+        # === _row_to_tuple — 70 VALUES (NO id, NO content_hash) ===
         def _row_to_tuple(row):
             form_pdf_raw = (row.get('Form PDF', '') or row.get('Form PDF Link', '') or '').strip()
             base = 'http://publicdata.usac.org/'
             while form_pdf_raw.startswith(base):
                 form_pdf_raw = form_pdf_raw[len(base):]
             form_pdf = f"http://publicdata.usac.org{form_pdf_raw}" if form_pdf_raw else ''
-
             return (
                 row.get('Application Number', '').strip(),
                 row.get('Form Nickname', '').strip(),
@@ -1126,6 +1137,7 @@ def _import_all_background(app):
                 row.get('Form Version', '').strip()
             )
 
+        # === IMPORT LOOP ===
         with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
             reader = csv.DictReader(f, dialect='excel')
             for _ in range(start_index - 1):
