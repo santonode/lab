@@ -1030,7 +1030,6 @@ def import_interactive():
     # Default: show import page
     return render_template('erate_import.html', progress=progress, is_importing=is_importing)
 
-# === FINAL BULLETPROOF IMPORT — WORKS FOREVER ===
 def _import_all_background(app):
     global CSV_HEADERS_LOGGED, ROW_DEBUG_COUNT
     CSV_HEADERS_LOGGED = False
@@ -1046,35 +1045,7 @@ def _import_all_background(app):
         cur.execute("ALTER TABLE erate ADD COLUMN IF NOT EXISTS content_hash TEXT")
         conn.commit()
 
-        # === 69 REAL COLUMNS — EXACT MATCH TO CURRENT USAC CSV ===
-        columns = [
-            'app_number', 'form_nickname', 'form_pdf', 'funding_year', 'fcc_status',
-            'allowable_contract_date', 'created_datetime', 'created_by', 'certified_datetime',
-            'certified_by', 'last_modified_datetime', 'last_modified_by', 'ben', 'entity_name',
-            'org_status', 'org_type', 'applicant_type', 'website', 'latitude', 'longitude',
-            'fcc_reg_num', 'address1', 'address2', 'city', 'state', 'zip_code', 'zip_ext',
-            'email', 'phone', 'phone_ext', 'num_eligible', 'contact_name', 'contact_address1',
-            'contact_address2', 'contact_city', 'contact_state', 'contact_zip', 'contact_zip_ext',
-            'contact_phone', 'contact_phone_ext', 'contact_email', 'tech_name', 'tech_title',
-            'tech_phone', 'tech_phone_ext', 'tech_email', 'auth_name', 'auth_address',
-            'auth_city', 'auth_state', 'auth_zip', 'auth_zip_ext', 'auth_phone', 'auth_phone_ext',
-            'auth_email', 'auth_title', 'auth_employer', 'cat1_desc', 'cat2_desc',
-            'installment_type', 'installment_min', 'installment_max', 'rfp_id',
-            'state_restrictions', 'restriction_desc', 'statewide', 'all_public',
-            'all_nonpublic', 'all_libraries', 'form_version'
-        ]
-
-        def normalize_for_hash(values):
-            norm = list(values)
-            if len(norm) > 2 and norm[2]:
-                norm[2] = norm[2].split('?')[0].split('#')[0]
-            if len(norm) > 19:
-                try: norm[18] = round(float(norm[18] or 0), 6) if norm[18] not in ('', None) else None
-                except: norm[18] = None
-                try: norm[19] = round(float(norm[19] or 0), 6) if norm[19] not in ('', None) else None
-                except: norm[19] = None
-            return tuple(None if (isinstance(v, str) and v.strip() == '') else v for v in norm)
-
+        # ORIGINAL WORKING _row_to_tuple — 70 values (no id, no content_hash)
         def _row_to_tuple(row):
             form_pdf_raw = (row.get('Form PDF', '') or row.get('Form PDF Link', '') or '').strip()
             base = 'http://publicdata.usac.org/'
@@ -1088,12 +1059,12 @@ def _import_all_background(app):
                 form_pdf,
                 row.get('Funding Year', '').strip(),
                 row.get('FCC Form 470 Status', '').strip(),
-                row.get('Allowable Contract Date', '') or None,
-                row.get('Created Date/Time', '') or None,
+                parse_datetime(row.get('Allowable Contract Date')),
+                parse_datetime(row.get('Created Date/Time')),
                 row.get('Created By', '').strip(),
-                row.get('Certified Date/Time', '') or None,
+                parse_datetime(row.get('Certified Date/Time')),
                 row.get('Certified By', '').strip(),
-                row.get('Last Modified Date/Time', '') or None,
+                parse_datetime(row.get('Last Modified Date/Time')),
                 row.get('Last Modified By', '').strip(),
                 row.get('Billed Entity Number', '').strip(),
                 row.get('Billed Entity Name', '').strip(),
@@ -1101,8 +1072,8 @@ def _import_all_background(app):
                 row.get('Organization Type', '').strip(),
                 row.get('Applicant Type', '').strip(),
                 row.get('Website URL', ''),
-                row.get('Latitude', '') or None,
-                row.get('Longitude', '') or None,
+                float(row.get('Latitude') or 0),
+                float(row.get('Longitude') or 0),
                 row.get('Billed Entity FCC Registration Number', '').strip(),
                 row.get('Billed Entity Address 1', ''),
                 row.get('Billed Entity Address 2', ''),
@@ -1113,7 +1084,7 @@ def _import_all_background(app):
                 row.get('Billed Entity Email', '').strip(),
                 row.get('Billed Entity Phone', '').strip(),
                 row.get('Billed Entity Phone Ext', '').strip(),
-                row.get('Number of Eligible Entities', '') or '0',
+                int(row.get('Number of Eligible Entities') or 0),
                 row.get('Contact Name', '').strip(),
                 row.get('Contact Address 1', ''),
                 row.get('Contact Address 2', ''),
@@ -1143,8 +1114,8 @@ def _import_all_background(app):
                 row.get('Category One Description', ''),
                 row.get('Category Two Description', ''),
                 row.get('Installment Type', '').strip(),
-                row.get('Installment Min Range Years', '') or '0',
-                row.get('Installment Max Range Years', '') or '0',
+                int(row.get('Installment Min Range Years') or 0),
+                int(row.get('Installment Max Range Years') or 0),
                 row.get('Request for Proposal Identifier', '').strip(),
                 row.get('State or Local Restrictions', '').strip(),
                 row.get('State or Local Restrictions Description', ''),
@@ -1176,7 +1147,7 @@ def _import_all_background(app):
                 if not app_number:
                     continue
 
-                values = _row_to_tuple(row)  # 69 values
+                values = _row_to_tuple(row)  # 70 values
                 normalized = normalize_for_hash(values)
                 content_hash = hashlib.sha256('|'.join(str(v) if v is not None else '' for v in normalized).encode()).hexdigest()
 
@@ -1190,16 +1161,14 @@ def _import_all_background(app):
                     batch_update.append(values + (content_hash, app_number))
                     updated += 1
                 else:
-                    batch_insert.append(values + (content_hash,))  # 69 + 1 = 70
+                    batch_insert.append(values + (content_hash,))  # 70 + 1 = 71
                     imported += 1
 
                 if len(batch_insert) + len(batch_update) >= 1000:
                     if batch_insert:
-                        placeholders = ', '.join(['%s'] * 69)  # 69 real columns
-                        insert_sql = f"INSERT INTO erate ({', '.join(columns)}, content_hash) VALUES ({placeholders}, %s) ON CONFLICT (app_number) DO UPDATE SET content_hash = EXCLUDED.content_hash"
-                        cur.executemany(insert_sql, batch_insert)
+                        cur.executemany(INSERT_SQL + ", content_hash) VALUES (" + "%s," * 70 + "%s)", batch_insert)
                         conn.commit()
-                        log("INSERTED/UPDATED %d records (batch)", len(batch_insert))
+                        log("INSERTED %s new records", len(batch_insert))
                         batch_insert.clear()
                     if batch_update:
                         set_clause = ', '.join(f"{col} = %s" for col in columns)
@@ -1211,9 +1180,7 @@ def _import_all_background(app):
 
             # Final batch
             if batch_insert:
-                placeholders = ', '.join(['%s'] * 70)
-                insert_sql = f"INSERT INTO erate ({', '.join(columns)}, content_hash) VALUES ({placeholders}) ON CONFLICT (app_number) DO UPDATE SET content_hash = EXCLUDED.content_hash"
-                cur.executemany(insert_sql, batch_insert)
+                cur.executemany(INSERT_SQL + ", content_hash) VALUES (" + "%s," * 70 + "%s)", batch_insert)
                 conn.commit()
             if batch_update:
                 set_clause = ', '.join(f"{col} = %s" for col in columns)
