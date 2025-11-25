@@ -686,17 +686,56 @@
     
     <script>
 
-        // === CLOSE ANY MODAL BY ID (used by X buttons) ===
-        function closeModal(modalId) {
-            const modal = document.getElementById(modalId + 'Modal') || 
-                          document.getElementById(modalId + '-modal') ||
-                          document.getElementById(modalId);
+        // === UNIVERSAL CLOSE MODAL – ONE FUNCTION TO RULE THEM ALL ===
+        function closeModal(idOrType) {
+            let modal;
+
+            // Direct ID match
+            modal = document.getElementById(idOrType);
+            if (!modal) modal = document.getElementById(idOrType + 'Modal');
+            if (!modal) modal = document.getElementById(idOrType + '-modal');
+
+            // Legacy type support (keeps your existing onclick="closeModal('detail')" working)
+            if (!modal) {
+                const map = {
+                    'detail':      'detail-modal',
+                    'bbmap':       'bbmap-modal',
+                    'map':         'map-modal',
+                    'outOfPoints': 'outOfPointsModal',
+                    'register':    'registerModal',
+                    'login':       'loginModal',
+                    'auth':        'authModal',
+                    'settings':    'settings-modal'
+                };
+                if (map[idOrType]) modal = document.getElementById(map[idOrType]);
+            }
+
             if (modal) {
                 modal.style.display = 'none';
-                // Also remove .show class if you ever switch to that method
                 modal.classList.remove('show');
             }
+
+            // Special map cleanup
+            if (idOrType === 'map' || modal?.id === 'map-modal') {
+                const mapDiv = document.getElementById('map-container');
+                if (mapDiv?._leaflet_map) {
+                    mapDiv._leaflet_map.remove();
+                    delete mapDiv._leaflet_map;
+                    mapDiv.innerHTML = '';
+                }
+            }
+
+            // Global cleanup
+            document.body.classList.remove('loading');
+            document.getElementById('loading')?.classList.remove('show');
         }
+
+        // Click outside any modal → close it
+        document.addEventListener('click', e => {
+            if (e.target.classList.contains('modal')) {
+                closeModal(e.target.id);
+            }
+        });
         
         // === AUTH MODAL LOGIC ===
         function continueAsGuest() {
@@ -1018,26 +1057,6 @@
                 }).bindPopup(`<strong>${data.distance}</strong> to ${data.nearest_kmz_pop}`)
                   .addTo(map);
             }
-        }
-
-        // === closeModal() ===
-        function closeModal(type) {
-            if (type === 'detail') detailModal.classList.remove('show');
-            if (type === 'bbmap') bbmapModal.classList.remove('show');
-            if (type === 'map') {
-                mapModal.classList.remove('show');
-                const mapDiv = document.getElementById('map-container');
-                if (mapDiv._leaflet_map) {
-                    mapDiv._leaflet_map.remove();
-                    delete mapDiv._leaflet_map;
-                }
-                mapDiv.innerHTML = '';
-            }
-            if (type === 'outOfPoints') {
-                document.getElementById('outOfPointsModal').classList.remove('show');
-            }
-            body.classList.remove('loading');
-            overlay.classList.remove('show');
         }
 
         // === renderSection(), activateTab(), copyAddress() — ALL FULLY INCLUDED ===
@@ -1371,17 +1390,7 @@
                 display.textContent = saved === 'fna' ? 'FNA Network' : 'Bluebird Network';
             }
         });
-
-        // Close modal when clicking outside the content
-        document.querySelectorAll('.modal').forEach(modal => {
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    modal.style.display = 'none';
-                    modal.classList.remove('show');
-                }
-            });
-        });
-        
+       
     </script>
 </body>
 </html>
