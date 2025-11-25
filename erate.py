@@ -1221,7 +1221,7 @@ def _import_all_background(app):
 
                 if len(batch_insert) + len(batch_update) >= 1000:
                     if batch_insert:
-                        cur.executemany(INSERT_SQL + ", content_hash) VALUES (" + "%s," * 70 + "%s)", batch_insert)
+                        cur.executemany(INSERT_SQL + ", content_hash) VALUES (" + "%s," * 69 + "%s)", batch_insert)
                         conn.commit()
                         log("INSERTED %s new records", len(batch_insert))
                         batch_insert.clear()
