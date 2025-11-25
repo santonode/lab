@@ -19,31 +19,6 @@ import zipfile
 import xml.etree.ElementTree as ET
 import hashlib
 
-# === ORIGINAL WORKING INSERT_SQL — REQUIRED FOR IMPORT ===
-INSERT_SQL = '''
-    INSERT INTO erate (
-        app_number, form_nickname, form_pdf, funding_year, fcc_status,
-        allowable_contract_date, created_datetime, created_by, certified_datetime,
-        certified_by, last_modified_datetime, last_modified_by, ben, entity_name,
-        org_status, org_type, applicant_type, website, latitude, longitude,
-        fcc_reg_num, address1, address2, city, state, zip_code, zip_ext,
-        email, phone, phone_ext, num_eligible, contact_name, contact_address1,
-        contact_address2, contact_city, contact_state, contact_zip, contact_zip_ext,
-        contact_phone, contact_phone_ext, contact_email, tech_name, tech_title,
-        tech_phone, tech_phone_ext, tech_email, auth_name, auth_address,
-        auth_city, auth_state, auth_zip, auth_zip_ext, auth_phone, auth_phone_ext,
-        auth_email, auth_title, auth_employer, cat1_desc, cat2_desc,
-        installment_type, installment_min, installment_max, rfp_id,
-        state_restrictions, restriction_desc, statewide, all_public,
-        all_nonpublic, all_libraries, form_version
-    ) VALUES (
-        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-    )
-'''
-
 # === TRUE NEAREST FIBER DISTANCE (for table column) ===
 def get_nearest_fiber_distance(lat, lon, kmz_path):
     if not lat or not lon or not os.path.exists(kmz_path):
@@ -189,6 +164,32 @@ def out_of_points():
     else:
         return jsonify({"message": "You have run out of click points. Email sales@santoelectronics.com to top up your account."})
 
+# === SQL INSERT (70 columns) ===
+INSERT_SQL = '''
+    INSERT INTO erate (
+        app_number, form_nickname, form_pdf, funding_year, fcc_status,
+        allowable_contract_date, created_datetime, created_by,
+        certified_datetime, certified_by, last_modified_datetime, last_modified_by,
+        ben, entity_name, org_status, org_type, applicant_type, website,
+        latitude, longitude, fcc_reg_num, address1, address2, city, state,
+        zip_code, zip_ext, email, phone, phone_ext, num_eligible,
+        contact_name, contact_address1, contact_address2, contact_city,
+        contact_state, contact_zip, contact_zip_ext, contact_phone,
+        contact_phone_ext, contact_email, tech_name, tech_title,
+        tech_phone, tech_phone_ext, tech_email, auth_name, auth_address,
+        auth_city, auth_state, auth_zip, auth_zip_ext, auth_phone,
+        auth_phone_ext, auth_email, auth_title, auth_employer,
+        cat1_desc, cat2_desc, installment_type, installment_min,
+        installment_max, rfp_id, state_restrictions, restriction_desc,
+        statewide, all_public, all_nonpublic, all_libraries, form_version
+    ) VALUES (
+        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+    )
+'''
+
 # === PARSE DATETIME ===
 def parse_datetime(value):
     if not value or not str(value).strip():
@@ -208,7 +209,9 @@ def parse_datetime(value):
             continue
     return None
 
-# FINAL BULLETPROOF ROW TO TUPLE — EXACT MATCH TO YOUR 69-COLUMN CSV
+# === CSV ROW → TUPLE ===
+CSV_HEADERS_LOGGED = False
+ROW_DEBUG_COUNT = 0
 def _row_to_tuple(row):
     global CSV_HEADERS_LOGGED, ROW_DEBUG_COUNT
     if not CSV_HEADERS_LOGGED:
@@ -217,7 +220,6 @@ def _row_to_tuple(row):
     if ROW_DEBUG_COUNT < 3:
         log("DEBUG ROW %s: %s", ROW_DEBUG_COUNT + 1, dict(row))
         ROW_DEBUG_COUNT += 1
-
     form_pdf_raw = (
         row.get('Form PDF', '') or row.get('Form PDF Link', '') or
         row.get('PDF', '') or row.get('Form PDF Path', '') or ''
@@ -226,92 +228,77 @@ def _row_to_tuple(row):
     while form_pdf_raw.startswith(base):
         form_pdf_raw = form_pdf_raw[len(base):]
     form_pdf = f"http://publicdata.usac.org{form_pdf_raw}" if form_pdf_raw else ''
-
-    def safe_float(v):
-        try: return float(v) if v and str(v).strip() else None
-        except: return None
-    def safe_int(v):
-        try: return int(v) if v and str(v).strip() else None
-        except: return None
-    def safe_date(v):
-        if not v or not str(v).strip(): return None
-        try: return datetime.strptime(str(v).strip(), '%m/%d/%Y %I:%M %p')
-        except:
-            try: return datetime.strptime(str(v).strip(), '%m/%d/%Y')
-            except: return None
-
     return (
-        None,  # id
-        row.get('Application Number', '').strip() or None,
-        row.get('Form Nickname', '').strip() or None,
-        form_pdf or None,
-        row.get('Funding Year', '').strip() or None,
-        row.get('FCC Form 470 Status', '').strip() or None,
-        safe_date(row.get('Allowable Contract Date')),
-        safe_date(row.get('Created Date/Time')),
-        row.get('Created By', '').strip() or None,
-        safe_date(row.get('Certified Date/Time')),
-        row.get('Certified By', '').strip() or None,
-        safe_date(row.get('Last Modified Date/Time')),
-        row.get('Last Modified By', '').strip() or None,
-        row.get('Billed Entity Number', '').strip() or None,
-        row.get('Billed Entity Name', '').strip() or None,
-        row.get('Organization Status', '').strip() or None,
-        row.get('Organization Type', '').strip() or None,
-        row.get('Applicant Type', '').strip() or None,
-        row.get('Website URL', '') or None,
-        safe_float(row.get('Latitude')),
-        safe_float(row.get('Longitude')),
-        row.get('Billed Entity FCC Registration Number', '').strip() or None,
-        row.get('Billed Entity Address 1', '') or None,
-        row.get('Billed Entity Address 2', '') or None,
-        row.get('Billed Entity City', '').strip() or None,
-        row.get('Billed Entity State', '').strip() or None,
-        row.get('Billed Entity Zip Code', '').strip() or None,
-        row.get('Billed Entity Zip Code Ext', '').strip() or None,
-        row.get('Billed Entity Email', '').strip() or None,
-        row.get('Billed Entity Phone', '').strip() or None,
-        row.get('Billed Entity Phone Ext', '').strip() or None,
-        safe_int(row.get('Number of Eligible Entities')),
-        row.get('Contact Name', '').strip() or None,
-        row.get('Contact Address 1', '') or None,
-        row.get('Contact Address 2', '') or None,
-        row.get('Contact City', '').strip() or None,
-        row.get('Contact State', '').strip() or None,
-        row.get('Contact Zip', '').strip() or None,
-        row.get('Contact Zip Ext', '').strip() or None,
-        row.get('Contact Phone', '').strip() or None,
-        row.get('Contact Phone Ext', '').strip() or None,
-        row.get('Contact Email', '').strip() or None,
-        row.get('Technical Contact Name', '').strip() or None,
-        row.get('Technical Contact Title', '').strip() or None,
-        row.get('Technical Contact Phone', '').strip() or None,
-        row.get('Technical Contact Phone Ext', '').strip() or None,
-        row.get('Technical Contact Email', '').strip() or None,
-        row.get('Authorized Person Name', '').strip() or None,
-        row.get('Authorized Person Address', '') or None,
-        row.get('Authorized Person City', '').strip() or None,
-        row.get('Authorized Person State', '').strip() or None,
-        row.get('Authorized Person Zip', '').strip() or None,
-        row.get('Authorized Person Zip Ext', '').strip() or None,
-        row.get('Authorized Person Phone Number', '').strip() or None,
-        row.get('Authorized Person Phone Number Ext', '').strip() or None,
-        row.get('Authorized Person Email', '').strip() or None,
-        row.get('Authorized Person Title', '').strip() or None,
-        row.get('Authorized Person Employer', '').strip() or None,
-        row.get('Category One Description', '') or None,
-        row.get('Category Two Description', '') or None,
-        row.get('Installment Type', '').strip() or None,
-        safe_int(row.get('Installment Min Range Years')),
-        safe_int(row.get('Installment Max Range Years')),
-        row.get('Request for Proposal Identifier', '').strip() or None,
-        row.get('State or Local Restrictions', '').strip() or None,
-        row.get('State or Local Restrictions Description', '') or None,
-        row.get('Statewide State', '').strip() or None,
-        row.get('All Public Schools Districts', '').strip() or None,
-        row.get('All Non-Public schools', '').strip() or None,
-        row.get('All Libraries', '').strip() or None,
-        row.get('Form Version', '').strip() or None
+        row.get('Application Number', ''),
+        row.get('Form Nickname', ''),
+        form_pdf,
+        row.get('Funding Year', ''),
+        row.get('FCC Form 470 Status', ''),
+        parse_datetime(row.get('Allowable Contract Date')),
+        parse_datetime(row.get('Created Date/Time')),
+        row.get('Created By', ''),
+        parse_datetime(row.get('Certified Date/Time')),
+        row.get('Certified By', ''),
+        parse_datetime(row.get('Last Modified Date/Time')),
+        row.get('Last Modified By', ''),
+        row.get('Billed Entity Number', ''),
+        row.get('Billed Entity Name', ''),
+        row.get('Organization Status', ''),
+        row.get('Organization Type', ''),
+        row.get('Applicant Type', ''),
+        row.get('Website URL', ''),
+        float(row.get('Latitude') or 0),
+        float(row.get('Longitude') or 0),
+        row.get('Billed Entity FCC Registration Number', ''),
+        row.get('Billed Entity Address 1', ''),
+        row.get('Billed Entity Address 2', ''),
+        row.get('Billed Entity City', ''),
+        row.get('Billed Entity State', ''),
+        row.get('Billed Entity Zip Code', ''),
+        row.get('Billed Entity Zip Code Ext', ''),
+        row.get('Billed Entity Email', ''),
+        row.get('Billed Entity Phone', ''),
+        row.get('Billed Entity Phone Ext', ''),
+        int(row.get('Number of Eligible Entities') or 0),
+        row.get('Contact Name', ''),
+        row.get('Contact Address 1', ''),
+        row.get('Contact Address 2', ''),
+        row.get('Contact City', ''),
+        row.get('Contact State', ''),
+        row.get('Contact Zip', ''),
+        row.get('Contact Zip Ext', ''),
+        row.get('Contact Phone', ''),
+        row.get('Contact Phone Ext', ''),
+        row.get('Contact Email', ''),
+        row.get('Technical Contact Name', ''),
+        row.get('Technical Contact Title', ''),
+        row.get('Technical Contact Phone', ''),
+        row.get('Technical Contact Phone Ext', ''),
+        row.get('Technical Contact Email', ''),
+        row.get('Authorized Person Name', ''),
+        row.get('Authorized Person Address', ''),
+        row.get('Authorized Person City', ''),
+        row.get('Authorized Person State', ''),
+        row.get('Authorized Person Zip', ''),
+        row.get('Authorized Person Zip Ext', ''),
+        row.get('Authorized Person Phone Number', ''),
+        row.get('Authorized Person Phone Number Ext', ''),
+        row.get('Authorized Person Email', ''),
+        row.get('Authorized Person Title', ''),
+        row.get('Authorized Person Employer', ''),
+        row.get('Category One Description', ''),
+        row.get('Category Two Description', ''),
+        row.get('Installment Type', ''),
+        int(row.get('Installment Min Range Years') or 0),
+        int(row.get('Installment Max Range Years') or 0),
+        row.get('Request for Proposal Identifier', ''),
+        row.get('State or Local Restrictions', ''),
+        row.get('State or Local Restrictions Description', ''),
+        row.get('Statewide State', ''),
+        row.get('All Public Schools Districts', ''),
+        row.get('All Non-Public schools', ''),
+        row.get('All Libraries', ''),
+        row.get('Form Version', '')
     )
 
 # === BLUEBIRD POP LIST (223) ===
@@ -578,9 +565,6 @@ def _load_kmz(provider):
 # === FINAL WORKING BBMap API — FNA RANKING FIXED + TRUE DISTANCE + NO OOM ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
-    # DEDUCT 1 POINT WHEN MAP IS OPENED (via Map button, Prev, or Next)
-    if request.args.get('deduct') == '1':
-        deduct_point()
     network = request.args.get('network', 'bluebird')
     fna_member = request.args.get('fna_member')
     distance_only = request.args.get('distance_only') == '1'
@@ -1002,254 +986,138 @@ def _download_csv_background(app):
 @erate_bp.route('/import-interactive', methods=['GET', 'POST'])
 def import_interactive():
     log("Import interactive page accessed")
-    
     if not os.path.exists(CSV_FILE):
         log("CSV not found")
         return "<h2>CSV not found: 470schema.csv</h2>", 404
-
     with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
         total = sum(1 for _ in csv.reader(f)) - 1
     log("CSV has %s rows (excluding header)", total)
-
-    # Initialize or reset config
-    if 'import_total' not in current_app.config or current_app.config['import_total'] != total:
-        log("Resetting import progress")
+    if 'import_total' not in current_app.config:
+        current_app.config['import_total'] = total
+        current_app.config['import_index'] = 1
+        current_app.config['import_success'] = 0
+        current_app.config['import_error'] = 0
+    elif current_app.config['import_total'] != total:
+        log("CSV changed, resetting progress")
         current_app.config.update({
             'import_total': total,
             'import_index': 1,
             'import_success': 0,
-            'import_error': 0,
-            'BULK_IMPORT_IN_PROGRESS': False
+            'import_error': 0
         })
-
     progress = {
         'index': current_app.config['import_index'],
         'total': current_app.config['import_total'],
         'success': current_app.config['import_success'],
         'error': current_app.config['import_error']
     }
-
     is_importing = current_app.config.get('BULK_IMPORT_IN_PROGRESS', False)
-
-    # Show complete page if import finished
     if is_importing or progress['index'] > progress['total']:
         log("Import complete page shown")
         return render_template('erate_import_complete.html', progress=progress)
-
-    # Handle POST — start import
     if request.method == 'POST' and request.form.get('action') == 'import_all':
         if is_importing:
             flash("Import already running.", "info")
-        else:
-            current_app.config['BULK_IMPORT_IN_PROGRESS'] = True
-            thread = threading.Thread(
-                target=_import_all_background,
-                args=(current_app._get_current_object(),),
-                daemon=True
-            )
-            current_app.config['IMPORT_THREAD'] = thread
-            thread.start()
-            flash("Bulk import started. Check /erate/view-log", "success")
+            return redirect(url_for('erate.import_interactive'))
+        current_app.config.update({
+            'BULK_IMPORT_IN_PROGRESS': True,
+            'import_index': 1,
+            'import_success': 0,
+            'import_error': 0
+        })
+        thread = threading.Thread(target=_import_all_background, args=(current_app._get_current_object(),))
+        thread.daemon = True
+        current_app.config['IMPORT_THREAD'] = thread
+        thread.start()
+        flash("Bulk import started. Check /erate/view-log", "success")
         return redirect(url_for('erate.import_interactive'))
-
-    # Default: show import page
     return render_template('erate_import.html', progress=progress, is_importing=is_importing)
 
 def _import_all_background(app):
     global CSV_HEADERS_LOGGED, ROW_DEBUG_COUNT
     CSV_HEADERS_LOGGED = False
     ROW_DEBUG_COUNT = 0
-    log("=== IMPORT STARTED — SMART HASH + NORMALIZATION (NO FALSE UPDATES) ===")
+    log("=== IMPORT STARTED — DEBUG ENABLED ===")
     try:
-        log("Bulk import started with intelligent update detection")
+        log("Bulk import started")
         with app.app_context():
             total = app.config['import_total']
             start_index = app.config['import_index']
         conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
         cur = conn.cursor()
-        cur.execute("ALTER TABLE erate ADD COLUMN IF NOT EXISTS content_hash TEXT")
-        conn.commit()
-
-        # 69 real columns (excluding id and content_hash)
-        columns = [
-            'app_number', 'form_nickname', 'form_pdf', 'funding_year', 'fcc_status',
-            'allowable_contract_date', 'created_datetime', 'created_by', 'certified_datetime',
-            'certified_by', 'last_modified_datetime', 'last_modified_by', 'ben', 'entity_name',
-            'org_status', 'org_type', 'applicant_type', 'website', 'latitude', 'longitude',
-            'fcc_reg_num', 'address1', 'address2', 'city', 'state', 'zip_code', 'zip_ext',
-            'email', 'phone', 'phone_ext', 'num_eligible', 'contact_name', 'contact_address1',
-            'contact_address2', 'contact_city', 'contact_state', 'contact_zip', 'contact_zip_ext',
-            'contact_phone', 'contact_phone_ext', 'contact_email', 'tech_name', 'tech_title',
-            'tech_phone', 'tech_phone_ext', 'tech_email', 'auth_name', 'auth_address',
-            'auth_city', 'auth_state', 'auth_zip', 'auth_zip_ext', 'auth_phone', 'auth_phone_ext',
-            'auth_email', 'auth_title', 'auth_employer', 'cat1_desc', 'cat2_desc',
-            'installment_type', 'installment_min', 'installment_max', 'rfp_id',
-            'state_restrictions', 'restriction_desc', 'statewide', 'all_public',
-            'all_nonpublic', 'all_libraries', 'form_version'
-        ]
-
-        def normalize_for_hash(values):
-            norm = list(values)
-            if len(norm) > 2 and norm[2]:
-                norm[2] = norm[2].split('?')[0].split('#')[0]
-            if len(norm) > 19:
-                try: norm[18] = round(float(norm[18] or 0), 6) if norm[18] not in ('', None) else None
-                except: norm[18] = None
-                try: norm[19] = round(float(norm[19] or 0), 6) if norm[19] not in ('', None) else None
-                except: norm[19] = None
-            return tuple(None if (isinstance(v, str) and v.strip() == '') else v for v in norm)
-
-        def _row_to_tuple(row):
-            form_pdf_raw = (row.get('Form PDF', '') or row.get('Form PDF Link', '') or '').strip()
-            base = 'http://publicdata.usac.org/'
-            while form_pdf_raw.startswith(base):
-                form_pdf_raw = form_pdf_raw[len(base):]
-            form_pdf = f"http://publicdata.usac.org{form_pdf_raw}" if form_pdf_raw else ''
-            return (
-                row.get('Application Number', '').strip(),
-                row.get('Form Nickname', '').strip(),
-                form_pdf,
-                row.get('Funding Year', '').strip(),
-                row.get('FCC Form 470 Status', '').strip(),
-                parse_datetime(row.get('Allowable Contract Date')),
-                parse_datetime(row.get('Created Date/Time')),
-                row.get('Created By', '').strip(),
-                parse_datetime(row.get('Certified Date/Time')),
-                row.get('Certified By', '').strip(),
-                parse_datetime(row.get('Last Modified Date/Time')),
-                row.get('Last Modified By', '').strip(),
-                row.get('Billed Entity Number', '').strip(),
-                row.get('Billed Entity Name', '').strip(),
-                row.get('Organization Status', '').strip(),
-                row.get('Organization Type', '').strip(),
-                row.get('Applicant Type', '').strip(),
-                row.get('Website URL', ''),
-                float(row.get('Latitude') or 0),
-                float(row.get('Longitude') or 0),
-                row.get('Billed Entity FCC Registration Number', '').strip(),
-                row.get('Billed Entity Address 1', ''),
-                row.get('Billed Entity Address 2', ''),
-                row.get('Billed Entity City', '').strip(),
-                row.get('Billed Entity State', '').strip(),
-                row.get('Billed Entity Zip Code', '').strip(),
-                row.get('Billed Entity Zip Code Ext', '').strip(),
-                row.get('Billed Entity Email', '').strip(),
-                row.get('Billed Entity Phone', '').strip(),
-                row.get('Billed Entity Phone Ext', '').strip(),
-                int(row.get('Number of Eligible Entities') or 0),
-                row.get('Contact Name', '').strip(),
-                row.get('Contact Address 1', ''),
-                row.get('Contact Address 2', ''),
-                row.get('Contact City', '').strip(),
-                row.get('Contact State', '').strip(),
-                row.get('Contact Zip', '').strip(),
-                row.get('Contact Zip Ext', '').strip(),
-                row.get('Contact Phone', '').strip(),
-                row.get('Contact Phone Ext', '').strip(),
-                row.get('Contact Email', '').strip(),
-                row.get('Technical Contact Name', '').strip(),
-                row.get('Technical Contact Title', '').strip(),
-                row.get('Technical Contact Phone', '').strip(),
-                row.get('Technical Contact Phone Ext', '').strip(),
-                row.get('Technical Contact Email', '').strip(),
-                row.get('Authorized Person Name', '').strip(),
-                row.get('Authorized Person Address', ''),
-                row.get('Authorized Person City', '').strip(),
-                row.get('Authorized Person State', '').strip(),
-                row.get('Authorized Person Zip', '').strip(),
-                row.get('Authorized Person Zip Ext', '').strip(),
-                row.get('Authorized Person Phone Number', '').strip(),
-                row.get('Authorized Person Phone Number Ext', '').strip(),
-                row.get('Authorized Person Email', '').strip(),
-                row.get('Authorized Person Title', '').strip(),
-                row.get('Authorized Person Employer', '').strip(),
-                row.get('Category One Description', ''),
-                row.get('Category Two Description', ''),
-                row.get('Installment Type', '').strip(),
-                int(row.get('Installment Min Range Years') or 0),
-                int(row.get('Installment Max Range Years') or 0),
-                row.get('Request for Proposal Identifier', '').strip(),
-                row.get('State or Local Restrictions', '').strip(),
-                row.get('State or Local Restrictions Description', ''),
-                row.get('Statewide State', '').strip(),
-                row.get('All Public Schools Districts', '').strip(),
-                row.get('All Non-Public schools', '').strip(),
-                row.get('All Libraries', '').strip(),
-                row.get('Form Version', '').strip()
-            )
-
         with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
             reader = csv.DictReader(f, dialect='excel')
+            log("CSV reader created with excel dialect")
             for _ in range(start_index - 1):
                 try: next(reader)
                 except StopIteration: break
-
-            batch_insert = []
-            batch_update = []
-            imported = updated = skipped = 0
+            log("Skipped to record %s", start_index)
+            batch = []
+            imported = 0
             last_heartbeat = time.time()
-
             for row in reader:
                 if time.time() - last_heartbeat > 5:
-                    log("HEARTBEAT: %s processed (%s new, %s updated, %s skipped)",
-                        imported + updated + skipped, imported, updated, skipped)
+                    log("HEARTBEAT: %s rows processed", imported)
                     last_heartbeat = time.time()
-
                 app_number = row.get('Application Number', '').strip()
-                if not app_number:
-                    continue
-
-                values = _row_to_tuple(row)  # 69 values
-                normalized = normalize_for_hash(values)
-                content_hash = hashlib.sha256('|'.join(str(v) if v is not None else '' for v in normalized).encode()).hexdigest()
-
-                cur.execute("SELECT content_hash FROM erate WHERE app_number = %s", (app_number,))
-                existing = cur.fetchone()
-
-                if existing and existing[0] == content_hash:
-                    skipped += 1
-                    continue
-                elif existing:
-                    batch_update.append(values + (content_hash, app_number))
-                    updated += 1
-                else:
-                    batch_insert.append(values + (content_hash,))  # 69 + 1 = 70
-                    imported += 1
-
-                if len(batch_insert) + len(batch_update) >= 1000:
-                    if batch_insert:
-                        cur.executemany(INSERTertSQL.rstrip(") VALUES (") + ", content_hash) VALUES (%s)", batch_insert)
+                if not app_number: continue
+                batch.append(row)
+                imported += 1
+                if len(batch) >= 1000:
+                    cur.execute(
+                        "SELECT app_number FROM erate WHERE app_number = ANY(%s)",
+                        ([r['Application Number'] for r in batch],)
+                    )
+                    existing = {row[0] for row in cur.fetchall()}
+                    filtered_batch = [r for r in batch if r['Application Number'] not in existing]
+                    if filtered_batch:
+                        try:
+                            cur.executemany(INSERT_SQL, [_row_to_tuple(r) for r in filtered_batch])
+                            conn.commit()
+                            log("COMMITTED BATCH OF %s", len(filtered_batch))
+                            cur.execute("SELECT COUNT(*) FROM erate WHERE app_number = ANY(%s)",
+                                        ([r['Application Number'] for r in filtered_batch],))
+                            actual = cur.fetchone()[0]
+                            log("VERIFIED: %s rows", actual)
+                        except Exception as e:
+                            log("COMMIT FAILED: %s", e)
+                            conn.rollback()
+                            raise
+                    with app.app_context():
+                        app.config['import_index'] += len(batch)
+                        app.config['import_success'] += len(filtered_batch)
+                        log("Progress: %s / %s", app.config['import_index'], total)
+                    batch = []
+            if batch:
+                cur.execute(
+                    "SELECT app_number FROM erate WHERE app_number = ANY(%s)",
+                    ([r['Application Number'] for r in batch],)
+                )
+                existing = {row[0] for row in cur.fetchall()}
+                filtered_batch = [r for r in batch if r['Application Number'] not in existing]
+                if filtered_batch:
+                    try:
+                        cur.executemany(INSERT_SQL, [_row_to_tuple(r) for r in filtered_batch])
                         conn.commit()
-                        log("INSERTED %s new records", len(batch_insert))
-                        batch_insert.clear()
-                    if batch_update:
-                        set_clause = ', '.join(f"{col} = %s" for col in columns)
-                        update_sql = f"UPDATE erate SET {set_clause}, content_hash = %s WHERE app_number = %s"
-                        cur.executemany(update_sql, batch_update)
-                        conn.commit()
-                        log("UPDATED %s changed records", len(batch_update))
-                        batch_update.clear()
-
-            # Final batch — SAME CORRECT METHOD AS LOOP
-            if batch_insert:
-                cur.executemany(INSERT_SQL.rstrip(") VALUES (") + ", content_hash) VALUES (%s)", batch_insert)
-                conn.commit()
-                log("FINAL INSERT: %s records", len(batch_insert))
-
-            if batch_update:
-                set_clause = ', '.join(f"{col} = %s" for col in columns)
-                update_sql = f"UPDATE erate SET {set_clause}, content_hash = %s WHERE app_number = %s"
-                cur.executemany(update_sql, batch_update)
-                conn.commit()
-                log("FINAL UPDATE: %s records", len(batch_update))
-
-        log("IMPORT COMPLETE: %s new, %s updated, %s skipped", imported, updated, skipped)
+                        log("FINAL BATCH COMMITTED: %s", len(filtered_batch))
+                        cur.execute("SELECT COUNT(*) FROM erate WHERE app_number = ANY(%s)",
+                                    ([r['Application Number'] for r in filtered_batch],))
+                        actual = cur.fetchone()[0]
+                        log("FINAL VERIFIED: %s rows", actual)
+                    except Exception as e:
+                        log("FINAL COMMIT FAILED: %s", e)
+                        conn.rollback()
+                        raise
+                with app.app_context():
+                    app.config['import_index'] = total + 1
+                    app.config['import_success'] += len(filtered_batch)
+        log("Bulk import complete: %s imported", app.config['import_success'])
     except Exception as e:
-        log("IMPORT FAILED: %s", e)
-        log(traceback.format_exc())
-        conn.rollback()
+        log("IMPORT thread CRASHED: %s", e)
+        log("Traceback: %s", traceback.format_exc())
     finally:
-        conn.close()
+        try: conn.close()
+        except: pass
         with app.app_context():
             app.config['BULK_IMPORT_IN_PROGRESS'] = False
         log("Import thread finished")
@@ -1452,106 +1320,3 @@ def logout():
     session.clear()
     flash("Logged out", "success")
     return redirect(url_for('erate.dashboard'))
-
-# === DYNAMIC COVERAGE REPORT ===
-@erate_bp.route('/coverage-report')
-def coverage_report():
-    import zipfile
-    import xml.etree.ElementTree as ET
-    from collections import defaultdict
-    import os
-
-    # Simple state bounding boxes (good enough for fiber routes)
-    STATE_BOUNDS = {
-        "AL": (30.2, 35.0, -88.5, -84.9), "AK": (51.2, 71.4, -179.2, -129.9),
-        "AZ": (31.3, 37.0, -114.8, -109.0), "AR": (33.0, 36.5, -94.6, -89.6),
-        "CA": (32.5, 42.0, -124.4, -114.1), "CO": (37.0, 41.0, -109.1, -102.0),
-        "CT": (40.9, 42.1, -73.7, -71.8), "DE": (38.4, 39.8, -75.8, -75.0),
-        "FL": (24.5, 31.0, -87.6, -80.0), "GA": (30.4, 35.0, -85.6, -80.8),
-        "ID": (42.0, 49.0, -117.0, -111.0), "IL": (37.0, 42.5, -91.5, -87.5),
-        "IN": (37.8, 41.8, -88.1, -84.8), "IA": (40.4, 43.5, -96.6, -90.1),
-        "KS": (37.0, 40.0, -102.1, -94.6), "KY": (36.5, 39.1, -89.6, -81.9),
-        "LA": (28.9, 33.0, -94.0, -88.8), "ME": (43.1, 47.5, -71.1, -66.9),
-        "MD": (37.9, 39.7, -79.5, -75.0), "MA": (41.2, 42.9, -73.5, -69.9),
-        "MI": (41.7, 48.3, -90.4, -82.4), "MN": (43.5, 49.4, -97.2, -89.5),
-        "MS": (30.2, 35.0, -91.7, -88.1), "MO": (36.0, 40.6, -95.8, -89.1),
-        "MT": (44.4, 49.0, -116.0, -104.0), "NE": (40.0, 43.0, -104.1, -95.3),
-        "NV": (35.0, 42.0, -120.0, -114.0), "NH": (42.7, 45.3, -72.6, -70.6),
-        "NJ": (38.9, 41.4, -75.6, -73.9), "NM": (31.3, 37.0, -109.1, -103.0),
-        "NY": (40.5, 45.0, -79.8, -71.9), "NC": (33.8, 36.6, -84.3, -75.4),
-        "ND": (45.9, 49.0, -104.1, -96.5), "OH": (38.4, 41.9, -84.8, -80.5),
-        "OK": (33.6, 37.0, -103.0, -94.4), "OR": (42.0, 46.3, -124.6, -116.5),
-        "PA": (39.7, 42.3, -80.6, -74.7), "RI": (41.1, 42.0, -71.9, -71.1),
-        "SC": (32.0, 35.2, -83.4, -78.5), "SD": (42.5, 45.9, -104.1, -96.5),
-        "TN": (34.9, 36.7, -90.3, -81.6), "TX": (25.8, 36.5, -106.6, -93.5),
-        "UT": (37.0, 42.0, -114.1, -109.0), "VT": (42.7, 45.0, -73.4, -71.5),
-        "VA": (36.5, 39.5, -83.7, -75.2), "WA": (45.5, 49.0, -124.8, -116.9),
-        "WV": (37.2, 40.6, -82.6, -77.7), "WI": (42.5, 47.1, -92.9, -86.8),
-        "WY": (41.0, 45.0, -111.1, -104.1)
-    }
-
-    def point_in_state(lat, lon):
-        for state, (min_lat, max_lat, min_lon, max_lon) in STATE_BOUNDS.items():
-            if min_lat <= lat <= max_lat and min_lon <= lon <= max_lon:
-                return state
-        return None
-
-    coverage = defaultdict(set)
-
-    # Bluebird
-    kmz_path = KMZ_PATH_BLUEBIRD
-    if os.path.exists(kmz_path):
-        with zipfile.ZipFile(kmz_path, 'r') as kmz:
-            kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
-            if kml_files:
-                root = ET.fromstring(kmz.read(kml_files[0]))
-                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-                for coord_elem in root.findall('.//kml:coordinates', ns):
-                    if coord_elem.text:
-                        for point in coord_elem.text.strip().split():
-                            parts = point.split(',')
-                            if len(parts) >= 2:
-                                try:
-                                    lon, lat = float(parts[0]), float(parts[1])
-                                    state = point_in_state(lat, lon)
-                                    if state:
-                                        coverage["Bluebird Network"].add(state)
-                                except: pass
-
-    # FNA Members
-    for filename in os.listdir(FNA_MEMBERS_DIR):
-        if not filename.lower().endswith('.kmz'):
-            continue
-        member_name = os.path.splitext(filename)[0].replace('_', ' ').strip()
-        path = os.path.join(FNA_MEMBERS_DIR, filename)
-        if not os.path.exists(path):
-            continue
-        try:
-            with zipfile.ZipFile(path, 'r') as kmz:
-                kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
-                if not kml_files:
-                    continue
-                root = ET.fromstring(kmz.read(kml_files[0]))
-                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-                for coord_elem in root.findall('.//kml:coordinates', ns):
-                    if coord_elem.text:
-                        for point in coord_elem.text.strip().split():
-                            parts = point.split(',')
-                            if len(parts) >= 2:
-                                try:
-                                    lon, lat = float(parts[0]), float(parts[1])
-                                    state = point_in_state(lat, lon)
-                                    if state:
-                                        coverage[member_name].add(state)
-                                except: pass
-        except: pass
-
-    # Sort and format
-    lines = []
-    for name in sorted(coverage.keys()):
-        states = sorted(coverage[name])
-        lines.append(f"Member Name = {name}")
-        lines.append(f"States with Coverage = {', '.join(states) if states else 'None'}")
-        lines.append("")
-
-    return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
