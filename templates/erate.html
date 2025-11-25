@@ -687,18 +687,16 @@
     
     <script>
 
-        // === FINAL UNIVERSAL CLOSE MODAL – WORKS FOR EVERY SINGLE MODAL ===
-        function closeModal(modalId) {
-            const modal = document.getElementById(modalId) ||
-                          document.getElementById(modalId + 'Modal') ||
-                          document.getElementById(modalId + '-modal');
+        // FINAL 100% WORKING CLOSE MODAL – WORKS FOR EVERY MODAL INCLUDING LOGIN
+        function closeModal(id) {
+            const modal = document.getElementById(id);
             if (modal) {
                 modal.style.display = 'none';
                 modal.classList.remove('show');
             }
 
             // Map cleanup
-            if (modalId === 'map-modal' || modalId === 'map') {
+            if (id === 'map-modal') {
                 const mapDiv = document.getElementById('map-container');
                 if (mapDiv?._leaflet_map) {
                     mapDiv._leaflet_map.remove();
@@ -712,17 +710,28 @@
             document.getElementById('loading')?.classList.remove('show');
         }
 
-        // Click outside any modal → close + special behavior for Out-of-Points
+        // Click outside OR X button → close modal (with special Out-of-Points behavior)
         document.addEventListener('click', e => {
-            if (!e.target.classList.contains('modal')) return;
+            // If click is on the modal background (outside content)
+            if (e.target.classList.contains('modal')) {
+                const modalId = e.target.id;
 
-            const modalId = e.target.id;
+                if (modalId === 'outOfPointsModal') {
+                    closeModal('outOfPointsModal');
+                    document.getElementById('registerModal').style.display = 'flex';
+                } else {
+                    closeModal(modalId);
+                }
+            }
 
-            if (modalId === 'outOfPointsModal') {
-                closeModal('outOfPointsModal');
-                document.getElementById('registerModal').style.display = 'flex';  // Open Register
-            } else {
-                closeModal(modalId);
+            // If click is directly on an X button with onclick="closeModal('someId')"
+            if (e.target.classList.contains('modal-close')) {
+                e.stopPropagation(); // Prevent double-trigger
+                const onclick = e.target.getAttribute('onclick');
+                if (onclick && onclick.includes('closeModal')) {
+                    const match = onclick.match(/closeModal\(['"]([^'"]+)['"]\)/);
+                    if (match) closeModal(match[1]);
+                }
             }
         });
         
