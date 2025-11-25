@@ -1070,7 +1070,7 @@ def _import_all_background(app):
         cur.execute("ALTER TABLE erate ADD COLUMN IF NOT EXISTS content_hash TEXT")
         conn.commit()
 
-        # === columns LIST — REQUIRED FOR UPDATE BATCHES ===
+        # 69 real columns (excluding id and content_hash)
         columns = [
             'app_number', 'form_nickname', 'form_pdf', 'funding_year', 'fcc_status',
             'allowable_contract_date', 'created_datetime', 'created_by', 'certified_datetime',
@@ -1088,7 +1088,6 @@ def _import_all_background(app):
             'all_nonpublic', 'all_libraries', 'form_version'
         ]
 
-        # === normalize_for_hash ===
         def normalize_for_hash(values):
             norm = list(values)
             if len(norm) > 2 and norm[2]:
@@ -1100,7 +1099,6 @@ def _import_all_background(app):
                 except: norm[19] = None
             return tuple(None if (isinstance(v, str) and v.strip() == '') else v for v in norm)
 
-        # === _row_to_tuple — 70 VALUES ===
         def _row_to_tuple(row):
             form_pdf_raw = (row.get('Form PDF', '') or row.get('Form PDF Link', '') or '').strip()
             base = 'http://publicdata.usac.org/'
@@ -1180,7 +1178,6 @@ def _import_all_background(app):
                 row.get('Form Version', '').strip()
             )
 
-        # === IMPORT LOOP ===
         with open(CSV_FILE, 'r', encoding='utf-8-sig', newline='') as f:
             reader = csv.DictReader(f, dialect='excel')
             for _ in range(start_index - 1):
@@ -1202,7 +1199,7 @@ def _import_all_background(app):
                 if not app_number:
                     continue
 
-                values = _row_to_tuple(row)  # 70 values
+                values = _row_to_tuple(row)  # 69 values
                 normalized = normalize_for_hash(values)
                 content_hash = hashlib.sha256('|'.join(str(v) if v is not None else '' for v in normalized).encode()).hexdigest()
 
@@ -1216,12 +1213,12 @@ def _import_all_background(app):
                     batch_update.append(values + (content_hash, app_number))
                     updated += 1
                 else:
-                    batch_insert.append(values + (content_hash,))  # 70 + 1 = 71
+                    batch_insert.append(values + (content_hash,))  # 69 + 1 = 70
                     imported += 1
 
                 if len(batch_insert) + len(batch_update) >= 1000:
                     if batch_insert:
-                        cur.executemany(INSERT_SQL + ", content_hash) VALUES (" + "%s," * 70 + "%s)", batch_insert)
+                        cur.executemany(INSERTertSQL.rstrip(") VALUES (") + ", content_hash) VALUES (%s)", batch_insert)
                         conn.commit()
                         log("INSERTED %s new records", len(batch_insert))
                         batch_insert.clear()
@@ -1233,15 +1230,18 @@ def _import_all_background(app):
                         log("UPDATED %s changed records", len(batch_update))
                         batch_update.clear()
 
-            # Final batch
+            # Final batch — SAME CORRECT METHOD AS LOOP
             if batch_insert:
-                cur.executemany(INSERT_SQL + ", content_hash) VALUES (" + "%s," * 70 + "%s)", batch_insert)
+                cur.executemany(INSERT_SQL.rstrip(") VALUES (") + ", content_hash) VALUES (%s)", batch_insert)
                 conn.commit()
+                log("FINAL INSERT: %s records", len(batch_insert))
+
             if batch_update:
                 set_clause = ', '.join(f"{col} = %s" for col in columns)
                 update_sql = f"UPDATE erate SET {set_clause}, content_hash = %s WHERE app_number = %s"
                 cur.executemany(update_sql, batch_update)
                 conn.commit()
+                log("FINAL UPDATE: %s records", len(batch_update))
 
         log("IMPORT COMPLETE: %s new, %s updated, %s skipped", imported, updated, skipped)
     except Exception as e:
