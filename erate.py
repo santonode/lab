@@ -19,6 +19,31 @@ import zipfile
 import xml.etree.ElementTree as ET
 import hashlib
 
+# === ORIGINAL WORKING INSERT_SQL — REQUIRED FOR IMPORT ===
+INSERT_SQL = '''
+    INSERT INTO erate (
+        app_number, form_nickname, form_pdf, funding_year, fcc_status,
+        allowable_contract_date, created_datetime, created_by, certified_datetime,
+        certified_by, last_modified_datetime, last_modified_by, ben, entity_name,
+        org_status, org_type, applicant_type, website, latitude, longitude,
+        fcc_reg_num, address1, address2, city, state, zip_code, zip_ext,
+        email, phone, phone_ext, num_eligible, contact_name, contact_address1,
+        contact_address2, contact_city, contact_state, contact_zip, contact_zip_ext,
+        contact_phone, contact_phone_ext, contact_email, tech_name, tech_title,
+        tech_phone, tech_phone_ext, tech_email, auth_name, auth_address,
+        auth_city, auth_state, auth_zip, auth_zip_ext, auth_phone, auth_phone_ext,
+        auth_email, auth_title, auth_employer, cat1_desc, cat2_desc,
+        installment_type, installment_min, installment_max, rfp_id,
+        state_restrictions, restriction_desc, statewide, all_public,
+        all_nonpublic, all_libraries, form_version
+    ) VALUES (
+        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+    )
+'''
+
 # === TRUE NEAREST FIBER DISTANCE (for table column) ===
 def get_nearest_fiber_distance(lat, lon, kmz_path):
     if not lat or not lon or not os.path.exists(kmz_path):
