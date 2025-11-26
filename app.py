@@ -45,6 +45,11 @@ def serve_thumbs(filename):
 def serve_vids(filename):
     return send_from_directory('static/vids', filename)
 
+# Add this — your private lab
+@app.route('/erate_test_lab_2025')
+def erate_test_lab():
+    return render_template('erate_test.html')
+
 # === SERVE static2/ (gear-icon, styles) ===
 @app.route('/static2/<path:filename>')
 def static2_files(filename):
