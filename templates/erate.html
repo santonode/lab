@@ -1197,115 +1197,113 @@
         });
 
         async function loadDistancesIfNeeded() {
-                const settings = await fetch('/erate/user_settings').then(r => r.json()).catch(() => ({}));
-                userFT = parseInt(settings.ft) || 100;
-                userDM = parseFloat(settings.dm) || 5.0;
+            // === CLEAN FINAL: SHOW DISTANCE COLUMN WHEN ≤ FT + CLICK TO EXCLUDE ===
+            const settings = await fetch('/erate/user_settings').then(r => r.json()).catch(() => ({}));
+            const userFT = parseInt(settings.ft) || 100;
+            const totalFiltered = {{ total_filtered }};
 
-                const total = parseInt(summaryEl.textContent.match(/of (\d+)/)?.[1] || '999');
-                if (total > userFT || isLoadingDistances) return;
+            // Respect Filter Threshold — only show distance column when ≤ FT
+            const showDistanceColumn = totalFiltered > 0 && totalFiltered <= userFT;
 
-                isLoadingDistances = true;
-                document.body.style.cursor = 'wait';
+            document.querySelectorAll('th.distance-header, td.distance-cell').forEach(el => {
+                el.style.display = showDistanceColumn ? '' : 'none';
+            });
 
-                // Always show distance column/header when calculating
-                document.querySelectorAll('.distance-header, .distance-cell').forEach(el => el.style.display = 'table-cell');
-                document.querySelectorAll('.distance-cell').forEach(c => c.textContent = '...');
-
-                // AUTO DETECT NETWORK
-                const urlParams = new URLSearchParams(window.location.search);
-                const state = urlParams.get('state')?.toUpperCase() || '';
-                const bluebirdStates = ['IA','KS','IL','MO','OK'];
-                const fnaStates = ['MI','OH','PA','FL','GA','NC','SC','LA','TN','KY','VA','WV','MD','DE','NJ'];
-                let currentNetwork = localStorage.getItem('preferredNetwork') || 'bluebird';
-                if (fnaStates.includes(state)) currentNetwork = 'fna';
-                else if (bluebirdStates.includes(state)) currentNetwork = 'bluebird';
-
-                document.getElementById('current-network-display').textContent = 
-                    currentNetwork === 'fna' ? 'FNA Network' : 'Bluebird Network';
-
-                const rows = Array.from(document.querySelectorAll('tbody tr'));
-
-                // WHEN FILTER IS OFF: populate distances but DO NOT touch visibility or count
-                if (!distanceFilterEnabled) {
-                        for (const row of rows) {
-                                const appNumber = row.querySelector('.app-number')?.textContent.trim();
-                                const cell = row.querySelector('.distance-cell');
-                                if (appNumber && appNumber !== '—' && cell) {
-                                        try {
-                                                const data = await fetch(`/erate/bbmap/${appNumber}?network=${currentNetwork}&distance_only=1`)
-                                                        .then(r => r.json());
-                                                cell.textContent = data.nearest_fiber_distance || '—';
-                                        } catch {
-                                                cell.textContent = '—';
-                                        }
-                                }
-                        }
-                        // DO NOT modify any row display or summary
-                        isLoadingDistances = false;
-                        document.body.style.cursor = 'default';
-                        updateToggleButton();
-                        return;
-                }
-
-                // WHEN FILTER IS ON: apply distance filter and update count
-                let visibleCount = 0;
-                for (const row of rows) {
-                        const appNumber = row.querySelector('.app-number')?.textContent.trim();
-                        const cell = row.querySelector('.distance-cell');
-
-                        if (!appNumber || appNumber === '—') {
-                                row.style.display = 'none';
-                                continue;
-                        }
-
-                        try {
-                                const data = await fetch(`/erate/bbmap/${appNumber}?network=${currentNetwork}&distance_only=1`)
-                                        .then(r => r.json());
-                                const dist = data.nearest_fiber_distance || '—';
-                                if (cell) cell.textContent = dist;
-
-                                const num = parseFloat(dist);
-                                if (!isNaN(num) && num <= userDM) {
-                                        row.style.display = '';
-                                        visibleCount++;
-                                } else {
-                                        row.style.display = 'none';
-                                }
-                        } catch {
-                                if (cell) cell.textContent = '—';
-                                row.style.display = 'none';
-                        }
-                }
-
-                const showing = Math.min(visibleCount, 10);
-                summaryEl.textContent = `Showing ${showing} of ${visibleCount} records (≤ ${userDM} mi)`;
-                if (loadMoreBtn) {
-                        loadMoreBtn.style.display = visibleCount > 10 ? 'block' : 'none';
-                }
-
+            if (!showDistanceColumn) {
                 isLoadingDistances = false;
                 document.body.style.cursor = 'default';
-                updateToggleButton();
+                return;
+            }
+
+            // Always calculate distances when column is visible
+            isLoadingDistances = true;
+            document.body.style.cursor = 'wait';
+            document.querySelectorAll('.distance-cell').forEach(c => c.innerHTML = '<span style="color:#999;">...</span>');
+
+            // AUTO DETECT NETWORK
+            const urlParams = new URLSearchParams(window.location.search);
+            const state = urlParams.get('state')?.toUpperCase() || '';
+            const bluebirdStates = ['IA','KS','IL','MO','OK'];
+            const fnaStates = ['MI','OH','PA','FL','GA','NC','SC','LA','TN','KY','VA','WV','MD','DE','NJ','AL'];
+            let currentNetwork = localStorage.getItem('preferredNetwork') || 'bluebird';
+            if (fnaStates.includes(state)) currentNetwork = 'fna';
+            else if (bluebirdStates.includes(state)) currentNetwork = 'bluebird';
+
+            document.getElementById('current-network-display').textContent =
+                currentNetwork === 'fna' ? 'FNA Network' : 'Bluebird Network';
+
+            const rows = Array.from(document.querySelectorAll('tbody tr'));
+
+            for (const row of rows) {
+                const appNumber = row.querySelector('.app-number')?.textContent.trim();
+                const cell = row.querySelector('.distance-cell');
+                if (!appNumber || appNumber === '—' || !cell) continue;
+
+                try {
+                    const data = await fetch(`/erate/bbmap/${appNumber}?network=${currentNetwork}&distance_only=1`)
+                        .then(r => r.json());
+                    const distText = data.nearest_fiber_distance || '—';
+
+                    cell.innerHTML = `
+                        <a href="#" class="exclude-applicant" data-appnum="${appNumber}"
+                           style="color:#dc3545; font-weight:600; text-decoration:none;">
+                            ${distText}
+                        </a>
+                    `;
+                } catch (err) {
+                    cell.innerHTML = `
+                        <a href="#" class="exclude-applicant" data-appnum="${appNumber}"
+                           style="color:#dc3545; font-weight:600; text-decoration:none;">
+                            —
+                        </a>
+                    `;
+                }
+            }
+
+            isLoadingDistances = false;
+            document.body.style.cursor = 'default';
         }
 
-        function applyDistanceFilter() {
-            loadDistancesIfNeeded();  // Re-run with current toggle state
-        }
+        // CLICK ANY RED DISTANCE TO EXCLUDE APPLICANT
+        document.querySelectorAll('.exclude-applicant').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (this.classList.contains('excluded')) return;
 
-        // Save original summary text on first load
-        let originalText = '';
+                const row = this.closest('tr');
+                row.style.opacity = '0.3';
+                row.style.pointerEvents = 'none';
+                this.textContent = 'Excluded';
+                this.style.color = '#999';
+                this.classList.add('excluded');
+
+                // Update "Showing X of Y"
+                const summary = document.querySelector('.summary');
+                if (summary) {
+                    const match = summary.textContent.match(/of (\d+)/);
+                    if (match) {
+                        const total = parseInt(match[1]);
+                        summary.textContent = summary.textContent.replace(
+                            /of \d+/, `of ${total - 1}`
+                        );
+                    }
+                }
+            });
+        });
+
+        // Load distances on page load
         window.addEventListener('load', () => {
-            originalText = summaryEl?.textContent || '';
             setTimeout(loadDistancesIfNeeded, 800);
         });
 
+        // Prevent form submit while loading
         document.getElementById('filter-form')?.addEventListener('submit', e => {
             if (isLoadingDistances) {
                 e.preventDefault();
                 alert('Please wait — calculating distances…');
             }
         });
-
+        
         // === USER SETTINGS MODAL ===
         document.getElementById('user-settings-btn')?.addEventListener('click', () => {
             fetch('/erate/user_settings')
