@@ -41,17 +41,13 @@ from flask import render_template  # ← ADD THIS AT THE TOP OF app.py
 @app.route('/erate_test_lab_2025')
 @login_required
 def erate_test_lab():
-    # This uses your REAL dashboard function — full DB, full session, full everything
+    # Use your REAL dashboard function — full database, full session
     from erate import dashboard
-    # Run the real dashboard to get all the data/context
-    response = dashboard()
-    # But force it to render our test template instead of erate.html
-    if isinstance(response, tuple):
-        # dashboard returned (html, status, headers)
-        return render_template('erate_test.html'), response[1], response[2]
-    else:
-        # dashboard returned just html string
-        return render_template('erate_test.html')
+    # Run the real dashboard to get all the data
+    with app.app_context():
+        response = dashboard()
+    # Force it to use your test template
+    return render_template('erate_test.html')
 
 # === SERVE /static/thumbs/ AND /static/vids/ ===
 @app.route('/static/thumbs/<path:filename>')
