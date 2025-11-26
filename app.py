@@ -41,6 +41,10 @@ app.register_blueprint(memes_bp, url_prefix='/memes')   # /memes, /memes/registe
 def erate_test_lab():
     return render_template('erate_test.html')
 
+@app.route('/debug_test')
+def debug_test():
+    return "DEBUG: Flask is alive! Routes are working. Template is erate_test.html"
+
 # === SERVE /static/thumbs/ AND /static/vids/ ===
 @app.route('/static/thumbs/<path:filename>')
 def serve_thumbs(filename):
