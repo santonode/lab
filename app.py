@@ -36,10 +36,25 @@ def inject_cache_buster():
 app.register_blueprint(erate_bp, url_prefix='/erate')  # /erate/, /erate/import-interactive
 app.register_blueprint(memes_bp, url_prefix='/memes')   # /memes, /memes/register, etc.
 
-# Add this — your private lab
 @app.route('/erate_test_lab_2025')
 def erate_test_lab():
-    return render_template('erate_test.html')
+    import os
+    template_path = os.path.join(app.root_path, 'templates', 'erate_test.html')
+    if not os.path.exists(template_path):
+        return f"""
+        <h1>TEMPLATE NOT FOUND</h1>
+        <p>Expected path:</p>
+        <code>{template_path}</code>
+        <p>Check your project structure on Render.</p>
+        """, 500
+    try:
+        return render_template('erate_test.html')
+    except Exception as e:
+        return f"""
+        <h1>TEMPLATE ERROR</h1>
+        <p>{str(e)}</p>
+        <p>Template exists but failed to render.</p>
+        """, 500
 
 @app.route('/debug_test')
 def debug_test():
