@@ -1163,33 +1163,6 @@
         // Remove loading when page is fully ready
         window.addEventListener('load', hideLoading);
 
-        // === FINAL & BULLETPROOF: Distance filter OFF = no filtering, no hiding, no pagination break ===
-        let isLoadingDistances = false;
-        let userFT = 100;
-        let userDM = 5.0;
-        let distanceFilterEnabled = false;  // DEFAULT OFF
-
-        const toggleBtn = document.getElementById('toggle-distance-filter');
-        const summaryEl = document.querySelector('.summary');
-        const loadMoreBtn = document.querySelector('.load-more');
-
-        function updateToggleButton() {
-            if (!toggleBtn) return;
-            if (distanceFilterEnabled) {
-                toggleBtn.textContent = `Distance filter: ON (≤ ${userDM} mi) — click to disable`;
-                toggleBtn.className = 'btn btn-success';
-            } else {
-                toggleBtn.textContent = 'Distance filter: OFF — click to enable';
-                toggleBtn.className = 'btn btn-secondary';
-            }
-        }
-
-        toggleBtn?.addEventListener('click', () => {
-            distanceFilterEnabled = !distanceFilterEnabled;
-            updateToggleButton();
-            applyDistanceFilter();  // Only re-filters when toggled
-        });
-
         async function loadDistancesIfNeeded() {
                 const settings = await fetch('/erate/user_settings').then(r => r.json()).catch(() => ({}));
                 userFT = parseInt(settings.ft) || 100;
@@ -1334,16 +1307,24 @@
             }
         });
 
-        // === SYNC NETWORK DISPLAY WITH MAP SWITCHER ===
+        // === SYNC NETWORK DISPLAY WITH MAP SWITCHER (CLEAN — NO DISTANCE FILTER) ===
         document.getElementById('network-select')?.addEventListener('change', function() {
             const network = this.value;
             const display = document.getElementById('current-network-display');
             if (display) {
                 display.textContent = network === 'fna' ? 'FNA Network' : 'Bluebird Network';
             }
-            // Also re-run distance calculation if toggle is ON
-            if (distanceFilterEnabled) {
-                applyDistanceFilter();
+            localStorage.setItem('preferredNetwork', network);
+        });
+
+        // Restore saved network on page load
+        window.addEventListener('load', () => {
+            const saved = localStorage.getItem('preferredNetwork') || 'bluebird';
+            const select = document.getElementById('network-select');
+            const display = document.getElementById('current-network-display');
+            if (select) select.value = saved;
+            if (display) {
+                display.textContent = saved === 'fna' ? 'FNA Network' : 'Bluebird Network';
             }
         });
 
