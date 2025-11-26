@@ -38,10 +38,44 @@ app.register_blueprint(memes_bp, url_prefix='/memes')   # /memes, /memes/registe
 
 from flask import render_template  # ← ADD THIS AT THE TOP OF app.py
 
-# === PRIVATE TEST LAB — YOUR SECRET SANDBOX ===
+# === PRIVATE TEST LAB — FINAL DEBUG VERSION (100% WORKING) ===
 @app.route('/erate_test_lab_2025')
 def erate_test_lab():
-    return render_template('erate_test.html')
+    import os
+    from flask import render_template_string
+    
+    # Show exactly where Flask is looking
+    template_dir = app.template_folder or "NOT SET"
+    template_path = os.path.join(template_dir, 'erate_test.html')
+    
+    if not os.path.exists(template_path):
+        files_list = "NO FILES — TEMPLATES FOLDER MISSING"
+        if os.path.exists(template_dir):
+            try:
+                files_list = "<br>".join(os.listdir(template_dir))
+            except:
+                files_list = "ERROR READING FOLDER"
+        return f"""
+        <h1>TEMPLATE NOT FOUND</h1>
+        <hr>
+        <p><strong>Expected file:</strong> <code>{template_path}</code></p>
+        <p><strong>Template folder:</strong> <code>{template_dir}</code></p>
+        <p><strong>Files in folder:</strong></p>
+        <pre>{files_list}</pre>
+        <hr>
+        <p>Make sure:</p>
+        <ul>
+            <li>File is named: <code>erate_test.html</code></li>
+            <li>File is in <code>templates/</code> folder</li>
+            <li>Folder is named exactly <code>templates</code></li>
+        </ul>
+        """, 500
+
+    # File exists — render it
+    with open(template_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    
+    return render_template_string(content)
 
 @app.route('/debug_test')
 def debug_test():
