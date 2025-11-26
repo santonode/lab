@@ -40,27 +40,26 @@ from flask import render_template  # ← ADD THIS AT THE TOP OF app.py
 
 @app.route('/erate_test_lab_2025')
 def erate_test_lab():
-    # Load the template file directly
-    template_path = os.path.join(app.root_path, 'templates', 'erate_test.html')
-    
-    if not os.path.exists(template_path):
-        return f"<h1>FILE NOT FOUND</h1><p>{template_path}</p>", 500
-    
-    with open(template_path, 'r', encoding='utf-8') as f:
-        html_content = f.read()
-    
-    # Inject minimal context so Jinja doesn't crash
-    context = {
-        'session': {'ft': 100},
+    # Hard-coded minimal context — no imports, no risk
+    fake_context = {
+        'session': {'ft': 100, 'username': 'king'},
         'total_filtered': 33,
-        'filters': lambda x: x,  # dummy filter
-        'url_for': url_for,
+        'total': 302208,
+        'cache_buster': 123456789,
+        # Fake filters so Jinja doesn't explode
+        'filters': lambda x: x,
+        'strftime': lambda dt, fmt='%m/%d/%Y': dt.strftime(fmt) if dt else '',
+        # url_for stub
+        'url_for': lambda *args, **kwargs: '#'
     }
     
-    # Render with your real app context (includes filters, session, etc.)
-    from flask import _app_ctx_stack
-    with app.app_context():
-        return render_template_string(html_content, **context)
+    try:
+        with open('templates/erate_test.html', 'r', encoding='utf-8') as f:
+            html = f.read()
+        from flask import render_template_string
+        return render_template_string(html, **fake_context)
+    except Exception as e:
+        return f"<pre>DEBUG ERROR:\n{str(e)}\n\nSTACK:\n{__import__('traceback').format_exc()}</pre>", 500
 
 # === SERVE /static/thumbs/ AND /static/vids/ ===
 @app.route('/static/thumbs/<path:filename>')
