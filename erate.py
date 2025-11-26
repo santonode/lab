@@ -1331,6 +1331,110 @@ def coverage_report():
     ]
     return "<pre style='font-family: monospace; padding: 20px; background: #f8f9fa;'>" + "\n".join(report) + "</pre>"
 
+# === DYNAMIC COVERAGE REPORT ===
+@erate_bp.route('/coverage-report')
+def coverage_report():
+    import zipfile
+    import xml.etree.ElementTree as ET
+    from collections import defaultdict
+    import os
+
+    # Simple state bounding boxes (good enough for fiber routes)
+    STATE_BOUNDS = {
+        "AL": (30.2, 35.0, -88.5, -84.9), "AK": (51.2, 71.4, -179.2, -129.9),
+        "AZ": (31.3, 37.0, -114.8, -109.0), "AR": (33.0, 36.5, -94.6, -89.6),
+        "CA": (32.5, 42.0, -124.4, -114.1), "CO": (37.0, 41.0, -109.1, -102.0),
+        "CT": (40.9, 42.1, -73.7, -71.8), "DE": (38.4, 39.8, -75.8, -75.0),
+        "FL": (24.5, 31.0, -87.6, -80.0), "GA": (30.4, 35.0, -85.6, -80.8),
+        "ID": (42.0, 49.0, -117.0, -111.0), "IL": (37.0, 42.5, -91.5, -87.5),
+        "IN": (37.8, 41.8, -88.1, -84.8), "IA": (40.4, 43.5, -96.6, -90.1),
+        "KS": (37.0, 40.0, -102.1, -94.6), "KY": (36.5, 39.1, -89.6, -81.9),
+        "LA": (28.9, 33.0, -94.0, -88.8), "ME": (43.1, 47.5, -71.1, -66.9),
+        "MD": (37.9, 39.7, -79.5, -75.0), "MA": (41.2, 42.9, -73.5, -69.9),
+        "MI": (41.7, 48.3, -90.4, -82.4), "MN": (43.5, 49.4, -97.2, -89.5),
+        "MS": (30.2, 35.0, -91.7, -88.1), "MO": (36.0, 40.6, -95.8, -89.1),
+        "MT": (44.4, 49.0, -116.0, -104.0), "NE": (40.0, 43.0, -104.1, -95.3),
+        "NV": (35.0, 42.0, -120.0, -114.0), "NH": (42.7, 45.3, -72.6, -70.6),
+        "NJ": (38.9, 41.4, -75.6, -73.9), "NM": (31.3, 37.0, -109.1, -103.0),
+        "NY": (40.5, 45.0, -79.8, -71.9), "NC": (33.8, 36.6, -84.3, -75.4),
+        "ND": (45.9, 49.0, -104.1, -96.5), "OH": (38.4, 41.9, -84.8, -80.5),
+        "OK": (33.6, 37.0, -103.0, -94.4), "OR": (42.0, 46.3, -124.6, -116.5),
+        "PA": (39.7, 42.3, -80.6, -74.7), "RI": (41.1, 42.0, -71.9, -71.1),
+        "SC": (32.0, 35.2, -83.4, -78.5), "SD": (42.5, 45.9, -104.1, -96.5),
+        "TN": (34.9, 36.7, -90.3, -81.6), "TX": (25.8, 36.5, -106.6, -93.5),
+        "UT": (37.0, 42.0, -114.1, -109.0), "VT": (42.7, 45.0, -73.4, -71.5),
+        "VA": (36.5, 39.5, -83.7, -75.2), "WA": (45.5, 49.0, -124.8, -116.9),
+        "WV": (37.2, 40.6, -82.6, -77.7), "WI": (42.5, 47.1, -92.9, -86.8),
+        "WY": (41.0, 45.0, -111.1, -104.1)
+    }
+
+    def point_in_state(lat, lon):
+        for state, (min_lat, max_lat, min_lon, max_lon) in STATE_BOUNDS.items():
+            if min_lat <= lat <= max_lat and min_lon <= lon <= max_lon:
+                return state
+        return None
+
+    coverage = defaultdict(set)
+
+    # Bluebird
+    kmz_path = KMZ_PATH_BLUEBIRD
+    if os.path.exists(kmz_path):
+        with zipfile.ZipFile(kmz_path, 'r') as kmz:
+            kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
+            if kml_files:
+                root = ET.fromstring(kmz.read(kml_files[0]))
+                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+                for coord_elem in root.findall('.//kml:coordinates', ns):
+                    if coord_elem.text:
+                        for point in coord_elem.text.strip().split():
+                            parts = point.split(',')
+                            if len(parts) >= 2:
+                                try:
+                                    lon, lat = float(parts[0]), float(parts[1])
+                                    state = point_in_state(lat, lon)
+                                    if state:
+                                        coverage["Bluebird Network"].add(state)
+                                except: pass
+
+    # FNA Members
+    for filename in os.listdir(FNA_MEMBERS_DIR):
+        if not filename.lower().endswith('.kmz'):
+            continue
+        member_name = os.path.splitext(filename)[0].replace('_', ' ').strip()
+        path = os.path.join(FNA_MEMBERS_DIR, filename)
+        if not os.path.exists(path):
+            continue
+        try:
+            with zipfile.ZipFile(path, 'r') as kmz:
+                kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
+                if not kml_files:
+                    continue
+                root = ET.fromstring(kmz.read(kml_files[0]))
+                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+                for coord_elem in root.findall('.//kml:coordinates', ns):
+                    if coord_elem.text:
+                        for point in coord_elem.text.strip().split():
+                            parts = point.split(',')
+                            if len(parts) >= 2:
+                                try:
+                                    lon, lat = float(parts[0]), float(parts[1])
+                                    state = point_in_state(lat, lon)
+                                    if state:
+                                        coverage[member_name].add(state)
+                                except: pass
+        except: pass
+
+    # Sort and format
+    lines = []
+    for name in sorted(coverage.keys()):
+        states = sorted(coverage[name])
+        lines.append(f"Member Name = {name}")
+        lines.append(f"States with Coverage = {', '.join(states) if states else 'None'}")
+        lines.append("")
+
+    return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
+
+
 @erate_bp.route('/_test')  # ← underscore so no one guesses it
 def erate_test():
     return render_template('erate_test.html')
