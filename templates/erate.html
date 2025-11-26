@@ -1196,62 +1196,19 @@
             applyDistanceFilter();  // Only re-filters when toggled
         });
 
-        // === FINAL: CLICK RED DISTANCE → REMOVE APPLICANT + PERSIST + RESPECT FT ===
-        let excludedApps = new Set(JSON.parse(localStorage.getItem('erate_excluded') || '[]'));
-
-        function renderTable() {
-            const rows = document.querySelectorAll('tbody tr');
-            let visible = 0;
-            let shown = 0;
-
-            rows.forEach(row => {
-                const appNum = row.querySelector('.app-number')?.textContent.trim();
-                if (excludedApps.has(appNum)) {
-                    row.style.display = 'none';
-                } else {
-                    row.style.display = '';
-                    visible++;
-                    if (shown < 10) shown++;
-                }
-            });
-
-            const summary = document.querySelector('.summary');
-            if (summary) {
-                summary.textContent = `Showing ${shown} of ${visible} records`;
-            }
-        }
-
-        function attachExclusionHandlers() {
-            document.querySelectorAll('.exclude-applicant').forEach(link => {
-                if (link.dataset.bound) return;
-                link.dataset.bound = 'true';
-
-                link.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    const appNum = this.dataset.appnum;
-                    if (!appNum) return;
-
-                    console.log("EXCLUDED:", appNum);
-                    excludedApps.add(appNum);
-                    localStorage.setItem('erate_excluded', JSON.stringify([...excludedApps]));
-
-                    renderTable();
-                });
-            });
-        }
-
+        // === FINAL CLEAN: SHOW DISTANCE COLUMN WHEN ≤ FT + CLICK TO EXCLUDE ===
         async function loadDistancesIfNeeded() {
             const settings = await fetch('/erate/user_settings').then(r => r.json()).catch(() => ({}));
             const userFT = parseInt(settings.ft) || 100;
             const totalFiltered = {{ total_filtered }};
 
             const showDistanceColumn = totalFiltered > 0 && totalFiltered <= userFT;
+
             document.querySelectorAll('th.distance-header, td.distance-cell').forEach(el => {
                 el.style.display = showDistanceColumn ? '' : 'none';
             });
 
             if (!showDistanceColumn) {
-                renderTable();
                 isLoadingDistances = false;
                 document.body.style.cursor = 'default';
                 return;
@@ -1261,6 +1218,7 @@
             document.body.style.cursor = 'wait';
             document.querySelectorAll('.distance-cell').forEach(c => c.innerHTML = '<span style="color:#999;">...</span>');
 
+            // AUTO DETECT NETWORK
             const urlParams = new URLSearchParams(window.location.search);
             const state = urlParams.get('state')?.toUpperCase() || '';
             const bluebirdStates = ['IA','KS','IL','MO','OK'];
@@ -1272,7 +1230,7 @@
             document.getElementById('current-network-display').textContent =
                 currentNetwork === 'fna' ? 'FNA Network' : 'Bluebird Network';
 
-            const rows = document.querySelectorAll('tbody tr');
+            const rows = Array.from(document.querySelectorAll('tbody tr'));
 
             for (const row of rows) {
                 const appNumber = row.querySelector('.app-number')?.textContent.trim();
@@ -1300,19 +1258,137 @@
                 }
             }
 
-            attachExclusionHandlers();
-            renderTable();
-
+            // ATTACH CLICK HANDLERS AFTER DISTANCES LOAD
             isLoadingDistances = false;
             document.body.style.cursor = 'default';
+            attachExclusionHandlers();   // ← FINAL STEP — CLICK TO EXCLUDE WORKS
         }
 
+        // CLICK TO EXCLUDE — WITH CONSOLE LOG
+        function attachExclusionHandlers() {
+            document.querySelectorAll('.exclude-applicant:not(.excluded)').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    console.log("EXCLUDE CLICKED:", this.dataset.appnum);  // YOU WILL SEE THIS
+
+                    if (this.classList.contains('excluded')) return;
+
+                    const row = this.closest('tr');
+                    row.style.opacity = '0.3';
+                    row.style.pointerEvents = 'none';
+                    this.textContent = 'Excluded';
+                    this.style.color = '#999';
+                    this.classList.add('excluded');
+
+                    const summary = document.querySelector('.summary');
+                    if (summary) {
+                        const match = summary.textContent.match(/of (\d+)/);
+                        if (match) {
+                            const total = parseInt(match[1]);
+                            summary.textContent = summary.textContent.replace(/of \d+/, `of ${total - 1}`);
+                        }
+                    }
+                });
+            });
+        }
+
+        // Run on load
         window.addEventListener('load', () => {
-            setTimeout(() => {
-                loadDistancesIfNeeded();
-                renderTable();
-            }, 800);
+            setTimeout(loadDistancesIfNeeded, 800);
         });
+        
+        // === USER SETTINGS MODAL ===
+        document.getElementById('user-settings-btn')?.addEventListener('click', () => {
+            fetch('/erate/user_settings')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('settings-ft').value = data.ft || 100;
+                    document.getElementById('settings-dm').value = data.dm || 5.0;
+                    document.getElementById('settings-modal').classList.add('show');
+                })
+                .catch(() => {
+                    document.getElementById('settings-ft').value = 100;
+                    document.getElementById('settings-dm').value = 5.0;
+                    document.getElementById('settings-modal').classList.add('show');
+                });
+        });
+
+        document.getElementById('settings-form')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            fetch('/erate/user_settings', {
+                method: 'POST',
+                body: formData
+            }).then(() => {
+                location.reload();
+            });
+        });
+
+        // Close modal when clicking outside or X
+        document.getElementById('settings-modal')?.addEventListener('click', (e) => {
+            if (e.target === document.getElementById('settings-modal') || e.target.classList.contains('modal-close')) {
+                document.getElementById('settings-modal').classList.remove('show');
+            }
+        });
+
+        // === SYNC NETWORK DISPLAY WITH MAP SWITCHER ===
+        document.getElementById('network-select')?.addEventListener('change', function() {
+            const network = this.value;
+            const display = document.getElementById('current-network-display');
+            if (display) {
+                display.textContent = network === 'fna' ? 'FNA Network' : 'Bluebird Network';
+            }
+            // Also re-run distance calculation if toggle is ON
+            if (distanceFilterEnabled) {
+                applyDistanceFilter();
+            }
+        });
+
+        // Also update on page load if user has a saved preference
+        window.addEventListener('load', () => {
+            const saved = localStorage.getItem('preferredNetwork') || 'bluebird';
+            const display = document.getElementById('current-network-display');
+            if (display) {
+                display.textContent = saved === 'fna' ? 'FNA Network' : 'Bluebird Network';
+            }
+        });
+
+        // === FINAL: CLICK RED DISTANCE → REMOVE FROM RESULTS + PERSIST ACROSS PAGES ===
+        let excludedApps = new Set(JSON.parse(localStorage.getItem('erate_excluded') || '[]'));
+
+        function attachExclusionHandlers() {
+            document.querySelectorAll('.exclude-applicant').forEach(link => {
+                if (link.dataset.bound) return;
+                link.dataset.bound = 'true';
+
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const appNum = this.dataset.appnum;
+                    if (!appNum || excludedApps.has(appNum)) return;
+
+                    console.log("EXCLUDED:", appNum);
+                    excludedApps.add(appNum);
+                    localStorage.setItem('erate_excluded', JSON.stringify([...excludedApps]));
+
+                    // Remove row completely
+                    const row = this.closest('tr');
+                    row.remove();
+
+                    // Update summary count
+                    const summary = document.querySelector('.summary');
+                    if (summary) {
+                        const match = summary.textContent.match(/of (\d+)/);
+                        if (match) {
+                            const total = parseInt(match[1]);
+                            summary.textContent = summary.textContent.replace(/of \d+/, `of ${total - 1}`);
+                        }
+                    }
+                });
+            });
+        }
+
+        // Call after distances load
+        attachExclusionHandlers();
         
     </script>
 </body>
