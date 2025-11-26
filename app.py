@@ -38,48 +38,29 @@ app.register_blueprint(memes_bp, url_prefix='/memes')   # /memes, /memes/registe
 
 from flask import render_template  # ← ADD THIS AT THE TOP OF app.py
 
-# === PRIVATE TEST LAB — FINAL DEBUG VERSION (100% WORKING) ===
 @app.route('/erate_test_lab_2025')
 def erate_test_lab():
-    import os
-    from flask import render_template_string
-    
-    # Show exactly where Flask is looking
-    template_dir = app.template_folder or "NOT SET"
-    template_path = os.path.join(template_dir, 'erate_test.html')
+    # Load the template file directly
+    template_path = os.path.join(app.root_path, 'templates', 'erate_test.html')
     
     if not os.path.exists(template_path):
-        files_list = "NO FILES — TEMPLATES FOLDER MISSING"
-        if os.path.exists(template_dir):
-            try:
-                files_list = "<br>".join(os.listdir(template_dir))
-            except:
-                files_list = "ERROR READING FOLDER"
-        return f"""
-        <h1>TEMPLATE NOT FOUND</h1>
-        <hr>
-        <p><strong>Expected file:</strong> <code>{template_path}</code></p>
-        <p><strong>Template folder:</strong> <code>{template_dir}</code></p>
-        <p><strong>Files in folder:</strong></p>
-        <pre>{files_list}</pre>
-        <hr>
-        <p>Make sure:</p>
-        <ul>
-            <li>File is named: <code>erate_test.html</code></li>
-            <li>File is in <code>templates/</code> folder</li>
-            <li>Folder is named exactly <code>templates</code></li>
-        </ul>
-        """, 500
-
-    # File exists — render it
-    with open(template_path, 'r', encoding='utf-8') as f:
-        content = f.read()
+        return f"<h1>FILE NOT FOUND</h1><p>{template_path}</p>", 500
     
-    return render_template_string(content)
-
-@app.route('/debug_test')
-def debug_test():
-    return "DEBUG: Flask is alive! Routes are working. Template is erate_test.html"
+    with open(template_path, 'r', encoding='utf-8') as f:
+        html_content = f.read()
+    
+    # Inject minimal context so Jinja doesn't crash
+    context = {
+        'session': {'ft': 100},
+        'total_filtered': 33,
+        'filters': lambda x: x,  # dummy filter
+        'url_for': url_for,
+    }
+    
+    # Render with your real app context (includes filters, session, etc.)
+    from flask import _app_ctx_stack
+    with app.app_context():
+        return render_template_string(html_content, **context)
 
 # === SERVE /static/thumbs/ AND /static/vids/ ===
 @app.route('/static/thumbs/<path:filename>')
