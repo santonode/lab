@@ -1259,10 +1259,9 @@
             }
 
             // ATTACH CLICK HANDLERS AFTER DISTANCES LOAD
-            attachExclusionHandlers();
-
             isLoadingDistances = false;
             document.body.style.cursor = 'default';
+            attachExclusionHandlers();   // ← FINAL STEP — CLICK TO EXCLUDE WORKS
         }
 
         // CLICK TO EXCLUDE — WITH CONSOLE LOG
@@ -1354,32 +1353,42 @@
             }
         });
 
-        // === CLICK ANY RED DISTANCE (— or number) TO EXCLUDE APPLICANT ===
-        document.querySelectorAll('.exclude-applicant').forEach(link => {
-            link.addEventListener('click', function(e) {
-                e.preventDefault();
-                if (this.classList.contains('excluded')) return;
+        // === FINAL: CLICK RED DISTANCE → REMOVE FROM RESULTS + PERSIST ACROSS PAGES ===
+        let excludedApps = new Set(JSON.parse(localStorage.getItem('erate_excluded') || '[]'));
 
-                const row = this.closest('tr');
-                row.style.opacity = '0.3';
-                row.style.pointerEvents = 'none';
-                this.textContent = 'Excluded';
-                this.style.color = '#999';
-                this.classList.add('excluded');
+        function attachExclusionHandlers() {
+            document.querySelectorAll('.exclude-applicant').forEach(link => {
+                if (link.dataset.bound) return;
+                link.dataset.bound = 'true';
 
-                // Update "Showing X of Y" count
-                const summary = document.querySelector('.summary');
-                if (summary) {
-                    const match = summary.textContent.match(/of (\d+)/);
-                    if (match) {
-                        const total = parseInt(match[1]);
-                        summary.textContent = summary.textContent.replace(
-                            /of \d+/, `of ${total - 1}`
-                        );
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const appNum = this.dataset.appnum;
+                    if (!appNum || excludedApps.has(appNum)) return;
+
+                    console.log("EXCLUDED:", appNum);
+                    excludedApps.add(appNum);
+                    localStorage.setItem('erate_excluded', JSON.stringify([...excludedApps]));
+
+                    // Remove row completely
+                    const row = this.closest('tr');
+                    row.remove();
+
+                    // Update summary count
+                    const summary = document.querySelector('.summary');
+                    if (summary) {
+                        const match = summary.textContent.match(/of (\d+)/);
+                        if (match) {
+                            const total = parseInt(match[1]);
+                            summary.textContent = summary.textContent.replace(/of \d+/, `of ${total - 1}`);
+                        }
                     }
-                }
+                });
             });
-        });
+        }
+
+        // Call after distances load
+        attachExclusionHandlers();
         
     </script>
 </body>
