@@ -39,27 +39,19 @@ app.register_blueprint(memes_bp, url_prefix='/memes')   # /memes, /memes/registe
 from flask import render_template  # ← ADD THIS AT THE TOP OF app.py
 
 @app.route('/erate_test_lab_2025')
+@login_required
 def erate_test_lab():
-    # Hard-coded minimal context — no imports, no risk
-    fake_context = {
-        'session': {'ft': 100, 'username': 'king'},
-        'total_filtered': 33,
-        'total': 302208,
-        'cache_buster': 123456789,
-        # Fake filters so Jinja doesn't explode
-        'filters': lambda x: x,
-        'strftime': lambda dt, fmt='%m/%d/%Y': dt.strftime(fmt) if dt else '',
-        # url_for stub
-        'url_for': lambda *args, **kwargs: '#'
-    }
-    
-    try:
-        with open('templates/erate_test.html', 'r', encoding='utf-8') as f:
-            html = f.read()
-        from flask import render_template_string
-        return render_template_string(html, **fake_context)
-    except Exception as e:
-        return f"<pre>DEBUG ERROR:\n{str(e)}\n\nSTACK:\n{__import__('traceback').format_exc()}</pre>", 500
+    # This uses your REAL dashboard function — full DB, full session, full everything
+    from erate import dashboard
+    # Run the real dashboard to get all the data/context
+    response = dashboard()
+    # But force it to render our test template instead of erate.html
+    if isinstance(response, tuple):
+        # dashboard returned (html, status, headers)
+        return render_template('erate_test.html'), response[1], response[2]
+    else:
+        # dashboard returned just html string
+        return render_template('erate_test.html')
 
 # === SERVE /static/thumbs/ AND /static/vids/ ===
 @app.route('/static/thumbs/<path:filename>')
