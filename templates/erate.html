@@ -478,7 +478,12 @@
                         <td><span class="entity-name">{{ row.entity_name|default('—') }}</span></td>
                         <td>{{ row.state|default('—') }}</td>
                         <td class="modified">{{ row.last_modified_datetime|strftime('%m/%d/%Y') if row.last_modified_datetime else '—' }}</td>
-                        <td class="distance-cell" style="display:none; color:#dc3545; font-weight:600;">—</td>
+                        <td class="distance-cell" style="display:none;">
+                            <a href="#" class="exclude-applicant" data-appnum="{{ row.app_number|default('') }}"
+                               style="color:#dc3545; font-weight:600; text-decoration:none;">
+                                —
+                            </a>
+                        </td>
                         <td><button class="btn btn-primary btn-sm">Map</button></td>
                     </tr>
                     {% endfor %}
@@ -1355,6 +1360,33 @@
             if (display) {
                 display.textContent = saved === 'fna' ? 'FNA Network' : 'Bluebird Network';
             }
+        });
+
+        // === CLICK ANY RED DISTANCE (— or number) TO EXCLUDE APPLICANT ===
+        document.querySelectorAll('.exclude-applicant').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (this.classList.contains('excluded')) return;
+
+                const row = this.closest('tr');
+                row.style.opacity = '0.3';
+                row.style.pointerEvents = 'none';
+                this.textContent = 'Excluded';
+                this.style.color = '#999';
+                this.classList.add('excluded');
+
+                // Update "Showing X of Y" count
+                const summary = document.querySelector('.summary');
+                if (summary) {
+                    const match = summary.textContent.match(/of (\d+)/);
+                    if (match) {
+                        const total = parseInt(match[1]);
+                        summary.textContent = summary.textContent.replace(
+                            /of \d+/, `of ${total - 1}`
+                        );
+                    }
+                }
+            });
         });
         
     </script>
