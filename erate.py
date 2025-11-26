@@ -1315,12 +1315,12 @@ def user_settings():
                 "dm": float(row[1]) if row and row[1] is not None else 5.0
             })
 
+@erate_bp.route('/erate_test')
+def erate_test():
+    return render_template('erate_test.html')
+
 @erate_bp.route('/logout')
 def logout():
     session.clear()
     flash("Logged out", "success")
     return redirect(url_for('erate.dashboard'))
-
-@erate_bp.route('/erate_test')
-def erate_test():
-    return render_template('erate_test.html')
