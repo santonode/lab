@@ -1,5 +1,5 @@
 # app.py
-from flask import Flask, send_from_directory, redirect, url_for, render_template
+from flask import Flask, send_from_directory, redirect, url_for
 import os
 from datetime import datetime
 
@@ -35,19 +35,6 @@ def inject_cache_buster():
 # === REGISTER BLUEPRINTS WITH PREFIXES ===
 app.register_blueprint(erate_bp, url_prefix='/erate')  # /erate/, /erate/import-interactive
 app.register_blueprint(memes_bp, url_prefix='/memes')   # /memes, /memes/register, etc.
-
-from flask import render_template  # ← ADD THIS AT THE TOP OF app.py
-
-@app.route('/erate_test_lab_2025')
-@login_required
-def erate_test_lab():
-    # Use your REAL dashboard function — full database, full session
-    from erate import dashboard
-    # Run the real dashboard to get all the data
-    with app.app_context():
-        response = dashboard()
-    # Force it to use your test template
-    return render_template('erate_test.html')
 
 # === SERVE /static/thumbs/ AND /static/vids/ ===
 @app.route('/static/thumbs/<path:filename>')
