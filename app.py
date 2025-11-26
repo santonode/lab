@@ -36,6 +36,11 @@ def inject_cache_buster():
 app.register_blueprint(erate_bp, url_prefix='/erate')  # /erate/, /erate/import-interactive
 app.register_blueprint(memes_bp, url_prefix='/memes')   # /memes, /memes/register, etc.
 
+# Add this — your private lab
+@app.route('/erate_test_lab_2025')
+def erate_test_lab():
+    return render_template('erate_test.html')
+
 # === SERVE /static/thumbs/ AND /static/vids/ ===
 @app.route('/static/thumbs/<path:filename>')
 def serve_thumbs(filename):
@@ -44,11 +49,6 @@ def serve_thumbs(filename):
 @app.route('/static/vids/<path:filename>')
 def serve_vids(filename):
     return send_from_directory('static/vids', filename)
-
-# Add this — your private lab
-@app.route('/erate_test_lab_2025')
-def erate_test_lab():
-    return render_template('erate_test.html')
 
 # === SERVE static2/ (gear-icon, styles) ===
 @app.route('/static2/<path:filename>')
