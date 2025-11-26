@@ -1320,3 +1320,7 @@ def logout():
     session.clear()
     flash("Logged out", "success")
     return redirect(url_for('erate.dashboard'))
+
+@erate_bp.route('/erate_test')
+def erate_test():
+    return render_template('erate_test.html')
