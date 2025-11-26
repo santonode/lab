@@ -1196,13 +1196,12 @@
             applyDistanceFilter();  // Only re-filters when toggled
         });
 
+        // === FINAL CLEAN: SHOW DISTANCE COLUMN WHEN ≤ FT + CLICK TO EXCLUDE ===
         async function loadDistancesIfNeeded() {
-            // === CLEAN FINAL: SHOW DISTANCE COLUMN WHEN ≤ FT + CLICK TO EXCLUDE ===
             const settings = await fetch('/erate/user_settings').then(r => r.json()).catch(() => ({}));
             const userFT = parseInt(settings.ft) || 100;
             const totalFiltered = {{ total_filtered }};
 
-            // Respect Filter Threshold — only show distance column when ≤ FT
             const showDistanceColumn = totalFiltered > 0 && totalFiltered <= userFT;
 
             document.querySelectorAll('th.distance-header, td.distance-cell').forEach(el => {
@@ -1215,7 +1214,6 @@
                 return;
             }
 
-            // Always calculate distances when column is visible
             isLoadingDistances = true;
             document.body.style.cursor = 'wait';
             document.querySelectorAll('.distance-cell').forEach(c => c.innerHTML = '<span style="color:#999;">...</span>');
@@ -1224,7 +1222,7 @@
             const urlParams = new URLSearchParams(window.location.search);
             const state = urlParams.get('state')?.toUpperCase() || '';
             const bluebirdStates = ['IA','KS','IL','MO','OK'];
-            const fnaStates = ['MI','OH','PA','FL','GA','NC','SC','LA','TN','KY','VA','WV','MD','DE','NJ','AL'];
+            const fnaStates = ['MI','OH','PA','FL','GA','NC','SC','LA','TN','KY','VA','WV','MD','DE','NJ'];
             let currentNetwork = localStorage.getItem('preferredNetwork') || 'bluebird';
             if (fnaStates.includes(state)) currentNetwork = 'fna';
             else if (bluebirdStates.includes(state)) currentNetwork = 'bluebird';
@@ -1250,7 +1248,7 @@
                             ${distText}
                         </a>
                     `;
-                } catch (err) {
+                } catch {
                     cell.innerHTML = `
                         <a href="#" class="exclude-applicant" data-appnum="${appNumber}"
                            style="color:#dc3545; font-weight:600; text-decoration:none;">
@@ -1260,48 +1258,44 @@
                 }
             }
 
+            // ATTACH CLICK HANDLERS AFTER DISTANCES LOAD
+            attachExclusionHandlers();
+
             isLoadingDistances = false;
             document.body.style.cursor = 'default';
         }
 
-        // CLICK ANY RED DISTANCE TO EXCLUDE APPLICANT
-        document.querySelectorAll('.exclude-applicant').forEach(link => {
-            link.addEventListener('click', function(e) {
-                e.preventDefault();
-                if (this.classList.contains('excluded')) return;
+        // CLICK TO EXCLUDE — WITH CONSOLE LOG
+        function attachExclusionHandlers() {
+            document.querySelectorAll('.exclude-applicant:not(.excluded)').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    console.log("EXCLUDE CLICKED:", this.dataset.appnum);  // YOU WILL SEE THIS
 
-                const row = this.closest('tr');
-                row.style.opacity = '0.3';
-                row.style.pointerEvents = 'none';
-                this.textContent = 'Excluded';
-                this.style.color = '#999';
-                this.classList.add('excluded');
+                    if (this.classList.contains('excluded')) return;
 
-                // Update "Showing X of Y"
-                const summary = document.querySelector('.summary');
-                if (summary) {
-                    const match = summary.textContent.match(/of (\d+)/);
-                    if (match) {
-                        const total = parseInt(match[1]);
-                        summary.textContent = summary.textContent.replace(
-                            /of \d+/, `of ${total - 1}`
-                        );
+                    const row = this.closest('tr');
+                    row.style.opacity = '0.3';
+                    row.style.pointerEvents = 'none';
+                    this.textContent = 'Excluded';
+                    this.style.color = '#999';
+                    this.classList.add('excluded');
+
+                    const summary = document.querySelector('.summary');
+                    if (summary) {
+                        const match = summary.textContent.match(/of (\d+)/);
+                        if (match) {
+                            const total = parseInt(match[1]);
+                            summary.textContent = summary.textContent.replace(/of \d+/, `of ${total - 1}`);
+                        }
                     }
-                }
+                });
             });
-        });
+        }
 
-        // Load distances on page load
+        // Run on load
         window.addEventListener('load', () => {
             setTimeout(loadDistancesIfNeeded, 800);
-        });
-
-        // Prevent form submit while loading
-        document.getElementById('filter-form')?.addEventListener('submit', e => {
-            if (isLoadingDistances) {
-                e.preventDefault();
-                alert('Please wait — calculating distances…');
-            }
         });
         
         // === USER SETTINGS MODAL ===
