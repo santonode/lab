@@ -457,9 +457,6 @@
             <strong>Current Network:</strong> 
             <span id="current-network-display">Bluebird Network</span>
             &nbsp;&nbsp;|&nbsp;&nbsp;
-            <button id="toggle-distance-filter" class="btn btn-secondary" style="font-size:0.85rem;">
-                Distance filter: OFF — click to enable
-            </button>
         </div>
         {% endif %}
         <table>
@@ -1167,33 +1164,27 @@
         // Remove loading when page is fully ready
         window.addEventListener('load', hideLoading);
 
-        // === FINAL & BULLETPROOF: Distance filter OFF = no filtering, no hiding, no pagination break ===
-        let isLoadingDistances = false;
-        let userFT = 100;
-        let userDM = 5.0;
-        let distanceFilterEnabled = false;  // DEFAULT OFF
+        // === CLEAN: Show Distance Column Only When Results ≤ FT ===
+        const userFT = {{ session.ft | default(100) | int }};
+        const totalFiltered = {{ total_filtered | default(0) }};
 
-        const toggleBtn = document.getElementById('toggle-distance-filter');
-        const summaryEl = document.querySelector('.summary');
-        const loadMoreBtn = document.querySelector('.load-more');
+        function updateDistanceColumnVisibility() {
+            const distanceElements = document.querySelectorAll('th.distance-header, td.distance-cell');
+            const shouldShow = totalFiltered > 0 && totalFiltered <= userFT;
 
-        function updateToggleButton() {
-            if (!toggleBtn) return;
-            if (distanceFilterEnabled) {
-                toggleBtn.textContent = `Distance filter: ON (≤ ${userDM} mi) — click to disable`;
-                toggleBtn.className = 'btn btn-success';
-            } else {
-                toggleBtn.textContent = 'Distance filter: OFF — click to enable';
-                toggleBtn.className = 'btn btn-secondary';
-            }
+            distanceElements.forEach(el => {
+                el.style.display = shouldShow ? '' : 'none';
+            });
         }
 
-        toggleBtn?.addEventListener('click', () => {
-            distanceFilterEnabled = !distanceFilterEnabled;
-            updateToggleButton();
-            applyDistanceFilter();  // Only re-filters when toggled
-        });
+        // Run on page load
+        window.addEventListener('load', updateDistanceColumnVisibility);
 
+        // Re-run when network changes (in case it reloads)
+        document.getElementById('network-select')?.addEventListener('change', () => {
+            setTimeout(updateDistanceColumnVisibility, 300);
+        });
+        
         async function loadDistancesIfNeeded() {
                 const settings = await fetch('/erate/user_settings').then(r => r.json()).catch(() => ({}));
                 userFT = parseInt(settings.ft) || 100;
