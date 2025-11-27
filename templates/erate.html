@@ -808,7 +808,7 @@
                     const urlParams = new URLSearchParams(window.location.search);
                     const state = urlParams.get('state')?.toUpperCase() || '';
                     const bluebirdStates = ['IA','KS','IL','MO','OK'];
-                    const fnaStates = ['MI','OH','PA','FL','GA','NC','SC','LA','TN','KY','VA','WV','MD','DE','NJ'];
+                    const fnaStates = ['MI','OH','PA','FL','GA','NC','SC','LA','TN','KY','VA','WV','MD','DE','NJ','AL'];
                     let network = localStorage.getItem('preferredNetwork') || 'bluebird';
                     if (fnaStates.includes(state)) {
                         network = 'fna';
