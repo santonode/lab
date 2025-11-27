@@ -491,10 +491,12 @@
                 {% endif %}
             </tbody>
         </table>
-        <!-- FINAL PREV / NEXT + POINT DEDUCTION -->
+        <!-- FINAL: PREV + EXPORT + NEXT BUTTONS -->
         {% if has_more or next_offset|default(10) > 10 %}
         <div style="text-align:center; margin:40px 0;">
-            <div style="display:inline-flex; gap:10px; flex-wrap:nowrap; justify-content:center;">
+            <div style="display:inline-flex; gap:12px; flex-wrap:nowrap; justify-content:center; align-items:center;">
+                
+                <!-- PREV BUTTON -->
                 {% if next_offset|default(10) > 10 %}
                     <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset - 20 }}&deduct=1"
                        class="btn btn-primary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px;">
@@ -506,6 +508,14 @@
                     </span>
                 {% endif %}
 
+                <!-- EXPORT BUTTON — ONE-CLICK DOWNLOAD -->
+                <a href="/erate/download-export" 
+                   class="btn btn-success btn-sm" 
+                   style="padding:6px 12px; font-size:0.8rem; min-width:68px; font-weight:600;">
+                    Export
+                </a>
+
+                <!-- NEXT BUTTON -->
                 {% if has_more %}
                     <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset|default(10) }}&deduct=1"
                        class="btn btn-primary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px;">
