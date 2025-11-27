@@ -491,6 +491,7 @@
                 {% endif %}
             </tbody>
         </table>
+
         <!-- FINAL: PREV + EXPORT + NEXT — PERFECT LOGIC -->
         {% if has_more or next_offset|default(10) > 10 %}
         <div style="text-align:center; margin:40px 0;">
@@ -508,8 +509,8 @@
                     </span>
                 {% endif %}
 
-                <!-- EXPORT BUTTON — ONLY WHEN DISTANCE COLUMN IS VISIBLE -->
-                {% if total_filtered <= 100 and total_filtered > 0 %}
+                <!-- EXPORT BUTTON — EXACT SAME LOGIC AS DISTANCE COLUMN -->
+                {% if total_filtered <= (session.ft | default(100) | int) and total_filtered > 0 %}
                     <a href="/erate/download-export"
                        class="btn btn-danger btn-sm"
                        style="padding:6px 12px; font-size:0.8rem; min-width:68px; font-weight:600; color:white;">
