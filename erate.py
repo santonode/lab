@@ -1432,7 +1432,8 @@ def add_to_export():
         return jsonify({"error": "Missing app_number"}), 400
 
     # Build user-specific CSV: exports/username_001.csv
-    filename = f"{EXPORT_DIR}/{current_user.username}_001.csv"
+    username = session.get('username', 'guest')
+    filename = f"{EXPORT_DIR}/{username}_001.csv"
     
     applicant = db.session.execute(
         db.select(Erate).filter_by(app_number=app_number)
