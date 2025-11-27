@@ -1431,6 +1431,7 @@ def add_to_export():
         return jsonify({"error": "Not logged in"}), 401
 
     app_number = request.json.get('app_number')
+    distance = request.json.get('distance', '')
     if not app_number:
         return jsonify({"error": "Missing app_number"}), 400
 
@@ -1438,15 +1439,17 @@ def add_to_export():
     filename = f"exports/{username}_001.csv"
     os.makedirs("exports", exist_ok=True)
 
-    # Use your real get_conn() from db.py
     from db import get_conn
 
     try:
         conn = get_conn()
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT app_number, entity_name, state, last_modified_datetime, 
-                       latitude, longitude 
+                SELECT 
+                    app_number, form_nickname, entity_name, ben, 
+                    address1, address2, city, state, zip_code,
+                    phone, phone_ext, email,
+                    last_modified_datetime
                 FROM erate 
                 WHERE app_number = %s
             """, (app_number,))
@@ -1455,32 +1458,48 @@ def add_to_export():
         if not row:
             return jsonify({"error": "Applicant not found"}), 404
 
-        # Check if already exported
-        if os.path.exists(filename):
-            with open(filename, 'r', encoding='utf-8') as f:
-                reader = csv.reader(f)
-                if any(row[0] == app_number for row in reader):
-                    return jsonify({"status": "already_added"})
+        # Build full data
+        (app_num, form_nick, entity_name, ben, addr1, addr2, 
+         city, state, zip_code, phone, phone_ext, email, mod_date) = row
 
-        # Write to CSV
-        data = {
-            "Applicant #": row[0],
-            "Entity Name": row[1] or "",
-            "State": row[2] or "",
-            "Modified": row[3].strftime('%m/%d/%Y') if row[3] else "",
-            "Distance": request.json.get('distance', ''),
-            "Latitude": row[4] or "",
-            "Longitude": row[5] or ""
+        full_address = f"{addr1 or ''} {addr2 or ''}, {city or ''}, {state or ''} {zip_code or ''}".strip(" ,")
+        full_phone = f"{phone or ''}{' x' + phone_ext if phone_ext else ''}".strip()
+
+        # Get current network (same logic as distance column)
+        current_network = "Bluebird Network"
+        if 'fna' in request.referrer.lower() or session.get('current_network') == 'fna':
+            current_network = "FNA Network"
+
+        export_row = {
+            "Applicant #": app_num,
+            "Form Nickname": form_nick or "",
+            "Entity Name": entity_name or "",
+            "BEN#": ben or "",
+            "BEN Address": full_address,
+            "BEN Phone": full_phone,
+            "BEN Email": email or "",
+            "State": state or "",
+            "Modified": mod_date.strftime('%m/%d/%Y') if mod_date else "",
+            "Distance": distance,
+            "Current Network": current_network
         }
 
+        # Check if already in file
+        if os.path.exists(filename):
+            with open(filename, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                if any(r.get("Applicant #") == app_num for r in reader):
+                    return jsonify({"status": "already_added"})
+
+        # Write immediately with full data
         file_exists = os.path.exists(filename)
         with open(filename, 'a', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=data.keys())
+            writer = csv.DictWriter(f, fieldnames=export_row.keys())
             if not file_exists:
                 writer.writeheader()
-            writer.writerow(data)
+            writer.writerow(export_row)
 
-        return jsonify({"status": "added"})
+        return jsonify({"status": "added", "})
 
     except Exception as e:
         current_app.logger.error(f"Export failed: {e}")
