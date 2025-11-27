@@ -1194,9 +1194,11 @@
         async function loadDistancesIfNeeded() {
             const settings = await fetch('/erate/user_settings').then(r => r.json()).catch(() => ({}));
             const userFT = parseInt(settings.ft) || 100;
-            const totalFiltered = {{ total_filtered }};
 
-            // RESPECT FILTER THRESHOLD — ONLY SHOW & CALCULATE DISTANCES IF ≤ FT
+            // READ REAL CURRENT TOTAL FROM SUMMARY — ALWAYS CORRECT
+            const summaryMatch = summaryEl.textContent.match(/of (\d+)/);
+            const totalFiltered = summaryMatch ? parseInt(summaryMatch[1]) : 999;
+
             const showDistanceColumn = totalFiltered > 0 && totalFiltered <= userFT;
 
             document.querySelectorAll('th.distance-header, td.distance-cell').forEach(el => {
