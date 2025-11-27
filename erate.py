@@ -1425,20 +1425,34 @@ def coverage_report():
     return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
 
 @erate_bp.route('/add-to-export', methods=['POST'])
-@login_required
 def add_to_export():
+    # NO @login_required — we use session directly
+    if 'username' not in session:
+        return jsonify({"error": "Not logged in"}), 401
+
     app_number = request.json.get('app_number')
     if not app_number:
         return jsonify({"error": "Missing app_number"}), 400
 
-    # Build user-specific CSV: exports/username_001.csv
-    username = session.get('username', 'guest')
-    filename = f"{EXPORT_DIR}/{username}_001.csv"
-    
+    # Use session username — NO current_user
+    username = session['username']
+    filename = f"exports/{username}_001.csv"
+
+    # Ensure exports folder exists
+    os.makedirs("exports", exist_ok=True)
+
+    # Check if already added
+    if os.path.exists(filename):
+        with open(filename, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            if any(row.get("Applicant #") == app_number for row in reader):
+                return jsonify({"status": "already_added"})
+
+    # Fetch applicant data
     applicant = db.session.execute(
         db.select(Erate).filter_by(app_number=app_number)
     ).scalar_one_or_none()
-    
+
     if not applicant:
         return jsonify({"error": "Applicant not found"}), 404
 
@@ -1452,20 +1466,7 @@ def add_to_export():
         "Longitude": applicant.longitude or ""
     }
 
-    file_exists = os.path.isfile(filename)
-    already_added = False
-
-    # Check if already in file
-    if file_exists:
-        with open(filename, 'r', newline='', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            if any(r["Applicant #"] == app_number for r in reader):
-                already_added = True
-
-    if already_added:
-        return jsonify({"status": "already_added"})
-
-    # Append to CSV
+    file_exists = os.path.exists(filename)
     with open(filename, 'a', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=row.keys())
         if not file_exists:
