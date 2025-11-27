@@ -491,11 +491,11 @@
                 {% endif %}
             </tbody>
         </table>
-        <!-- FINAL: PREV + EXPORT + NEXT BUTTONS -->
+        <!-- FINAL: PREV + EXPORT + NEXT — PERFECT LOGIC -->
         {% if has_more or next_offset|default(10) > 10 %}
         <div style="text-align:center; margin:40px 0;">
             <div style="display:inline-flex; gap:12px; flex-wrap:nowrap; justify-content:center; align-items:center;">
-                
+
                 <!-- PREV BUTTON -->
                 {% if next_offset|default(10) > 10 %}
                     <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset - 20 }}&deduct=1"
@@ -508,12 +508,19 @@
                     </span>
                 {% endif %}
 
-                <!-- EXPORT BUTTON — ONE-CLICK DOWNLOAD -->
-                <a href="/erate/download-export" 
-                   class="btn btn-success btn-sm" 
-                   style="padding:6px 12px; font-size:0.8rem; min-width:68px; font-weight:600;">
-                    Export
-                </a>
+                <!-- EXPORT BUTTON — ONLY WHEN FT MET + RED + WHITE TEXT -->
+                {% if total_filtered <= (session.ft | default(100) | int if 'username' in session else 100) and total_filtered > 0 %}
+                    <a href="/erate/download-export"
+                       class="btn btn-danger btn-sm"
+                       style="padding:6px 12px; font-size:0.8rem; min-width:68px; font-weight:600; color:white;">
+                        Export
+                    </a>
+                {% else %}
+                    <span class="btn btn-secondary btn-sm"
+                          style="padding:6px 12px; font-size:0.8rem; min-width:68px; opacity:0.5; cursor:not-allowed; color:#999;">
+                        Export
+                    </span>
+                {% endif %}
 
                 <!-- NEXT BUTTON -->
                 {% if has_more %}
@@ -526,6 +533,7 @@
                         Next →
                     </span>
                 {% endif %}
+
             </div>
         </div>
         {% endif %}
