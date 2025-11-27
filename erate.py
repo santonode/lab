@@ -3,7 +3,7 @@
 # + NEW: FNA dropdown shows top 3 closest members first with star
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
-    send_file, flash, current_app, jsonify, Markup, session
+    send_file, flash, current_app, jsonify, Markup, session, abort
 )
 
 import csv
@@ -19,6 +19,7 @@ from math import radians, cos, sin, sqrt, atan2
 import zipfile
 import xml.etree.ElementTree as ET
 import hashlib
+
 from models import Erate  # ← For querying the applicant
 
 # === EXPORT SYSTEM — ADDED HERE ===
@@ -1484,6 +1485,24 @@ def add_to_export():
     except Exception as e:
         current_app.logger.error(f"Export failed: {e}")
         return jsonify({"error": "Server error"}), 500
+
+@erate_bp.route('/download-export')
+def download_export():
+    if 'username' not in session:
+        return abort(403)
+
+    username = session['username']
+    filename = f"exports/{username}_001.csv"
+
+    if not os.path.exists(filename):
+        return "No export file yet. Click some red distances first!", 404
+
+    return send_file(
+        filename,
+        as_attachment=True,
+        download_name=f"{username}_export.csv",
+        mimetype='text/csv'
+    )
 
 @erate_bp.route('/logout')
 def logout():
