@@ -1,16 +1,22 @@
 # app.py
 from flask import Flask, send_from_directory, redirect, url_for
+from flask_login import LoginManager  # ← ADDED
 import os
 from datetime import datetime
 
 # === IMPORTS ===
-from db import init_app  # ← CORRECT: init_app (not init_db_app)
+from db import init_app
 from erate import erate_bp
 from memes import memes_bp
 
 # === CREATE APP ===
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = os.getenv('SECRET_KEY', os.urandom(24).hex())
+
+# === LOGIN MANAGER — CRITICAL FOR current_user AND @login_required ===
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'erate.admin'  # or 'erate.login' — whatever your login route is
 
 # === DATABASE URL ===
 app.config['DATABASE_URL'] = os.getenv(
@@ -24,7 +30,6 @@ def strftime_filter(value, format="%m/%d/%Y %H:%M"):
     if value is None:
         return ""
     return value.strftime(format)
-
 app.jinja_env.filters['strftime'] = strftime_filter
 
 # === CACHE BUSTER ===
@@ -33,8 +38,8 @@ def inject_cache_buster():
     return dict(cache_buster=int(datetime.now().timestamp()))
 
 # === REGISTER BLUEPRINTS WITH PREFIXES ===
-app.register_blueprint(erate_bp, url_prefix='/erate')  # /erate/, /erate/import-interactive
-app.register_blueprint(memes_bp, url_prefix='/memes')   # /memes, /memes/register, etc.
+app.register_blueprint(erate_bp, url_prefix='/erate')
+app.register_blueprint(memes_bp, url_prefix='/memes')
 
 # === SERVE /static/thumbs/ AND /static/vids/ ===
 @app.route('/static/thumbs/<path:filename>')
@@ -58,7 +63,6 @@ def root():
     return redirect(url_for('erate.dashboard'))
 
 # === INIT DB ON START ===
-init_app(app)  # ← CORRECT: calls init_db() + teardown
+init_app(app)
 
 # === GUNICORN HANDLES $PORT — NO app.run() ===
-# DO NOT run Flask dev server in production
