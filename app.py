@@ -1,6 +1,5 @@
-# app.py
-from flask import Flask, send_from_directory, redirect, url_for
-from flask_login import LoginManager, UserMixin
+# app.py — FINAL, CLEAN, BULLETPROOF
+from flask import Flask, send_from_directory, redirect, url_for, session
 import os
 from datetime import datetime
 
@@ -12,26 +11,6 @@ from memes import memes_bp
 # === CREATE APP ===
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = os.getenv('SECRET_KEY', os.urandom(24).hex())
-
-# === LOGIN MANAGER — WORKS WITHOUT User MODEL ===
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'erate.admin'
-
-# Simple in-memory user for current_user (no DB needed)
-class SimpleUser(UserMixin):
-    def __init__(self, id, username):
-        self.id = str(id)
-        self.username = username
-
-@login_manager.user_loader
-def load_user(user_id):
-    # Fake user — just so current_user works
-    return SimpleUser(1, "king")
-
-@login_manager.unauthorized_handler
-def unauthorized():
-    return redirect(url_for('erate.admin'))
 
 # === DATABASE URL ===
 app.config['DATABASE_URL'] = os.getenv(
@@ -77,3 +56,5 @@ def root():
 
 # === INIT DB ===
 init_app(app)
+
+# === GUNICORN HANDLES $PORT ===
