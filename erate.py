@@ -1427,7 +1427,6 @@ def coverage_report():
 
 @erate_bp.route('/add-to-export', methods=['POST'])
 def add_to_export():
-    # NO @login_required — we use session directly
     if 'username' not in session:
         return jsonify({"error": "Not logged in"}), 401
 
@@ -1435,46 +1434,52 @@ def add_to_export():
     if not app_number:
         return jsonify({"error": "Missing app_number"}), 400
 
-    # Use session username — NO current_user
     username = session['username']
     filename = f"exports/{username}_001.csv"
-
-    # Ensure exports folder exists
     os.makedirs("exports", exist_ok=True)
 
-    # Check if already added
-    if os.path.exists(filename):
-        with open(filename, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            if any(row.get("Applicant #") == app_number for row in reader):
-                return jsonify({"status": "already_added"})
+    # Use your custom get_conn() from db.py
+    from db import get_conn
 
-    # Fetch applicant data
-    applicant = db.session.execute(
-        db.select(Erate).filter_by(app_number=app_number)
-    ).scalar_one_or_none()
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT app_number, entity_name, state, last_modified_datetime, latitude, longitude FROM erate WHERE app_number = %s", (app_number,))
+            row = cur.fetchone()
 
-    if not applicant:
-        return jsonify({"error": "Applicant not found"}), 404
+        if not row:
+            return jsonify({"error": "Applicant not found"}), 404
 
-    row = {
-        "Applicant #": applicant.app_number,
-        "Entity Name": applicant.entity_name or "",
-        "State": applicant.state or "",
-        "Modified": applicant.last_modified_datetime.strftime('%m/%d/%Y') if applicant.last_modified_datetime else "",
-        "Distance": request.json.get('distance', ''),
-        "Latitude": applicant.latitude or "",
-        "Longitude": applicant.longitude or ""
-    }
+        # Check if already in CSV
+        if os.path.exists(filename):
+            with open(filename, 'r', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                if any(row[0] == app_number for row in reader):
+                    return jsonify({"status": "already_added"})
 
-    file_exists = os.path.exists(filename)
-    with open(filename, 'a', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=row.keys())
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(row)
+        # Write to CSV
+        applicant_data = {
+            "Applicant #": row[0],
+            "Entity Name": row[1] or "",
+            "State": row[2] or "",
+            "Modified": row[3].strftime('%m/%d/%Y') if row[3] else "",
+            "Distance": request.json.get('distance', ''),
+            "Latitude": row[4] or "",
+            "Longitude": row[5] or ""
+        }
 
-    return jsonify({"status": "added"})
+        file_exists = os.path.exists(filename)
+        with open(filename, 'a', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=applicant_data.keys())
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow(applicant_data)
+
+        return jsonify({"status": "added"})
+
+    except Exception as e:
+        current_app.logger.error(f"Export failed: {e}")
+        return jsonify({"error": "Server error"}), 500
 
 @erate_bp.route('/logout')
 def logout():
