@@ -5,7 +5,6 @@ from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup, session
 )
-from flask_login import login_required, current_user   # ← ADD THIS LINE
 
 import csv
 import os
@@ -20,6 +19,8 @@ from math import radians, cos, sin, sqrt, atan2
 import zipfile
 import xml.etree.ElementTree as ET
 import hashlib
+from db import db  # ← THIS IS THE ONLY THING YOU NEED
+from models import Erate  # ← For querying the applicant
 
 # === EXPORT SYSTEM — ADDED HERE ===
 EXPORT_DIR = "exports"
