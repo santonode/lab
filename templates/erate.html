@@ -1191,14 +1191,17 @@
             applyDistanceFilter();  // Only re-filters when toggled
         });
 
+        // === FINAL: RESPECT FT + CLICK RED DISTANCE TO ADD TO EXPORT CSV ===
         async function loadDistancesIfNeeded() {
+            // Get user settings
             const settings = await fetch('/erate/user_settings').then(r => r.json()).catch(() => ({}));
             const userFT = parseInt(settings.ft) || 100;
 
-            // READ REAL CURRENT TOTAL FROM SUMMARY — ALWAYS CORRECT
+            // Get current total from summary text — ALWAYS accurate
             const summaryMatch = summaryEl.textContent.match(/of (\d+)/);
             const totalFiltered = summaryMatch ? parseInt(summaryMatch[1]) : 999;
 
+            // RESPECT FILTER THRESHOLD — ONLY SHOW & CALCULATE DISTANCES IF ≤ FT
             const showDistanceColumn = totalFiltered > 0 && totalFiltered <= userFT;
 
             document.querySelectorAll('th.distance-header, td.distance-cell').forEach(el => {
@@ -1256,7 +1259,7 @@
                 }
             }
 
-            // FINAL: ATTACH CLICK-TO-EXPORT WITH FEEDBACK + LOGS
+            // ATTACH CLICK HANDLER — ONLY ONCE PER LINK
             document.querySelectorAll('.add-to-export').forEach(link => {
                 if (link.dataset.bound === 'true') return;
                 link.dataset.bound = 'true';
@@ -1311,6 +1314,14 @@
         // Run on load
         window.addEventListener('load', () => {
             setTimeout(loadDistancesIfNeeded, 800);
+        });
+
+        // Prevent form submit during loading
+        document.getElementById('filter-form')?.addEventListener('submit', e => {
+            if (isLoadingDistances) {
+                e.preventDefault();
+                alert('Please wait — calculating distances…');
+            }
         });
 
         // === USER SETTINGS MODAL ===
