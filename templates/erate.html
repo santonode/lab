@@ -509,8 +509,8 @@
                     </span>
                 {% endif %}
 
-                <!-- EXPORT BUTTON — EXACT SAME LOGIC AS DISTANCE COLUMN -->
-                {% if total_filtered <= (session.ft | default(100) | int) and total_filtered > 0 %}
+                <!-- EXPORT BUTTON — USES total_count (GUARANTEED TO EXIST) -->
+                {% if total_count <= (session.ft | default(100) | int) and total_count > 0 %}
                     <a href="/erate/download-export"
                        class="btn btn-danger btn-sm"
                        style="padding:6px 12px; font-size:0.8rem; min-width:68px; font-weight:600; color:white;">
