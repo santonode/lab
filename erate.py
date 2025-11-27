@@ -19,7 +19,6 @@ from math import radians, cos, sin, sqrt, atan2
 import zipfile
 import xml.etree.ElementTree as ET
 import hashlib
-from db import db  # ← THIS IS THE ONLY THING YOU NEED
 from models import Erate  # ← For querying the applicant
 
 # === EXPORT SYSTEM — ADDED HERE ===
@@ -1438,19 +1437,24 @@ def add_to_export():
     filename = f"exports/{username}_001.csv"
     os.makedirs("exports", exist_ok=True)
 
-    # Use your custom get_conn() from db.py
+    # Use your real get_conn() from db.py
     from db import get_conn
 
     try:
         conn = get_conn()
         with conn.cursor() as cur:
-            cur.execute("SELECT app_number, entity_name, state, last_modified_datetime, latitude, longitude FROM erate WHERE app_number = %s", (app_number,))
+            cur.execute("""
+                SELECT app_number, entity_name, state, last_modified_datetime, 
+                       latitude, longitude 
+                FROM erate 
+                WHERE app_number = %s
+            """, (app_number,))
             row = cur.fetchone()
 
         if not row:
             return jsonify({"error": "Applicant not found"}), 404
 
-        # Check if already in CSV
+        # Check if already exported
         if os.path.exists(filename):
             with open(filename, 'r', encoding='utf-8') as f:
                 reader = csv.reader(f)
@@ -1458,7 +1462,7 @@ def add_to_export():
                     return jsonify({"status": "already_added"})
 
         # Write to CSV
-        applicant_data = {
+        data = {
             "Applicant #": row[0],
             "Entity Name": row[1] or "",
             "State": row[2] or "",
@@ -1470,10 +1474,10 @@ def add_to_export():
 
         file_exists = os.path.exists(filename)
         with open(filename, 'a', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=applicant_data.keys())
+            writer = csv.DictWriter(f, fieldnames=data.keys())
             if not file_exists:
                 writer.writeheader()
-            writer.writerow(applicant_data)
+            writer.writerow(data)
 
         return jsonify({"status": "added"})
 
