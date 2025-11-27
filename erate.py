@@ -1499,7 +1499,7 @@ def add_to_export():
                 writer.writeheader()
             writer.writerow(export_row)
 
-        return jsonify({"status": "added", "})
+        return jsonify({"status": "added"})
 
     except Exception as e:
         current_app.logger.error(f"Export failed: {e}")
