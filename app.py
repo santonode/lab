@@ -1,6 +1,6 @@
 # app.py
 from flask import Flask, send_from_directory, redirect, url_for
-from flask_login import LoginManager  # ← ADDED
+from flask_login import LoginManager
 import os
 from datetime import datetime
 
@@ -8,15 +8,27 @@ from datetime import datetime
 from db import init_app
 from erate import erate_bp
 from memes import memes_bp
+from models import User  # ← CRITICAL — your User model
 
 # === CREATE APP ===
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = os.getenv('SECRET_KEY', os.urandom(24).hex())
 
-# === LOGIN MANAGER — CRITICAL FOR current_user AND @login_required ===
+# === LOGIN MANAGER — FULLY WORKING ===
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'erate.admin'  # or 'erate.login' — whatever your login route is
+login_manager.login_view = 'erate.admin'  # your login route
+
+@login_manager.user_loader
+def load_user(user_id):
+    try:
+        return User.query.get(int(user_id))
+    except:
+        return None
+
+@login_manager.unauthorized_handler
+def unauthorized():
+    return redirect(url_for('erate.admin'))
 
 # === DATABASE URL ===
 app.config['DATABASE_URL'] = os.getenv(
@@ -26,7 +38,6 @@ app.config['DATABASE_URL'] = os.getenv(
 
 # === JINJA FILTERS ===
 def strftime_filter(value, format="%m/%d/%Y %H:%M"):
-    """Format datetime for Jinja templates"""
     if value is None:
         return ""
     return value.strftime(format)
