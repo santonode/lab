@@ -5,6 +5,8 @@ from flask import (
     Blueprint, render_template, request, redirect, url_for,
     send_file, flash, current_app, jsonify, Markup, session
 )
+from flask_login import login_required, current_user   # ← ADD THIS LINE
+
 import csv
 import os
 import logging
@@ -18,6 +20,10 @@ from math import radians, cos, sin, sqrt, atan2
 import zipfile
 import xml.etree.ElementTree as ET
 import hashlib
+
+# === EXPORT SYSTEM — ADDED HERE ===
+EXPORT_DIR = "exports"
+os.makedirs(EXPORT_DIR, exist_ok=True)
 
 # === TRUE NEAREST FIBER DISTANCE (for table column) ===
 def get_nearest_fiber_distance(lat, lon, kmz_path):
@@ -1417,6 +1423,55 @@ def coverage_report():
         lines.append("")
 
     return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
+
+@erate_bp.route('/add-to-export', methods=['POST'])
+@login_required
+def add_to_export():
+    app_number = request.json.get('app_number')
+    if not app_number:
+        return jsonify({"error": "Missing app_number"}), 400
+
+    # Build user-specific CSV: exports/username_001.csv
+    filename = f"{EXPORT_DIR}/{current_user.username}_001.csv"
+    
+    applicant = db.session.execute(
+        db.select(Erate).filter_by(app_number=app_number)
+    ).scalar_one_or_none()
+    
+    if not applicant:
+        return jsonify({"error": "Applicant not found"}), 404
+
+    row = {
+        "Applicant #": applicant.app_number,
+        "Entity Name": applicant.entity_name or "",
+        "State": applicant.state or "",
+        "Modified": applicant.last_modified_datetime.strftime('%m/%d/%Y') if applicant.last_modified_datetime else "",
+        "Distance": request.json.get('distance', ''),
+        "Latitude": applicant.latitude or "",
+        "Longitude": applicant.longitude or ""
+    }
+
+    file_exists = os.path.isfile(filename)
+    already_added = False
+
+    # Check if already in file
+    if file_exists:
+        with open(filename, 'r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            if any(r["Applicant #"] == app_number for r in reader):
+                already_added = True
+
+    if already_added:
+        return jsonify({"status": "already_added"})
+
+    # Append to CSV
+    with open(filename, 'a', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=row.keys())
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(row)
+
+    return jsonify({"status": "added"})
 
 @erate_bp.route('/logout')
 def logout():
