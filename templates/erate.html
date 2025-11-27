@@ -375,7 +375,7 @@
     <div class="modal" id="authModal">
         <div class="modal-content">
             <div class="modal-header">
-                <div class="modal-title">Santo E-Rate Query Tool</div>
+                <div class="modal-title">Welcome to E-Rate</div>
             </div>
             <div class="modal-body" style="text-align:center;">
                 <button class="btn btn-secondary" onclick="continueAsGuest()" style="margin:8px 0;">Continue as Guest</button>
@@ -457,6 +457,9 @@
             <strong>Current Network:</strong> 
             <span id="current-network-display">Bluebird Network</span>
             &nbsp;&nbsp;|&nbsp;&nbsp;
+            <button id="toggle-distance-filter" class="btn btn-secondary" style="font-size:0.85rem;">
+                Distance filter: OFF — click to enable
+            </button>
         </div>
         {% endif %}
         <table>
@@ -478,12 +481,7 @@
                         <td><span class="entity-name">{{ row.entity_name|default('—') }}</span></td>
                         <td>{{ row.state|default('—') }}</td>
                         <td class="modified">{{ row.last_modified_datetime|strftime('%m/%d/%Y') if row.last_modified_datetime else '—' }}</td>
-                        <td class="distance-cell" style="display:none;">
-                            <a href="#" class="exclude-applicant" data-appnum="{{ row.app_number|default('') }}"
-                               style="color:#dc3545; font-weight:600; text-decoration:none;">
-                                —
-                            </a>
-                        </td>
+                        <td class="distance-cell" style="display:none; color:#dc3545; font-weight:600;">—</td>
                         <td><button class="btn btn-primary btn-sm">Map</button></td>
                     </tr>
                     {% endfor %}
@@ -1196,107 +1194,116 @@
             applyDistanceFilter();  // Only re-filters when toggled
         });
 
-        // === FINAL CLEAN: SHOW DISTANCE COLUMN WHEN ≤ FT + CLICK TO EXCLUDE ===
         async function loadDistancesIfNeeded() {
-            const settings = await fetch('/erate/user_settings').then(r => r.json()).catch(() => ({}));
-            const userFT = parseInt(settings.ft) || 100;
-            const totalFiltered = {{ total_filtered }};
+                const settings = await fetch('/erate/user_settings').then(r => r.json()).catch(() => ({}));
+                userFT = parseInt(settings.ft) || 100;
+                userDM = parseFloat(settings.dm) || 5.0;
 
-            const showDistanceColumn = totalFiltered > 0 && totalFiltered <= userFT;
+                const total = parseInt(summaryEl.textContent.match(/of (\d+)/)?.[1] || '999');
+                if (total > userFT || isLoadingDistances) return;
 
-            document.querySelectorAll('th.distance-header, td.distance-cell').forEach(el => {
-                el.style.display = showDistanceColumn ? '' : 'none';
-            });
+                isLoadingDistances = true;
+                document.body.style.cursor = 'wait';
 
-            if (!showDistanceColumn) {
+                // Always show distance column/header when calculating
+                document.querySelectorAll('.distance-header, .distance-cell').forEach(el => el.style.display = 'table-cell');
+                document.querySelectorAll('.distance-cell').forEach(c => c.textContent = '...');
+
+                // AUTO DETECT NETWORK
+                const urlParams = new URLSearchParams(window.location.search);
+                const state = urlParams.get('state')?.toUpperCase() || '';
+                const bluebirdStates = ['IA','KS','IL','MO','OK'];
+                const fnaStates = ['MI','OH','PA','FL','GA','NC','SC','LA','TN','KY','VA','WV','MD','DE','NJ'];
+                let currentNetwork = localStorage.getItem('preferredNetwork') || 'bluebird';
+                if (fnaStates.includes(state)) currentNetwork = 'fna';
+                else if (bluebirdStates.includes(state)) currentNetwork = 'bluebird';
+
+                document.getElementById('current-network-display').textContent = 
+                    currentNetwork === 'fna' ? 'FNA Network' : 'Bluebird Network';
+
+                const rows = Array.from(document.querySelectorAll('tbody tr'));
+
+                // WHEN FILTER IS OFF: populate distances but DO NOT touch visibility or count
+                if (!distanceFilterEnabled) {
+                        for (const row of rows) {
+                                const appNumber = row.querySelector('.app-number')?.textContent.trim();
+                                const cell = row.querySelector('.distance-cell');
+                                if (appNumber && appNumber !== '—' && cell) {
+                                        try {
+                                                const data = await fetch(`/erate/bbmap/${appNumber}?network=${currentNetwork}&distance_only=1`)
+                                                        .then(r => r.json());
+                                                cell.textContent = data.nearest_fiber_distance || '—';
+                                        } catch {
+                                                cell.textContent = '—';
+                                        }
+                                }
+                        }
+                        // DO NOT modify any row display or summary
+                        isLoadingDistances = false;
+                        document.body.style.cursor = 'default';
+                        updateToggleButton();
+                        return;
+                }
+
+                // WHEN FILTER IS ON: apply distance filter and update count
+                let visibleCount = 0;
+                for (const row of rows) {
+                        const appNumber = row.querySelector('.app-number')?.textContent.trim();
+                        const cell = row.querySelector('.distance-cell');
+
+                        if (!appNumber || appNumber === '—') {
+                                row.style.display = 'none';
+                                continue;
+                        }
+
+                        try {
+                                const data = await fetch(`/erate/bbmap/${appNumber}?network=${currentNetwork}&distance_only=1`)
+                                        .then(r => r.json());
+                                const dist = data.nearest_fiber_distance || '—';
+                                if (cell) cell.textContent = dist;
+
+                                const num = parseFloat(dist);
+                                if (!isNaN(num) && num <= userDM) {
+                                        row.style.display = '';
+                                        visibleCount++;
+                                } else {
+                                        row.style.display = 'none';
+                                }
+                        } catch {
+                                if (cell) cell.textContent = '—';
+                                row.style.display = 'none';
+                        }
+                }
+
+                const showing = Math.min(visibleCount, 10);
+                summaryEl.textContent = `Showing ${showing} of ${visibleCount} records (≤ ${userDM} mi)`;
+                if (loadMoreBtn) {
+                        loadMoreBtn.style.display = visibleCount > 10 ? 'block' : 'none';
+                }
+
                 isLoadingDistances = false;
                 document.body.style.cursor = 'default';
-                return;
-            }
-
-            isLoadingDistances = true;
-            document.body.style.cursor = 'wait';
-            document.querySelectorAll('.distance-cell').forEach(c => c.innerHTML = '<span style="color:#999;">...</span>');
-
-            // AUTO DETECT NETWORK
-            const urlParams = new URLSearchParams(window.location.search);
-            const state = urlParams.get('state')?.toUpperCase() || '';
-            const bluebirdStates = ['IA','KS','IL','MO','OK'];
-            const fnaStates = ['MI','OH','PA','FL','GA','NC','SC','LA','TN','KY','VA','WV','MD','DE','NJ'];
-            let currentNetwork = localStorage.getItem('preferredNetwork') || 'bluebird';
-            if (fnaStates.includes(state)) currentNetwork = 'fna';
-            else if (bluebirdStates.includes(state)) currentNetwork = 'bluebird';
-
-            document.getElementById('current-network-display').textContent =
-                currentNetwork === 'fna' ? 'FNA Network' : 'Bluebird Network';
-
-            const rows = Array.from(document.querySelectorAll('tbody tr'));
-
-            for (const row of rows) {
-                const appNumber = row.querySelector('.app-number')?.textContent.trim();
-                const cell = row.querySelector('.distance-cell');
-                if (!appNumber || appNumber === '—' || !cell) continue;
-
-                try {
-                    const data = await fetch(`/erate/bbmap/${appNumber}?network=${currentNetwork}&distance_only=1`)
-                        .then(r => r.json());
-                    const distText = data.nearest_fiber_distance || '—';
-
-                    cell.innerHTML = `
-                        <a href="#" class="exclude-applicant" data-appnum="${appNumber}"
-                           style="color:#dc3545; font-weight:600; text-decoration:none;">
-                            ${distText}
-                        </a>
-                    `;
-                } catch {
-                    cell.innerHTML = `
-                        <a href="#" class="exclude-applicant" data-appnum="${appNumber}"
-                           style="color:#dc3545; font-weight:600; text-decoration:none;">
-                            —
-                        </a>
-                    `;
-                }
-            }
-
-            // ATTACH CLICK HANDLERS AFTER DISTANCES LOAD
-            isLoadingDistances = false;
-            document.body.style.cursor = 'default';
-            attachExclusionHandlers();   // ← FINAL STEP — CLICK TO EXCLUDE WORKS
+                updateToggleButton();
         }
 
-        // CLICK TO EXCLUDE — WITH CONSOLE LOG
-        function attachExclusionHandlers() {
-            document.querySelectorAll('.exclude-applicant:not(.excluded)').forEach(link => {
-                link.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    console.log("EXCLUDE CLICKED:", this.dataset.appnum);  // YOU WILL SEE THIS
-
-                    if (this.classList.contains('excluded')) return;
-
-                    const row = this.closest('tr');
-                    row.style.opacity = '0.3';
-                    row.style.pointerEvents = 'none';
-                    this.textContent = 'Excluded';
-                    this.style.color = '#999';
-                    this.classList.add('excluded');
-
-                    const summary = document.querySelector('.summary');
-                    if (summary) {
-                        const match = summary.textContent.match(/of (\d+)/);
-                        if (match) {
-                            const total = parseInt(match[1]);
-                            summary.textContent = summary.textContent.replace(/of \d+/, `of ${total - 1}`);
-                        }
-                    }
-                });
-            });
+        function applyDistanceFilter() {
+            loadDistancesIfNeeded();  // Re-run with current toggle state
         }
 
-        // Run on load
+        // Save original summary text on first load
+        let originalText = '';
         window.addEventListener('load', () => {
+            originalText = summaryEl?.textContent || '';
             setTimeout(loadDistancesIfNeeded, 800);
         });
-        
+
+        document.getElementById('filter-form')?.addEventListener('submit', e => {
+            if (isLoadingDistances) {
+                e.preventDefault();
+                alert('Please wait — calculating distances…');
+            }
+        });
+
         // === USER SETTINGS MODAL ===
         document.getElementById('user-settings-btn')?.addEventListener('click', () => {
             fetch('/erate/user_settings')
@@ -1352,43 +1359,6 @@
                 display.textContent = saved === 'fna' ? 'FNA Network' : 'Bluebird Network';
             }
         });
-
-        // === FINAL: CLICK RED DISTANCE → REMOVE FROM RESULTS + PERSIST ACROSS PAGES ===
-        let excludedApps = new Set(JSON.parse(localStorage.getItem('erate_excluded') || '[]'));
-
-        function attachExclusionHandlers() {
-            document.querySelectorAll('.exclude-applicant').forEach(link => {
-                if (link.dataset.bound) return;
-                link.dataset.bound = 'true';
-
-                link.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    const appNum = this.dataset.appnum;
-                    if (!appNum || excludedApps.has(appNum)) return;
-
-                    console.log("EXCLUDED:", appNum);
-                    excludedApps.add(appNum);
-                    localStorage.setItem('erate_excluded', JSON.stringify([...excludedApps]));
-
-                    // Remove row completely
-                    const row = this.closest('tr');
-                    row.remove();
-
-                    // Update summary count
-                    const summary = document.querySelector('.summary');
-                    if (summary) {
-                        const match = summary.textContent.match(/of (\d+)/);
-                        if (match) {
-                            const total = parseInt(match[1]);
-                            summary.textContent = summary.textContent.replace(/of \d+/, `of ${total - 1}`);
-                        }
-                    }
-                });
-            });
-        }
-
-        // Call after distances load
-        attachExclusionHandlers();
         
     </script>
 </body>
