@@ -1,6 +1,6 @@
 # app.py
 from flask import Flask, send_from_directory, redirect, url_for
-from flask_login import LoginManager
+from flask_login import LoginManager, UserMixin
 import os
 from datetime import datetime
 
@@ -8,23 +8,26 @@ from datetime import datetime
 from db import init_app
 from erate import erate_bp
 from memes import memes_bp
-from models import User  # ← CRITICAL — your User model
 
 # === CREATE APP ===
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = os.getenv('SECRET_KEY', os.urandom(24).hex())
 
-# === LOGIN MANAGER — FULLY WORKING ===
+# === LOGIN MANAGER — WORKS WITHOUT User MODEL ===
 login_manager = LoginManager()
 login_manager.init_app(app)
-login_manager.login_view = 'erate.admin'  # your login route
+login_manager.login_view = 'erate.admin'
+
+# Simple in-memory user for current_user (no DB needed)
+class SimpleUser(UserMixin):
+    def __init__(self, id, username):
+        self.id = str(id)
+        self.username = username
 
 @login_manager.user_loader
 def load_user(user_id):
-    try:
-        return User.query.get(int(user_id))
-    except:
-        return None
+    # Fake user — just so current_user works
+    return SimpleUser(1, "king")
 
 @login_manager.unauthorized_handler
 def unauthorized():
@@ -48,11 +51,11 @@ app.jinja_env.filters['strftime'] = strftime_filter
 def inject_cache_buster():
     return dict(cache_buster=int(datetime.now().timestamp()))
 
-# === REGISTER BLUEPRINTS WITH PREFIXES ===
+# === REGISTER BLUEPRINTS ===
 app.register_blueprint(erate_bp, url_prefix='/erate')
 app.register_blueprint(memes_bp, url_prefix='/memes')
 
-# === SERVE /static/thumbs/ AND /static/vids/ ===
+# === STATIC ROUTES ===
 @app.route('/static/thumbs/<path:filename>')
 def serve_thumbs(filename):
     return send_from_directory('static/thumbs', filename)
@@ -61,19 +64,16 @@ def serve_thumbs(filename):
 def serve_vids(filename):
     return send_from_directory('static/vids', filename)
 
-# === SERVE static2/ (gear-icon, styles) ===
 @app.route('/static2/<path:filename>')
 def static2_files(filename):
     response = send_from_directory('static2', filename)
     response.headers['Cache-Control'] = 'no-cache'
     return response
 
-# === ROOT REDIRECT → E-RATE DASHBOARD ===
+# === ROOT REDIRECT ===
 @app.route('/')
 def root():
     return redirect(url_for('erate.dashboard'))
 
-# === INIT DB ON START ===
+# === INIT DB ===
 init_app(app)
-
-# === GUNICORN HANDLES $PORT — NO app.run() ===
