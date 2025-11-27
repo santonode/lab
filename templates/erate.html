@@ -1288,7 +1288,10 @@
                         const resp = await fetch('/erate/add-to-export', {
                             method: 'POST',
                             headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({app_number: appNum})
+                            body: JSON.stringify({
+                                app_number: appNum,
+                                distance: originalText  // ← THIS IS THE MISSING PIECE
+                            })
                         });
                         const data = await resp.json();
 
