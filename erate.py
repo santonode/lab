@@ -1446,51 +1446,61 @@ def add_to_export():
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM erate WHERE app_number = %s", (app_number,))
             row = cur.fetchone()
+            if not row:
+                return jsonify({"error": "Applicant not found"}), 404
 
-        if not row:
-            return jsonify({"error": "Applicant not found"}), 404
-
-        # Get column names in order
-        columns = [desc[0] for desc in cur.description]
-
-        # Build dict with ALL fields from DB
-        export_row = dict(zip(columns, row))
+            # Get all column names
+            columns = [desc[0] for desc in cur.description]
+            export_row = dict(zip(columns, row))
 
         # Add our two custom fields
         export_row["Distance"] = distance
         export_row["Current Network"] = (
-            "FNA Network" 
-            if session.get('current_network') == 'fna' or 'fna' in request.referrer.lower() 
+            "FNA Network"
+            if session.get('current_network') == 'fna' or 'fna' in request.referrer.lower()
             else "Bluebird Network"
         )
 
-        # Reorder so our fields are first (optional but nice)
+        # Build clean BEN Address and Phone
+        addr1 = export_row.get('address1') or ''
+        addr2 = export_row.get('address2') or ''
+        city = export_row.get('city') or ''
+        state = export_row.get('state') or ''
+        zip_code = export_row.get('zip_code') or ''
+        full_address = f"{addr1} {addr2}, {city}, {state} {zip_code}".strip(" ,")
+
+        phone = export_row.get('phone') or ''
+        phone_ext = export_row.get('phone_ext') or ''
+        full_phone = f"{phone}{' x' + phone_ext if phone_ext else ''}".strip()
+
+        # Final ordered row with key fields first
         ordered_row = {
             "Applicant #": export_row.get("app_number", ""),
             "Form Nickname": export_row.get("form_nickname", ""),
             "Entity Name": export_row.get("entity_name", ""),
             "BEN#": export_row.get("ben", ""),
-            "BEN Address": f"{export_row.get('address1','')} {export_row.get('address2','')}, {export_row.get('city','')}, {export_row.get('state','') {export_row.get('zip_code','')}".strip(" ,"),
-            "BEN Phone": f"{export_row.get('phone','')}{' x' + export_row.get('phone_ext','') if export_row.get('phone_ext') else ''}".strip(),
+            "BEN Address": full_address,
+            "BEN Phone": full_phone,
             "BEN Email": export_row.get("email", ""),
             "State": export_row.get("state", ""),
             "Modified": export_row.get("last_modified_datetime").strftime('%m/%d/%Y') if export_row.get("last_modified_datetime") else "",
             "Distance": distance,
             "Current Network": export_row["Current Network"],
         }
+
         # Add ALL remaining DB fields
         for k, v in export_row.items():
             if k not in ordered_row:
-                ordered_row[k] = v or ""
+                ordered_row[k] = v if v is not None else ""
 
-        # Check duplicate
+        # Duplicate check
         if os.path.exists(filename):
             with open(filename, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 if any(r.get("Applicant #") == app_number for r in reader):
                     return jsonify({"status": "already_added"})
 
-        # Write with ALL fields
+        # Write full row
         file_exists = os.path.exists(filename)
         with open(filename, 'a', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=ordered_row.keys())
@@ -1503,6 +1513,24 @@ def add_to_export():
     except Exception as e:
         current_app.logger.error(f"Export failed: {e}")
         return jsonify({"error": "Server error"}), 500
+
+@erate_bp.route('/download-export')
+def download_export():
+    if 'username' not in session:
+        return abort(403)
+
+    username = session['username']
+    filename = f"exports/{username}_001.csv"
+
+    if not os.path.exists(filename):
+        return "No export file yet. Click some red distances first!", 404
+
+    return send_file(
+        filename,
+        as_attachment=True,
+        download_name=f"{username}_export.csv",
+        mimetype='text/csv'
+    )
 
 @erate_bp.route('/logout')
 def logout():
