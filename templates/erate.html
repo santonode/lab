@@ -508,12 +508,21 @@
                     </span>
                 {% endif %}
 
-                <!-- EXPORT BUTTON — ONE-CLICK DOWNLOAD -->
-                <a href="/erate/download-export" 
-                   class="btn btn-success btn-sm" 
-                   style="padding:6px 12px; font-size:0.8rem; min-width:68px; font-weight:600;">
-                    Export
-                </a>
+                <!-- DEBUG: total_count={{ total_count }}, user_ft={{ user_ft }}, user={{ user.username if user else 'guest' }} -->
+                <!-- EXPORT BUTTON — USES REAL USER FT (santo = 500, guest = 100) -->
+                {% set user_ft = (user.ft | int) if user and user.ft else 100 %}
+                {% if total_count <= user_ft and total_count > 0 %}
+                    <a href="/erate/download-export"
+                       class="btn btn-danger btn-sm"
+                       style="min-width:160px; padding:10px 20px; font-weight:600; color:white; background:#dc3545; border-color:#dc3545;">
+                        Export ({{ total_count }})
+                    </a>
+                {% else %}
+                    <span class="btn btn-secondary btn-sm"
+                          style="min-width:160px; padding:10px 20px; opacity:0.6; cursor:not-allowed;">
+                        Export ({{ total_count }})
+                    </span>
+                {% endif %}
 
                 <!-- NEXT BUTTON -->
                 {% if has_more %}
