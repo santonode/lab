@@ -492,7 +492,18 @@
             </tbody>
         </table>
 
-        <!-- FINAL: PREV + EXPORT + NEXT — THIS WILL WORK 100% -->
+        <!-- EXPORT BUTTON — ALWAYS VISIBLE WHEN DISTANCES ARE SHOWN -->
+        {% if total_count <= 100 and total_count > 0 %}
+            <div style="text-align:center; margin:20px 0;">
+                <a href="/erate/download-export"
+                   class="btn btn-danger btn-sm"
+                   style="padding:8px 20px; font-size:0.9rem; font-weight:600; color:white;">
+                    Export {{ total_count }} Records
+                </a>
+            </div>
+        {% endif %}
+
+        <!-- PAGINATION — ONLY WHEN NEEDED -->
         {% if has_more or next_offset|default(10) > 10 %}
         <div style="text-align:center; margin:40px 0;">
             <div style="display:inline-flex; gap:12px; flex-wrap:nowrap; justify-content:center; align-items:center;">
@@ -504,22 +515,8 @@
                         ← Prev
                     </a>
                 {% else %}
-                    <span class="btn btn-secondary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px; opacity:0.5; cursor:not-allowed;">
+                    <span class="btn btn-secondary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px; opacity:0.5;">
                         ← Prev
-                    </span>
-                {% endif %}
-
-                <!-- EXPORT BUTTON — USE total_count (THE REAL TOTAL) -->
-                {% if total_count <= 100 and total_count > 0 %}
-                    <a href="/erate/download-export"
-                       class="btn btn-danger btn-sm"
-                       style="padding:6px 12px; font-size:0.8rem; min-width:68px; font-weight:600; color:white;">
-                        Export
-                    </a>
-                {% else %}
-                    <span class="btn btn-secondary btn-sm"
-                          style="padding:6px 12px; font-size:0.8rem; min-width:68px; opacity:0.5; cursor:not-allowed; color:#999;">
-                        Export
                     </span>
                 {% endif %}
 
@@ -530,7 +527,7 @@
                         Next →
                     </a>
                 {% else %}
-                    <span class="btn btn-secondary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px; opacity:0.5; cursor:not-allowed;">
+                    <span class="btn btn-secondary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px; opacity:0.5;">
                         Next →
                     </span>
                 {% endif %}
@@ -538,6 +535,7 @@
             </div>
         </div>
         {% endif %}
+            
     </div>
     
     <!-- FOOTER LINKS + DYNAMIC COVERAGE REPORT -->
