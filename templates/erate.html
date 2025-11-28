@@ -504,14 +504,14 @@
         {% endif %}
 
         {% if has_more or next_offset|default(10) > 10 %}
-        <!-- FINAL: PREV + EXPORT + NEXT — ALL IN ONE LINE, PERFECT -->
+        <!-- FINAL: PREV + EXPORT + NEXT — PERFECT LOGIC & COLORS -->
         <div style="text-align:center; margin:40px 0;">
             <div style="display:inline-flex; gap:20px; align-items:center; justify-content:center; flex-wrap:nowrap;">
 
-                <!-- PREV -->
+                <!-- PREV BUTTON — ALWAYS BLUE WHEN ACTIVE -->
                 {% if next_offset|default(10) > 10 %}
                     <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset - 20 }}&deduct=1"
-                       class punk="btn btn-primary btn-sm" style="min-width:80px; padding:8px 16px;">
+                       class="btn btn-primary btn-sm" style="min-width:80px; padding:8px 16px; background-color:#007bff !important; border-color:#007bff !important;">
                         ← Prev
                     </a>
                 {% else %}
@@ -520,11 +520,12 @@
                     </span>
                 {% endif %}
 
-                <!-- EXPORT — RED WHEN ≤100, GRAY WHEN NOT — IN THE MIDDLE -->
-                {% if total_count <= 100 and total_count > 0 %}
+                <!-- EXPORT BUTTON — USES REAL USER FT (santo=500, guest=100) -->
+                {% set user_ft = session.ft | int | default(100) if 'username' in session else 100 %}
+                {% if total_count <= user_ft and total_count > 0 %}
                     <a href="/erate/download-export"
                        class="btn btn-danger btn-sm"
-                       style="min-width:140px; padding:10px 20px; font-weight:600; color:white; background:#dc3545; border:1px solid #dc3545;">
+                       style="min-width:140px; padding:10px 20px; font-weight:600; color:white !important; background:#dc3545 !important; border:1px solid #2b8a3e !important;">
                         Export ({{ total_count }})
                     </a>
                 {% else %}
@@ -534,10 +535,10 @@
                     </span>
                 {% endif %}
 
-                <!-- NEXT -->
+                <!-- NEXT BUTTON — ALWAYS BLUE WHEN ACTIVE -->
                 {% if has_more %}
                     <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset|default(10) }}&deduct=1"
-                       class="btn btn-primary btn-sm" style="min-width:80px; padding:8px 16px;">
+                       class="btn btn-primary btn-sm" style="min-width:80px; padding:8px 16px; background-color:#007bff !important; border-color:#007bff !important;">
                         Next →
                     </a>
                 {% else %}
