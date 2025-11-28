@@ -1207,26 +1207,24 @@ def import_hash_process():
                     db_result = cur.fetchone()
 
                     if db_result and db_result[0] != row_hash:
-                        # FIRST CHANGED RECORD FOUND → UPDATE AND STOP
                         log(f"UPDATING SINGLE RECORD → Applicant #: {app_number} | Entity: {entity_name}")
 
-                        # UPDATE erate table
-                        placeholders = ', '.join([f"{k}=%s" for k in row.keys()])
-                        update_sql = f"UPDATE erate SET {placeholders} WHERE app_number = %s"
+                        # THIS LINE IS FIXED
+                        quoted_sets = ', '.join([f'"{k}"=%s' for k in row.keys()])
+                        update_sql = f"UPDATE erate SET {quoted_sets} WHERE app_number = %s"
                         cur.execute(update_sql, list(row.values()) + [app_number])
 
-                        # Update hash table
+                        # Update hash
                         cur.execute(
                             "INSERT INTO erate_hash (app_number, row_hash) VALUES (%s, %s) "
                             "ON CONFLICT (app_number) DO UPDATE SET row_hash = EXCLUDED.row_hash",
                             (app_number, row_hash)
                         )
-
                         conn.commit()
                         conn.close()
 
                         flash(f"UPDATED ONE RECORD → {app_number} — {entity_name}", "success")
-                        flash("Hash import stopped after updating the first changed record.", "info")
+                        flash("Hash import stopped after first changed record.", "info")
                         return redirect(url_for('erate.dashboard'))
 
                 # No changed records
