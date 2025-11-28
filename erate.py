@@ -1174,8 +1174,21 @@ def import_hash_process():
         try:
             with conn.cursor() as cur:
                 for row in reader:
-                    app_number = row.get('Applicant #') or row.get('app_number')
-                    entity_name = row.get('Billed Entity Name') or row.get('Entity Name') or 'UNKNOWN'
+                    # USAC CSV uses these column names — be aggressive
+                    app_number = (
+                        row.get('Applicant #') or
+                        row.get('Application Number') or
+                        row.get('app_number') or
+                        row.get('App #') or
+                        ''
+                    ).strip()
+
+                    entity_name = (
+                        row.get('Billed Entity Name') or
+                        row.get('Entity Name') or
+                        row.get('BEN Name') or
+                        'UNKNOWN'
+                    )
 
                     if not app_number:
                         continue
