@@ -509,18 +509,18 @@
                     </span>
                 {% endif %}
 
-                <!-- EXPORT — RED WHEN ACTIVE, GRAY WHEN NOT — FORCED VISIBLE -->
-                {% set user_ft = user.ft | default(100) if user else 100 %}
+                <!-- EXPORT BUTTON — USES REAL USER FT (santo=500, guest=100) -->
+                {% set user_ft = user.ft | int | default(100) if user else 100 %}
                 {% if total_count <= user_ft and total_count > 0 %}
                     <a href="/erate/download-export"
                        class="btn btn-danger btn-sm"
-                       style="min-width:160px; padding:10px 20px; font-weight:600; color:white !important; background:#dc3545 !important; border:1px solid #dc3545 !important; box-shadow:0 2px 4px rgba(0,0,0,0.2);">
-                        Export
+                       style="min-width:160px; padding:10px 20px; font-weight:600; color:white;">
+                        Export ({{ total_count }})
                     </a>
                 {% else %}
                     <span class="btn btn-secondary btn-sm"
                           style="min-width:160px; padding:10px 20px; opacity:0.6; cursor:not-allowed;">
-                        Export
+                        Export ({{ total_count }})
                     </span>
                 {% endif %}
 
