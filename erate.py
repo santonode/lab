@@ -1444,84 +1444,65 @@ def add_to_export():
     try:
         conn = get_conn()
         with conn.cursor() as cur:
-            cur.execute("""
-                SELECT 
-                    app_number, form_nickname, entity_name, ben, 
-                    address1, address2, city, state, zip_code,
-                    phone, phone_ext, email,
-                    last_modified_datetime
-                FROM erate 
-                WHERE app_number = %s
-            """, (app_number,))
+            cur.execute("SELECT * FROM erate WHERE app_number = %s", (app_number,))
             row = cur.fetchone()
 
         if not row:
             return jsonify({"error": "Applicant not found"}), 404
 
-        # Build full data
-        (app_num, form_nick, entity_name, ben, addr1, addr2, 
-         city, state, zip_code, phone, phone_ext, email, mod_date) = row
+        # Get column names in order
+        columns = [desc[0] for desc in cur.description]
 
-        full_address = f"{addr1 or ''} {addr2 or ''}, {city or ''}, {state or ''} {zip_code or ''}".strip(" ,")
-        full_phone = f"{phone or ''}{' x' + phone_ext if phone_ext else ''}".strip()
+        # Build dict with ALL fields from DB
+        export_row = dict(zip(columns, row))
 
-        # Get current network (same logic as distance column)
-        current_network = "Bluebird Network"
-        if 'fna' in request.referrer.lower() or session.get('current_network') == 'fna':
-            current_network = "FNA Network"
+        # Add our two custom fields
+        export_row["Distance"] = distance
+        export_row["Current Network"] = (
+            "FNA Network" 
+            if session.get('current_network') == 'fna' or 'fna' in request.referrer.lower() 
+            else "Bluebird Network"
+        )
 
-        export_row = {
-            "Applicant #": app_num,
-            "Form Nickname": form_nick or "",
-            "Entity Name": entity_name or "",
-            "BEN#": ben or "",
-            "BEN Address": full_address,
-            "BEN Phone": full_phone,
-            "BEN Email": email or "",
-            "State": state or "",
-            "Modified": mod_date.strftime('%m/%d/%Y') if mod_date else "",
+        # Reorder so our fields are first (optional but nice)
+        ordered_row = {
+            "Applicant #": export_row.get("app_number", ""),
+            "Form Nickname": export_row.get("form_nickname", ""),
+            "Entity Name": export_row.get("entity_name", ""),
+            "BEN#": export_row.get("ben", ""),
+            "BEN Address": f"{export_row.get('address1','')} {export_row.get('address2','')}, {export_row.get('city','')}, {export_row.get('state','') {export_row.get('zip_code','')}".strip(" ,"),
+            "BEN Phone": f"{export_row.get('phone','')}{' x' + export_row.get('phone_ext','') if export_row.get('phone_ext') else ''}".strip(),
+            "BEN Email": export_row.get("email", ""),
+            "State": export_row.get("state", ""),
+            "Modified": export_row.get("last_modified_datetime").strftime('%m/%d/%Y') if export_row.get("last_modified_datetime") else "",
             "Distance": distance,
-            "Current Network": current_network
+            "Current Network": export_row["Current Network"],
         }
+        # Add ALL remaining DB fields
+        for k, v in export_row.items():
+            if k not in ordered_row:
+                ordered_row[k] = v or ""
 
-        # Check if already in file
+        # Check duplicate
         if os.path.exists(filename):
             with open(filename, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
-                if any(r.get("Applicant #") == app_num for r in reader):
+                if any(r.get("Applicant #") == app_number for r in reader):
                     return jsonify({"status": "already_added"})
 
-        # Write immediately with full data
+        # Write with ALL fields
         file_exists = os.path.exists(filename)
         with open(filename, 'a', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=export_row.keys())
+            writer = csv.DictWriter(f, fieldnames=ordered_row.keys())
             if not file_exists:
                 writer.writeheader()
-            writer.writerow(export_row)
+            writer.writerow(ordered_row)
 
         return jsonify({"status": "added"})
 
     except Exception as e:
         current_app.logger.error(f"Export failed: {e}")
         return jsonify({"error": "Server error"}), 500
-
-@erate_bp.route('/download-export')
-def download_export():
-    if 'username' not in session:
-        return abort(403)
-
-    username = session['username']
-    filename = f"exports/{username}_001.csv"
-
-    if not os.path.exists(filename):
-        return "No export file yet. Click some red distances first!", 404
-
-    return send_file(
-        filename,
-        as_attachment=True,
-        download_name=f"{username}_export.csv",
-        mimetype='text/csv'
-    )
 
 @erate_bp.route('/logout')
 def logout():
