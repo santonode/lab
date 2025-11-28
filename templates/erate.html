@@ -501,11 +501,11 @@
                 {% if next_offset|default(10) > 10 %}
                     <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset - 20 }}&deduct=1"
                        class="btn btn-primary btn-sm" style="min-width:80px; padding:8px 16px;">
-                        ← Prev
+                        Prev
                     </a>
                 {% else %}
                     <span class="btn btn-secondary btn-sm" style="min-width:80px; padding:8px 16px; opacity:0.5; cursor:not-allowed;">
-                        ← Prev
+                        Prev
                     </span>
                 {% endif %}
 
@@ -515,12 +515,12 @@
                     <a href="/erate/download-export"
                        class="btn btn-danger btn-sm"
                        style="min-width:160px; padding:10px 20px; font-weight:600; color:white !important; background:#dc3545 !important; border:1px solid #dc3545 !important; box-shadow:0 2px 4px rgba(0,0,0,0.2);">
-                        Export ({{ total_count }})
+                        Export
                     </a>
                 {% else %}
                     <span class="btn btn-secondary btn-sm"
                           style="min-width:160px; padding:10px 20px; opacity:0.6; cursor:not-allowed;">
-                        Export ({{ total_count }})
+                        Export
                     </span>
                 {% endif %}
 
@@ -528,11 +528,11 @@
                 {% if has_more %}
                     <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset|default(10) }}&deduct=1"
                        class="btn btn-primary btn-sm" style="min-width:80px; padding:8px 16px;">
-                        Next →
+                        Next
                     </a>
                 {% else %}
                     <span class="btn btn-secondary btn-sm" style="min-width:80px; padding:8px 16px; opacity:0.5; cursor:not-allowed;">
-                        Next →
+                        Next
                     </span>
                 {% endif %}
 
