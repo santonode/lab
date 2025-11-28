@@ -1165,73 +1165,72 @@ def import_hash_process():
     with open(CSV_FILE, 'rb') as f:
         file_hash = hashlib.md5(f.read()).hexdigest()
 
-    log(f"=== HASH IMPORT — FIRST-CHANGE TEST STARTED — User: {session['username']} | File hash: {file_hash[:16]}... ===")
+    log(f"=== HASH IMPORT — UPDATE FIRST CHANGED RECORD ONLY — User: {session['username']} ===")
 
     with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
-        rows = list(reader)
 
-    conn = psycopg.connect(DATABASE_URL)
-    try:
-        with conn.cursor() as cur:
-            # Skip if already processed
-            cur.execute("SELECT 1 FROM import_hash_log WHERE file_hash = %s", (file_hash,))
-            if cur.fetchone():
-                log("This file was already processed by hash import")
-                flash("This file was already processed", "info")
-                return redirect(url_for('erate.dashboard'))
+        conn = psycopg.connect(DATABASE_URL)
+        try:
+            with conn.cursor() as cur:
+                for row in reader:
+                    app_number = row.get('Applicant #') or row.get('app_number')
+                    entity_name = row.get('Billed Entity Name') or row.get('Entity Name') or 'UNKNOWN'
 
-            for i, row in enumerate(rows, 1):
-                app_number = row.get('Applicant #') or row.get('app_number')
-                entity_name = row.get('Billed Entity Name') or row.get('Entity Name') or 'UNKNOWN'
+                    if not app_number:
+                        continue
 
-                if not app_number:
-                    continue
+                    # Skip NEW records — old import owns them
+                    cur.execute("SELECT 1 FROM erate WHERE app_number = %s", (app_number,))
+                    if not cur.fetchone():
+                        continue
 
-                # Hash the row
-                clean_row = {k: v for k, v in row.items() if k not in ['Applicant #', 'app_number']}
-                row_hash = hashlib.md5(str(sorted(clean_row.items())).encode()).hexdigest()
+                    # Compute current row hash
+                    clean_row = {k: v for k, v in row.items() if k not in ['Applicant #', 'app_number']}
+                    row_hash = hashlib.md5(str(sorted(clean_row.items())).encode()).hexdigest()
 
-                cur.execute("SELECT row_hash FROM erate_hash WHERE app_number = %s", (app_number,))
-                result = cur.fetchone()
+                    # Compare with stored hash
+                    cur.execute("SELECT row_hash FROM erate_hash WHERE app_number = %s", (app_number,))
+                    db_result = cur.fetchone()
 
-                if not result:  # NEW RECORD
-                    log(f"FIRST CHANGE → NEW RECORD | Applicant #: {app_number} | Entity: {entity_name}")
-                    flash(f"NEW RECORD FOUND → Applicant #: {app_number} — {entity_name}", "warning")
-                    if not DRY_RUN_MODE:
-                        cur.execute(INSERT_SQL, _row_to_tuple(row))
-                        cur.execute("INSERT INTO erate_hash (app_number, row_hash) VALUES (%s, %s)", (app_number, row_hash))
-                        conn.commit()
-                    flash(f"Imported NEW record {app_number}. STOPPED for verification.", "success")
-                    return redirect(url_for('erate.dashboard'))
+                    if db_result and db_result[0] != row_hash:
+                        # FIRST CHANGED RECORD FOUND → UPDATE AND STOP
+                        log(f"UPDATING SINGLE RECORD → Applicant #: {app_number} | Entity: {entity_name}")
 
-                elif result[0] != row_hash:  # CHANGED RECORD
-                    log(f"FIRST CHANGE → UPDATED RECORD | Applicant #: {app_number} | Entity: {entity_name}")
-                    flash(f"CHANGED RECORD FOUND → Applicant #: {app_number} — {entity_name}", "warning")
-                    if not DRY_RUN_MODE:
-                        # UPDATE real erate table
-                        update_parts = [f"{k}=%s" for k in row.keys()]
-                        update_sql = f"UPDATE erate SET {', '.join(update_parts)} WHERE app_number = %s"
+                        # UPDATE erate table
+                        placeholders = ', '.join([f"{k}=%s" for k in row.keys()])
+                        update_sql = f"UPDATE erate SET {placeholders} WHERE app_number = %s"
                         cur.execute(update_sql, list(row.values()) + [app_number])
-                        # Update hash
-                        cur.execute("UPDATE erate_hash SET row_hash = %s WHERE app_number = %s", (row_hash, app_number))
+
+                        # Update hash table
+                        cur.execute(
+                            "INSERT INTO erate_hash (app_number, row_hash) VALUES (%s, %s) "
+                            "ON CONFLICT (app_number) DO UPDATE SET row_hash = EXCLUDED.row_hash",
+                            (app_number, row_hash)
+                        )
+
                         conn.commit()
-                    flash(f"Updated record {app_number}. STOPPED for verification.", "success")
-                    return redirect(url_for('erate.dashboard'))
+                        conn.close()
 
-            # No changes found
-            log("HASH IMPORT — NO CHANGES DETECTED IN ENTIRE FILE")
-            flash("No changes detected — your data is already up to date", "info")
+                        flash(f"UPDATED ONE RECORD → {app_number} — {entity_name}", "success")
+                        flash("Hash import stopped after updating the first changed record.", "info")
+                        return redirect(url_for('erate.dashboard'))
 
-    except Exception as e:
-        log(f"HASH IMPORT FAILED: {e}")
-        flash(f"Error: {e}", "error")
-    finally:
-        conn.close()
+                # No changed records
+                log("HASH IMPORT — NO CHANGED RECORDS FOUND")
+                flash("No changed records — all data already up to date", "info")
+
+        except Exception as e:
+            log(f"HASH IMPORT ERROR: {e}")
+            flash(f"Error: {e}", "error")
+        finally:
+            conn.close()
 
     return redirect(url_for('erate.dashboard'))
 
+# ================================================
 # === AUTH SYSTEM + GUEST → DASHBOARD + LOGOUT ===
+# ================================================
 def hash_password(pw):
     return hashlib.sha256(pw.encode()).hexdigest()
 
