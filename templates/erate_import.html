@@ -148,7 +148,7 @@
         </div>
     {% endif %}
 
-    <!-- BULK IMPORT BUTTON -->
+    <!-- DAILY BULK IMPORT (LEGACY) -->
     <div class="form-group">
         <form method="post" onsubmit="this.querySelector('button').disabled=true;">
             <input type="hidden" name="action" value="import_all">
@@ -160,6 +160,13 @@
                 {% endif %}
             </button>
         </form>
+    </div>
+
+    <!-- SMART HASH IMPORT (NEW) -->
+    <div class="form-group">
+        <a href="{{ url_for('erate.import_hash_start') }}" class="btn btn-success">
+            Smart Import (Hash Detection)
+        </a>
     </div>
 
     <!-- START OVER -->
