@@ -767,37 +767,26 @@ def bbmap(app_number):
         "fna_member": fna_member
     })
 
-# === DASHBOARD (WITH AUTH CHECK + TEXT SEARCH + USER FT PASSED) ===
+# === DASHBOARD (WITH AUTH CHECK + TEXT SEARCH) ===
 @erate_bp.route('/')
 def dashboard():
     log("Dashboard accessed")
-    
-    # GUEST MODE
     if not session.get('username'):
         return render_template('erate.html',
             table_data=[], total_count=0, total_filtered=0,
-            filters={}, has_more=False, next_offset=0,
-            user=None  # ← GUEST
+            filters={}, has_more=False, next_offset=0
         )
-
-    # DEDUCT POINT ON FILTER
+    # DEDUCT POINT ON ANY FILTER
     if any(request.args.get(k) for k in ['state', 'modified_after', 'text']):
         deduct_point()
-
-    # GET CURRENT USER FOR FT VALUE
-    from models import User  # ← make sure this import exists at top or here
-    current_user_obj = User.query.filter_by(username=session['username']).first()
-
     state_filter = request.args.get('state', '').strip().upper()
     modified_after_str = request.args.get('modified_after', '').strip()
     text_search = request.args.get('text', '').strip()
     offset = max(int(request.args.get('offset', 0)), 0)
     limit = 10
-
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10, autocommit=True)
     try:
         with conn.cursor() as cur:
-            # TOTAL COUNT (filtered)
             count_sql = 'SELECT COUNT(*) FROM erate'
             count_params = []
             where_clauses = []
@@ -814,8 +803,6 @@ def dashboard():
                 count_sql += ' WHERE ' + ' AND '.join(where_clauses)
             cur.execute(count_sql, count_params)
             total_count = cur.fetchone()[0]
-
-            # DATA
             sql = '''
                 SELECT app_number, entity_name, state, last_modified_datetime,
                        latitude, longitude
@@ -829,7 +816,6 @@ def dashboard():
             params.extend([limit + 1, offset])
             cur.execute(sql, params)
             rows = cur.fetchall()
-
             table_data = [
                 {
                     'app_number': r[0],
@@ -844,7 +830,7 @@ def dashboard():
             has_more = len(table_data) > limit
             table_data = table_data[:limit]
             next_offset = offset + limit
-
+            total_filtered = offset + len(table_data)
         return render_template(
             'erate.html',
             table_data=table_data,
@@ -854,10 +840,9 @@ def dashboard():
                 'text': text_search
             },
             total_count=total_count,
-            total_filtered=offset + len(table_data),
+            total_filtered=total_filtered,
             has_more=has_more,
             next_offset=next_offset,
-            user=current_user_obj,           # ← THIS IS THE KEY
             cache_bust=int(time.time())
         )
     except Exception as e:
