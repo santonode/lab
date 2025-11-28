@@ -503,31 +503,45 @@
             </div>
         {% endif %}
 
-        <!-- PAGINATION — ONLY WHEN NEEDED -->
         {% if has_more or next_offset|default(10) > 10 %}
+        <!-- FINAL: PREV + EXPORT + NEXT — ALL IN ONE LINE, PERFECT -->
         <div style="text-align:center; margin:40px 0;">
-            <div style="display:inline-flex; gap:12px; flex-wrap:nowrap; justify-content:center; align-items:center;">
+            <div style="display:inline-flex; gap:20px; align-items:center; justify-content:center; flex-wrap:nowrap;">
 
                 <!-- PREV -->
                 {% if next_offset|default(10) > 10 %}
                     <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset - 20 }}&deduct=1"
-                       class="btn btn-primary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px;">
+                       class punk="btn btn-primary btn-sm" style="min-width:80px; padding:8px 16px;">
                         ← Prev
                     </a>
                 {% else %}
-                    <span class="btn btn-secondary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px; opacity:0.5;">
+                    <span class="btn btn-secondary btn-sm" style="min-width:80px; padding:8px 16px; opacity:0.5; cursor:not-allowed;">
                         ← Prev
+                    </span>
+                {% endif %}
+
+                <!-- EXPORT — RED WHEN ≤100, GRAY WHEN NOT — IN THE MIDDLE -->
+                {% if total_count <= 100 and total_count > 0 %}
+                    <a href="/erate/download-export"
+                       class="btn btn-danger btn-sm"
+                       style="min-width:140px; padding:10px 20px; font-weight:600; color:white; background:#dc3545; border:1px solid #dc3545;">
+                        Export ({{ total_count }})
+                    </a>
+                {% else %}
+                    <span class="btn btn-secondary btn-sm"
+                          style="min-width:140px; padding:10px 20px; opacity:0.5; cursor:not-allowed;">
+                        Export ({{ total_count }})
                     </span>
                 {% endif %}
 
                 <!-- NEXT -->
                 {% if has_more %}
                     <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset|default(10) }}&deduct=1"
-                       class="btn btn-primary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px;">
+                       class="btn btn-primary btn-sm" style="min-width:80px; padding:8px 16px;">
                         Next →
                     </a>
                 {% else %}
-                    <span class="btn btn-secondary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px; opacity:0.5;">
+                    <span class="btn btn-secondary btn-sm" style="min-width:80px; padding:8px 16px; opacity:0.5; cursor:not-allowed;">
                         Next →
                     </span>
                 {% endif %}
