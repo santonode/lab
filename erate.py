@@ -1153,34 +1153,7 @@ def reset_import():
 # =====================================================
 # === HASH-BASED SMART IMPORT — DRY RUN MODE (SAFE) ===
 # =====================================================
-# === SMART HASH IMPORT — USES SERVER CSV (470schema.csv) — NO FILE PICKER ===
-@erate_bp.route('/import-hash')
-def import_hash_start():
-    if 'username' not in session:
-        flash("Login required", "error")
-        return redirect(url_for('erate.dashboard'))
-
-    if not os.path.exists(CSV_FILE):
-        flash("470schema.csv not found on server", "error")
-        return redirect(url_for('erate.import_interactive'))
-
-    return f'''
-    <div style="max-width:600px;margin:100px auto;padding:40px;background:white;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.15);text-align:center;font-family:system-ui">
-        <h2 style="color:#1a5d57;margin-bottom:10px">Smart Import (Hash Detection)</h2>
-        <p style="color:#666;margin-bottom:30px">Using server file: 470schema.csv<br>
-           Only new or changed records will be processed</p>
-        <form method="post" action="{url_for('erate.import_hash_process')}">
-            <button style="background:#27ae60;color:white;padding:16px 40px;border:none;border-radius:8px;font-size:1.1rem;font-weight:600;cursor:pointer">
-                Start Smart Import ({{ "DRY RUN" if DRY_RUN_MODE else "LIVE" }})
-            </button>
-        </form>
-        <p style="margin-top:30px;color:#c82333;font-weight:bold">
-            MODE: {'DRY RUN (no changes)' if DRY_RUN_MODE else 'LIVE IMPORT'}
-        </p>
-    </div>
-    '''
-
-@erate_bp.route('/import-hash-process', methods=['POST'])
+@erate_bp.route('/import-hash-process')
 def import_hash_process():
     if 'username' not in session:
         return redirect(url_for('erate.dashboard'))
@@ -1190,67 +1163,68 @@ def import_hash_process():
         return redirect(url_for('erate.import_interactive'))
 
     with open(CSV_FILE, 'rb') as f:
-        content = f.read()
-        file_hash = hashlib.md5(content).hexdigest()
+        file_hash = hashlib.md5(f.read()).hexdigest()
 
-    log(f"SMART IMPORT STARTED — User: {session['username']} | Hash: {file_hash[:16]}... | DRY RUN: {DRY_RUN_MODE}")
+    log(f"=== HASH IMPORT — FIRST-CHANGE TEST STARTED — User: {session['username']} | File hash: {file_hash[:16]}... ===")
 
     with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
         rows = list(reader)
 
-    added = updated = 0
-    examples = []
-
     conn = psycopg.connect(DATABASE_URL)
     try:
         with conn.cursor() as cur:
+            # Skip if already processed
             cur.execute("SELECT 1 FROM import_hash_log WHERE file_hash = %s", (file_hash,))
             if cur.fetchone():
-                log("File already processed by hash import")
-                flash("This file was already processed by Smart Import", "info")
+                log("This file was already processed by hash import")
+                flash("This file was already processed", "info")
                 return redirect(url_for('erate.dashboard'))
 
             for i, row in enumerate(rows, 1):
                 app_number = row.get('Applicant #') or row.get('app_number')
+                entity_name = row.get('Billed Entity Name') or row.get('Entity Name') or 'UNKNOWN'
+
                 if not app_number:
                     continue
 
-                row_clean = {k: v for k, v in row.items() if k not in ['Applicant #', 'app_number']}
-                row_hash = hashlib.md5(str(sorted(row_clean.items())).encode()).hexdigest()
+                # Hash the row
+                clean_row = {k: v for k, v in row.items() if k not in ['Applicant #', 'app_number']}
+                row_hash = hashlib.md5(str(sorted(clean_row.items())).encode()).hexdigest()
 
                 cur.execute("SELECT row_hash FROM erate_hash WHERE app_number = %s", (app_number,))
-                db_hash = cur.fetchone()
+                result = cur.fetchone()
 
-                if not db_hash:
-                    added += 1
-                    examples.append(f"NEW: {app_number}")
+                if not result:  # NEW RECORD
+                    log(f"FIRST CHANGE → NEW RECORD | Applicant #: {app_number} | Entity: {entity_name}")
+                    flash(f"NEW RECORD FOUND → Applicant #: {app_number} — {entity_name}", "warning")
                     if not DRY_RUN_MODE:
-                        cur.execute("INSERT INTO erate_hash (app_number, row_hash) VALUES (%s, %s) "
-                                    "ON CONFLICT (app_number) DO UPDATE SET row_hash = EXCLUDED.row_hash",
-                                    (app_number, row_hash))
-                elif db_hash[0] != row_hash:
-                    updated += 1
-                    examples.append(f"CHANGED: {app_number}")
+                        cur.execute(INSERT_SQL, _row_to_tuple(row))
+                        cur.execute("INSERT INTO erate_hash (app_number, row_hash) VALUES (%s, %s)", (app_number, row_hash))
+                        conn.commit()
+                    flash(f"Imported NEW record {app_number}. STOPPED for verification.", "success")
+                    return redirect(url_for('erate.dashboard'))
+
+                elif result[0] != row_hash:  # CHANGED RECORD
+                    log(f"FIRST CHANGE → UPDATED RECORD | Applicant #: {app_number} | Entity: {entity_name}")
+                    flash(f"CHANGED RECORD FOUND → Applicant #: {app_number} — {entity_name}", "warning")
                     if not DRY_RUN_MODE:
+                        # UPDATE real erate table
+                        update_parts = [f"{k}=%s" for k in row.keys()]
+                        update_sql = f"UPDATE erate SET {', '.join(update_parts)} WHERE app_number = %s"
+                        cur.execute(update_sql, list(row.values()) + [app_number])
+                        # Update hash
                         cur.execute("UPDATE erate_hash SET row_hash = %s WHERE app_number = %s", (row_hash, app_number))
+                        conn.commit()
+                    flash(f"Updated record {app_number}. STOPPED for verification.", "success")
+                    return redirect(url_for('erate.dashboard'))
 
-                if i % 5000 == 0:
-                    log(f"Processed {i}/{len(rows)} | Added: {added} | Updated: {updated}")
-
-            if not DRY_RUN_MODE:
-                cur.execute("""INSERT INTO import_hash_log (username, file_hash, records_added, records_updated)
-                               VALUES (%s, %s, %s, %s)""",
-                            (session['username'], file_hash, added, updated))
-                conn.commit()
-
-        flash(f"Smart Import Complete! Added: {added} | Updated: {updated} | "
-              f"DRY RUN: {'YES' if DRY_RUN_MODE else 'NO'}", "success")
-        if examples:
-            flash("Examples: " + " | ".join(examples[:10]), "info")
+            # No changes found
+            log("HASH IMPORT — NO CHANGES DETECTED IN ENTIRE FILE")
+            flash("No changes detected — your data is already up to date", "info")
 
     except Exception as e:
-        log(f"HASH IMPORT ERROR: {e}")
+        log(f"HASH IMPORT FAILED: {e}")
         flash(f"Error: {e}", "error")
     finally:
         conn.close()
