@@ -1209,22 +1209,51 @@ def import_hash_process():
                     if db_result and db_result[0] != row_hash:
                         log(f"UPDATING SINGLE RECORD → Applicant #: {app_number} | Entity: {entity_name}")
 
-                        # THIS LINE IS FIXED
-                        quoted_sets = ', '.join([f'"{k}"=%s' for k in row.keys()])
-                        update_sql = f"UPDATE erate SET {quoted_sets} WHERE app_number = %s"
-                        cur.execute(update_sql, list(row.values()) + [app_number])
+                        # Get real column names from erate table
+                        cur.execute("""
+                            SELECT column_name FROM information_schema.columns 
+                            WHERE table_name = 'erate' AND column_name != 'app_number'
+                        """)
+                        valid_columns = {row[0] for row in cur.fetchall()}
 
-                        # Update hash
+                        # Only update columns that actually exist
+                        update_parts = []
+                        values = []
+                        for k, v in row.items():
+                            # Map CSV column names to DB column names
+                            db_col = k.strip()
+                            if db_col == 'Application Number':
+                                continue  # skip — we use app_number as PK
+                            if db_col == 'Applicant #':
+                                continue
+                            # Normalize common variations
+                            if db_col in ['Billed Entity Name', 'BEN Name']:
+                                db_col = 'entity_name'
+                            if db_col in ['Form Nickname', 'Nickname']:
+                                db_col = 'form_nickname'
+
+                            if db_col in valid_columns:
+                                update_parts.append(f'"{db_col}" = %s')
+                                values.append(v or None)
+
+                        if not update_parts:
+                            log("No valid columns to update — skipping")
+                        else:
+                            update_sql = f"UPDATE erate SET {', '.join(update_parts)} WHERE app_number = %s"
+                            cur.execute(update_sql, values + [app_number])
+
+                        # Always update the hash
                         cur.execute(
                             "INSERT INTO erate_hash (app_number, row_hash) VALUES (%s, %s) "
                             "ON CONFLICT (app_number) DO UPDATE SET row_hash = EXCLUDED.row_hash",
                             (app_number, row_hash)
                         )
+
                         conn.commit()
                         conn.close()
 
                         flash(f"UPDATED ONE RECORD → {app_number} — {entity_name}", "success")
-                        flash("Hash import stopped after first changed record.", "info")
+                        flash("Hash import stopped after updating the first changed record.", "info")
                         return redirect(url_for('erate.dashboard'))
 
                 # No changed records
