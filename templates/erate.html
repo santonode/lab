@@ -724,9 +724,9 @@
             document.getElementById(type + 'Modal').style.display = 'none';
         }
 
-        // === FINAL POINT SYSTEM — GUEST NEVER GETS STUCK ===
         // === FINAL — GUESTS ALWAYS SEE REGISTER BUTTON, NEVER STUCK ===
-        function updatePoints(force = false) {
+        // === FINAL — GUESTS AUTO-RESET WHEN OUT OF POINTS ===
+        function updatePoints() {
             fetch('/erate/points?' + Date.now())
                 .then(r => r.json())
                 .then(data => {
@@ -735,17 +735,16 @@
 
                     el.textContent = `(${data.points} pts)`;
                     if (data.points <= 5) el.style.color = '#ffc107';
-                    if (data.points > 0 && !force) return;
 
-                    // FORCE SHOW MODAL IF POINTS <= 0
-                    const modal = document.getElementById('outOfPointsModal');
-                    const message = document.getElementById('out-of-points-message');
-                    const registerBtn = document.getElementById('register-for-points-btn');
+                    // GUEST OUT OF POINTS → FORCE A FRESH SESSION
+                    if (data.points <= 0 && !document.body.dataset.username) {
+                        el.style.color = '#dc3545';
 
-                    // TRUE GUEST DETECTION — checks for empty or missing username
-                    const isGuest = !document.body.dataset.username || document.body.dataset.username === '';
+                        // Show upgrade modal
+                        const modal = document.getElementById('outOfPointsModal');
+                        const message = document.getElementById('out-of-points-message');
+                        const registerBtn = document.getElementById('register-for-points-btn');
 
-                    if (isGuest) {
                         message.innerHTML = `
                             <strong>You've used all 25 guest points!</strong><br><br>
                             Create a free account now and get<br>
@@ -756,19 +755,22 @@
                             modal.classList.remove('show');
                             document.getElementById('registerModal').classList.add('show');
                         };
-                    } else {
-                        message.innerHTML = "You're out of points!<br><br>Contact support for more.";
-                        registerBtn.style.display = 'none';
-                    }
 
-                    modal.classList.add('show');
+                        modal.classList.add('show');
+
+                        // AUTO-REFRESH TO NEW GUEST SESSION AFTER 3 SECONDS IF THEY DON'T CLICK
+                        setTimeout(() => {
+                            if (modal.classList.contains('show')) {
+                                fetch('/erate/guest-reset', {method: 'POST'})
+                                    .then(() => location.reload());
+                            }
+                        }, 3000);
+                    }
                 });
         }
 
-        // ← THIS RUNS ON EVERY PAGE LOAD — GUESTS NEVER GET STUCK
-        document.addEventListener('DOMContentLoaded', () => {
-            updatePoints(true);  // force check on load
-        });
+        // Run on every page load
+        document.addEventListener('DOMContentLoaded', updatePoints);
         
         // === showDetails() — THIS WAS MISSING ===
         async function showDetails(appNumber) {
