@@ -724,7 +724,7 @@
             document.getElementById(type + 'Modal').style.display = 'none';
         }
 
-        // === FINAL POINT SYSTEM — GUESTS GET REGISTER BUTTON ===
+        // === FINAL POINT SYSTEM — GUEST NEVER GETS STUCK ===
         function updatePoints() {
             fetch('/erate/points?' + Date.now())
                 .then(r => r.json())
@@ -736,14 +736,12 @@
                     if (data.points <= 5) el.style.color = '#ffc107';
                     if (data.points > 0) return;
 
-                    // OUT OF POINTS
                     el.style.color = '#dc3545';
 
                     const modal = document.getElementById('outOfPointsModal');
                     const message = document.getElementById('out-of-points-message');
                     const registerBtn = document.getElementById('register-for-points-btn');
 
-                    // Detect guest: no username in body data-attribute
                     const isGuest = !document.body.dataset.username;
 
                     if (isGuest) {
@@ -758,20 +756,21 @@
                             document.getElementById('registerModal').classList.add('show');
                         };
                     } else {
-                        message.innerHTML = `
-                            <strong>You're out of points!</strong><br><br>
-                            Contact support for more points.
-                        `;
+                        message.innerHTML = "You're out of points!<br><br>Contact support for more.";
                         registerBtn.style.display = 'none';
                     }
 
                     modal.classList.add('show');
-                })
-                .catch(() => {
-                    const el = document.getElementById('points-display');
-                    if (el) el.textContent = '(?)';
                 });
         }
+
+        // ← THIS NEW LINE FIXES THE "STUCK" PROBLEM FOREVER
+        document.addEventListener('DOMContentLoaded', () => {
+            if (document.body.dataset.username === '') {
+                // Force check on page load for guests — they ALWAYS see the offer
+                updatePoints();
+            }
+        });
         
         // === showDetails() — THIS WAS MISSING ===
         async function showDetails(appNumber) {
