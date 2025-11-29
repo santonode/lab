@@ -1627,6 +1627,12 @@ def download_export():
         mimetype='text/csv'
     )
 
+@erate_bp.route('/guest-reset', methods=['POST'])
+def guest_reset():
+    if 'username' not in session:
+        session.clear()  # kills the 0-point guest cookie
+    return '', 204
+
 @erate_bp.route('/logout')
 def logout():
     session.clear()
