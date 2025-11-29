@@ -1165,16 +1165,23 @@ def import_hash_process():
     with open(CSV_FILE, 'rb') as f:
         file_hash = hashlib.md5(f.read()).hexdigest()
 
-    log(f"=== HASH IMPORT — UPDATE FIRST CHANGED RECORD ONLY — User: {session['username']} ===")
+    log(f"=== FULL SMART HASH IMPORT STARTED — User: {session['username']} ===")
 
     with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
 
+        updated = 0
         conn = psycopg.connect(DATABASE_URL)
         try:
             with conn.cursor() as cur:
+                # Get real column names from erate table
+                cur.execute("""
+                    SELECT column_name FROM information_schema.columns 
+                    WHERE table_name = 'erate' AND column_name != 'app_number'
+                """)
+                valid_columns = {row[0] for row in cur.fetchall()}
+
                 for row in reader:
-                    # USAC CSV uses these column names — be aggressive
                     app_number = (
                         row.get('Applicant #') or
                         row.get('Application Number') or
@@ -1182,13 +1189,6 @@ def import_hash_process():
                         row.get('App #') or
                         ''
                     ).strip()
-
-                    entity_name = (
-                        row.get('Billed Entity Name') or
-                        row.get('Entity Name') or
-                        row.get('BEN Name') or
-                        'UNKNOWN'
-                    )
 
                     if not app_number:
                         continue
@@ -1198,70 +1198,53 @@ def import_hash_process():
                     if not cur.fetchone():
                         continue
 
-                    # Compute current row hash
-                    clean_row = {k: v for k, v in row.items() if k not in ['Applicant #', 'app_number']}
+                    # Build clean row and hash
+                    clean_row = {}
+                    for k, v in row.items():
+                        db_col = k.strip()
+                        if db_col in ['Application Number', 'Applicant #']:
+                            continue
+                        if db_col in ['Billed Entity Name', 'BEN Name']:
+                            db_col = 'entity_name'
+                        if db_col in ['Form Nickname', 'Nickname']:
+                            db_col = 'form_nickname'
+                        if db_col in valid_columns:
+                            clean_row[db_col] = v or ''
+
                     row_hash = hashlib.md5(str(sorted(clean_row.items())).encode()).hexdigest()
 
-                    # Compare with stored hash
+                    # Compare hash
                     cur.execute("SELECT row_hash FROM erate_hash WHERE app_number = %s", (app_number,))
                     db_result = cur.fetchone()
 
                     if db_result and db_result[0] != row_hash:
-                        log(f"UPDATING SINGLE RECORD → Applicant #: {app_number} | Entity: {entity_name}")
+                        # UPDATE real record
+                        update_parts = [f'"{k}" = %s' for k in clean_row.keys()]
+                        values = list(clean_row.values())
+                        update_sql = f"UPDATE erate SET {', '.join(update_parts)} WHERE app_number = %s"
+                        cur.execute(update_sql, values + [app_number])
 
-                        # Get real column names from erate table
-                        cur.execute("""
-                            SELECT column_name FROM information_schema.columns 
-                            WHERE table_name = 'erate' AND column_name != 'app_number'
-                        """)
-                        valid_columns = {row[0] for row in cur.fetchall()}
-
-                        # Only update columns that actually exist
-                        update_parts = []
-                        values = []
-                        for k, v in row.items():
-                            # Map CSV column names to DB column names
-                            db_col = k.strip()
-                            if db_col == 'Application Number':
-                                continue  # skip — we use app_number as PK
-                            if db_col == 'Applicant #':
-                                continue
-                            # Normalize common variations
-                            if db_col in ['Billed Entity Name', 'BEN Name']:
-                                db_col = 'entity_name'
-                            if db_col in ['Form Nickname', 'Nickname']:
-                                db_col = 'form_nickname'
-
-                            if db_col in valid_columns:
-                                update_parts.append(f'"{db_col}" = %s')
-                                values.append(v or None)
-
-                        if not update_parts:
-                            log("No valid columns to update — skipping")
-                        else:
-                            update_sql = f"UPDATE erate SET {', '.join(update_parts)} WHERE app_number = %s"
-                            cur.execute(update_sql, values + [app_number])
-
-                        # Always update the hash
+                        # Update stored hash
                         cur.execute(
                             "INSERT INTO erate_hash (app_number, row_hash) VALUES (%s, %s) "
                             "ON CONFLICT (app_number) DO UPDATE SET row_hash = EXCLUDED.row_hash",
                             (app_number, row_hash)
                         )
 
-                        conn.commit()
-                        conn.close()
+                        updated += 1
 
-                        flash(f"UPDATED ONE RECORD → {app_number} — {entity_name}", "success")
-                        flash("Hash import stopped after updating the first changed record.", "info")
-                        return redirect(url_for('erate.dashboard'))
+                        if updated % 1000 == 0:
+                            conn.commit()
+                            log(f"Updated {updated} records so far...")
 
-                # No changed records
-                log("HASH IMPORT — NO CHANGED RECORDS FOUND")
-                flash("No changed records — all data already up to date", "info")
+                conn.commit()
+                log(f"FULL SMART IMPORT COMPLETE — Updated {updated} records")
+
+            flash(f"Smart Import Complete — Updated {updated} records", "success")
 
         except Exception as e:
-            log(f"HASH IMPORT ERROR: {e}")
+            conn.rollback()
+            log(f"SMART IMPORT FAILED: {e}")
             flash(f"Error: {e}", "error")
         finally:
             conn.close()
