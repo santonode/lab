@@ -724,8 +724,8 @@
             document.getElementById(type + 'Modal').style.display = 'none';
         }
 
-        // === FINAL — GUESTS ALWAYS SEE REGISTER BUTTON, NEVER STUCK ===
         // === FINAL — GUESTS AUTO-RESET WHEN OUT OF POINTS ===
+        // === FINAL — GUESTS SEE UPGRADE MESSAGE EVERY TIME AT 0 POINTS ===
         function updatePoints() {
             fetch('/erate/points?' + Date.now())
                 .then(r => r.json())
@@ -736,11 +736,10 @@
                     el.textContent = `(${data.points} pts)`;
                     if (data.points <= 5) el.style.color = '#ffc107';
 
-                    // GUEST OUT OF POINTS → FORCE A FRESH SESSION
+                    // GUEST WITH 0 POINTS → SHOW UPGRADE MESSAGE (NO AUTO REFRESH)
                     if (data.points <= 0 && !document.body.dataset.username) {
                         el.style.color = '#dc3545';
 
-                        // Show upgrade modal
                         const modal = document.getElementById('outOfPointsModal');
                         const message = document.getElementById('out-of-points-message');
                         const registerBtn = document.getElementById('register-for-points-btn');
@@ -757,20 +756,15 @@
                         };
 
                         modal.classList.add('show');
-
-                        // AUTO-REFRESH TO NEW GUEST SESSION AFTER 3 SECONDS IF THEY DON'T CLICK
-                        setTimeout(() => {
-                            if (modal.classList.contains('show')) {
-                                fetch('/erate/guest-reset', {method: 'POST'})
-                                    .then(() => location.reload());
-                            }
-                        }, 3000);
                     }
                 });
         }
 
-        // Run on every page load
-        document.addEventListener('DOMContentLoaded', updatePoints);
+        // Run on load AND every 5 seconds — message never gets lost
+        document.addEventListener('DOMContentLoaded', () => {
+            updatePoints();
+            setInterval(updatePoints, 5000);  // keeps checking
+        });
         
         // === showDetails() — THIS WAS MISSING ===
         async function showDetails(appNumber) {
