@@ -724,8 +724,7 @@
             document.getElementById(type + 'Modal').style.display = 'none';
         }
 
-        // === FINAL — GUESTS AUTO-RESET WHEN OUT OF POINTS ===
-        // === FINAL — GUESTS SEE UPGRADE MESSAGE EVERY TIME AT 0 POINTS ===
+        // === FINAL GUEST UX — NEVER LETS THEM USE THE SYSTEM WITH 0 POINTS ===
         function updatePoints() {
             fetch('/erate/points?' + Date.now())
                 .then(r => r.json())
@@ -734,36 +733,59 @@
                     if (!el) return;
 
                     el.textContent = `(${data.points} pts)`;
-                    if (data.points <= 5) el.style.color = '#ffc107';
 
-                    // GUEST WITH 0 POINTS → SHOW UPGRADE MESSAGE (NO AUTO REFRESH)
+                    // GUEST WITH 0 POINTS → BLOCK EVERYTHING + FORCE UPGRADE
                     if (data.points <= 0 && !document.body.dataset.username) {
                         el.style.color = '#dc3545';
 
+                        // BLOCK ALL INTERACTIVE ELEMENTS
+                        document.querySelectorAll('a, button, input, select').forEach(el => {
+                            if (!el.closest('#outOfPointsModal') && 
+                                !el.closest('#registerModal') && 
+                                !el.closest('#loginModal')) {
+                                el.style.pointerEvents = 'none';
+                                el.style.opacity = '0.5';
+                            }
+                        });
+
+                        // SHOW UPGRADE MODAL
                         const modal = document.getElementById('outOfPointsModal');
                         const message = document.getElementById('out-of-points-message');
                         const registerBtn = document.getElementById('register-for-points-btn');
 
                         message.innerHTML = `
                             <strong>You've used all 25 guest points!</strong><br><br>
-                            Create a free account now and get<br>
-                            <strong style="color:#27ae60; font-size:1.5rem;">100 more FREE points instantly!</strong>
+                            The system is now locked until you register.<br><br>
+                            <strong style="color:#27ae60; font-size:1.5rem;">Register now → 100 FREE points instantly!</strong>
                         `;
                         registerBtn.style.display = 'inline-block';
+                        registerBtn.textContent = "Register for 100 Free Points →";
                         registerBtn.onclick = () => {
                             modal.classList.remove('show');
+                            document.getElementById('authModal')?.classList.remove('show');
                             document.getElementById('registerModal').classList.add('show');
                         };
 
                         modal.classList.add('show');
+                        return;
                     }
+
+                    // Normal coloring
+                    if (data.points <= 5) el.style.color = '#ffc107';
+                    else el.style.color = '';
+
+                    // Re-enable everything if points > 0
+                    document.querySelectorAll('a, button, input, select').forEach(el => {
+                        el.style.pointerEvents = '';
+                        el.style.opacity = '';
+                    });
                 });
         }
 
-        // Run on load AND every 5 seconds — message never gets lost
+        // Run on load + every 3 seconds
         document.addEventListener('DOMContentLoaded', () => {
             updatePoints();
-            setInterval(updatePoints, 5000);  // keeps checking
+            setInterval(updatePoints, 3000);
         });
         
         // === showDetails() — THIS WAS MISSING ===
