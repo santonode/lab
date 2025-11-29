@@ -370,7 +370,7 @@
         }
     </style>
 </head>
-<body data-username="{{ session.username|default('') }}">
+<body>
     <!-- AUTH MODAL (ON FIRST VISIT) -->
     <div class="modal" id="authModal">
         <div class="modal-content">
@@ -388,7 +388,7 @@
     <div class="modal" id="registerModal" style="display:none;">
         <div class="modal-content">
             <div class="modal-header">
-                <div class="modal-title">Register (100 pts)</div>
+                <div class="modal-title">Register</div>
                 <button class="modal-close" onclick="closeModal('register')">x</button>
             </div>
             <div class="modal-body">
@@ -464,9 +464,9 @@
                 <tr>
                     <th>Applicant #</th>
                     <th>Entity Name</th>
-                    <th>St</th>
+                    <th>State</th>
                     <th>Modified</th>
-                    <th class="distance-header" style="display:none; color:#dc3545; font-weight:600;">Dist</th>
+                    <th class="distance-header" style="display:none; color:#dc3545; font-weight:600;">Distance</th>
                     <th>Map</th>
                 </tr>
             </thead>
@@ -658,22 +658,17 @@
             </div>
         </div>
     </div>
-    <!-- OUT OF POINTS MODAL — GUEST UPGRADE MESSAGE -->
-    <div class="overlay" id="outOfPointsModal">
-        <div class="modal-content" style="max-width:500px; text-align:center;">
+    <!-- OUT OF POINTS MODAL -->
+    <div class="modal" id="outOfPointsModal">
+        <div class="modal-content">
             <div class="modal-header">
                 <div class="modal-title">Out of Points</div>
             </div>
-            <div class="modal-body" id="out-of-points-message" style="padding:20px; font-size:1.1rem;">
-                <!-- Message will be filled by JS -->
+            <div class="modal-body" id="out-of-points-message" style="text-align:center; font-size:1rem;">
+                Loading...
             </div>
-            <div style="padding:15px 0;">
-                <button class="btn btn-success" id="register-for-points-btn" style="padding:14px 30px; font-size:1.1rem; font-weight:600; display:none;">
-                    Register for 100 Free Points
-                </button>
-                <button class="btn btn-primary" onclick="document.getElementById('outOfPointsModal').classList.remove('show'); location.reload();">
-                    OK
-                </button>
+            <div style="text-align:center; margin-top:15px;">
+                <button class="btn btn-primary" onclick="location.reload()">OK</button>
             </div>
         </div>
     </div>
@@ -723,71 +718,36 @@
         function closeModal(type) {
             document.getElementById(type + 'Modal').style.display = 'none';
         }
-
-        // === FINAL GUEST UX — NEVER LETS THEM USE THE SYSTEM WITH 0 POINTS ===
+        // === POINT COUNTER + OUT-OF-POINTS POPUP ===
         function updatePoints() {
             fetch('/erate/points?' + Date.now())
                 .then(r => r.json())
                 .then(data => {
                     const el = document.getElementById('points-display');
-                    if (!el) return;
-
-                    el.textContent = `(${data.points} pts)`;
-
-                    // GUEST WITH 0 POINTS → BLOCK EVERYTHING + FORCE UPGRADE
-                    if (data.points <= 0 && !document.body.dataset.username) {
-                        el.style.color = '#dc3545';
-
-                        // BLOCK ALL INTERACTIVE ELEMENTS
-                        document.querySelectorAll('a, button, input, select').forEach(el => {
-                            if (!el.closest('#outOfPointsModal') && 
-                                !el.closest('#registerModal') && 
-                                !el.closest('#loginModal')) {
-                                el.style.pointerEvents = 'none';
-                                el.style.opacity = '0.5';
-                            }
-                        });
-
-                        // SHOW UPGRADE MODAL
-                        const modal = document.getElementById('outOfPointsModal');
-                        const message = document.getElementById('out-of-points-message');
-                        const registerBtn = document.getElementById('register-for-points-btn');
-
-                        message.innerHTML = `
-                            <strong>You've used all 25 guest points!</strong><br><br>
-                            The system is now locked until you register.<br><br>
-                            <strong style="color:#27ae60; font-size:1.5rem;">Register now → 100 FREE points instantly!</strong>
-                        `;
-                        registerBtn.style.display = 'inline-block';
-                        registerBtn.textContent = "Register for 100 Free Points →";
-                        registerBtn.onclick = () => {
-                            modal.classList.remove('show');
-                            document.getElementById('authModal')?.classList.remove('show');
-                            document.getElementById('registerModal').classList.add('show');
-                        };
-
-                        modal.classList.add('show');
-                        return;
+                    if (el) {
+                        el.textContent = `(${data.points} pts)`;
+                        if (data.points <= 5) el.style.color = '#ffc107';
+                        if (data.points <= 0) {
+                            el.style.color = '#dc3545';
+                            fetch('/erate/out-of-points')
+                                .then(r => r.json())
+                                .then(msg => {
+                                    document.getElementById('out-of-points-message').textContent = msg.message;
+                                    document.getElementById('outOfPointsModal').classList.add('show');
+                                })
+                                .catch(() => {
+                                    document.getElementById('out-of-points-message').textContent = "You have run out of points.";
+                                    document.getElementById('outOfPointsModal').classList.add('show');
+                                });
+                        }
                     }
-
-                    // Normal coloring
-                    if (data.points <= 5) el.style.color = '#ffc107';
-                    else el.style.color = '';
-
-                    // Re-enable everything if points > 0
-                    document.querySelectorAll('a, button, input, select').forEach(el => {
-                        el.style.pointerEvents = '';
-                        el.style.opacity = '';
-                    });
+                })
+                .catch(() => {
+                    const el = document.getElementById('points-display');
+                    if (el) el.textContent = '(?)';
                 });
         }
 
-        // Run on load + every 3 seconds
-        document.addEventListener('DOMContentLoaded', () => {
-            updatePoints();
-            setInterval(updatePoints, 3000);
-        });
-        
         // === showDetails() — THIS WAS MISSING ===
         async function showDetails(appNumber) {
             updatePoints();
@@ -1443,36 +1403,5 @@
         });
         
     </script>
-
-    <script>
-    // Enhanced out-of-points message for guests
-    function showOutOfPoints(isGuest = false) {
-        const modal = document.getElementById('outOfPointsModal');
-        const message = document.getElementById('out-of-points-message');
-        const registerBtn = document.getElementById('register-for-points-btn');
-
-        if (isGuest) {
-            message.innerHTML = `
-                <strong>You've used all 25 guest points!</strong><br><br>
-                Create a free account now and get<br>
-                <strong style="color:#27ae60; font-size:1.4rem;">100 more FREE points instantly!</strong>
-            `;
-            registerBtn.style.display = 'inline-block';
-            registerBtn.onclick = () => {
-                modal.classList.remove('show');
-                document.getElementById('registerModal').classList.add('show');  // your existing register modal
-            };
-        } else {
-            message.innerHTML = `
-                <strong>You're out of points!</strong><br><br>
-                Contact support to get more.
-            `;
-            registerBtn.style.display = 'none';
-        }
-
-        modal.classList.add('show');
-    }
-    </script>
-    
 </body>
 </html>
