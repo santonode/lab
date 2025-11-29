@@ -370,7 +370,7 @@
         }
     </style>
 </head>
-<body>
+<body data-username="{{ session.username|default('') }}">
     <!-- AUTH MODAL (ON FIRST VISIT) -->
     <div class="modal" id="authModal">
         <div class="modal-content">
@@ -724,41 +724,47 @@
             document.getElementById(type + 'Modal').style.display = 'none';
         }
 
-        // === POINT COUNTER + OUT-OF-POINTS POPUP (NO BACKEND CHANGE) ===
+        // === FINAL POINT SYSTEM — GUESTS GET UPGRADE, MEMBERS GET SUPPORT MESSAGE ===
         function updatePoints() {
             fetch('/erate/points?' + Date.now())
                 .then(r => r.json())
                 .then(data => {
                     const el = document.getElementById('points-display');
-                    if (el) {
-                        el.textContent = `(${data.points} pts)`;
-                        if (data.points <= 5) el.style.color = '#ffc107';
-                        if (data.points <= 0) {
-                            el.style.color = '#dc3545';
+                    if (!el) return;
 
-                            // Detect guest by checking if username exists in session via DOM
-                            const isGuest = !document.body.dataset.username;
+                    el.textContent = `(${data.points} pts)`;
+                    if (data.points <= 5) el.style.color = '#ffc107';
+                    if (data.points > 0) return; // all good
 
-                            if (isGuest) {
-                                document.getElementById('out-of-points-message').innerHTML = `
-                                    <strong>You've used all 25 guest points!</strong><br><br>
-                                    Create a free account now and get<br>
-                                    <strong style="color:#27ae60; font-size:1.4rem;">100 more FREE points instantly!</strong>
-                                `;
-                                document.getElementById('register-for-points-btn').style.display = 'inline-block';
-                                document.getElementById('register-for-points-btn').onclick = () => {
-                                    document.getElementById('outOfPointsModal').classList.remove('show');
-                                    document.getElementById('registerModal').classList.add('show');
-                                };
-                            } else {
-                                document.getElementById('out-of-points-message').textContent = 
-                                    data.message || "You're out of points! Contact support for more.";
-                                document.getElementById('register-for-points-btn').style.display = 'none';
-                            }
+                    // OUT OF POINTS — show modal
+                    el.style.color = '#dc3545';
 
-                            document.getElementById('outOfPointsModal').classList.add('show');
-                        }
+                    const modal = document.getElementById('outOfPointsModal');
+                    const message = document.getElementById('out-of-points-message');
+                    const registerBtn = document.getElementById('register-for-points-btn');
+
+                    const isGuest = !document.body.dataset.username; // true if no logged-in user
+
+                    if (isGuest) {
+                        message.innerHTML = `
+                            <strong>You've used all 25 guest points!</strong><br><br>
+                            Create a free account now and get<br>
+                            <strong style="color:#27ae60; font-size:1.5rem;">100 more FREE points instantly!</strong>
+                        `;
+                        registerBtn.style.display = 'inline-block';
+                        registerBtn.onclick = () => {
+                            modal.classList.remove('show');
+                            document.getElementById('registerModal').classList.add('show');
+                        };
+                    } else {
+                        message.innerHTML = `
+                            <strong>You're out of points!</strong><br><br>
+                            Contact support to purchase more points or upgrade your plan.
+                        `;
+                        registerBtn.style.display = 'none';
                     }
+
+                    modal.classList.add('show');
                 })
                 .catch(() => {
                     const el = document.getElementById('points-display');
