@@ -1153,8 +1153,8 @@ def reset_import():
 # =====================================================
 # === HASH-BASED SMART IMPORT — DRY RUN MODE (SAFE) ===
 # =====================================================
-@erate_bp.route('/import-hash-process')
-def import_hash_process():
+@erate_bp.route('/import-hash')
+def import_hash_start():
     if 'username' not in session:
         return redirect(url_for('erate.dashboard'))
 
@@ -1162,43 +1162,45 @@ def import_hash_process():
         flash("470schema.csv not found", "error")
         return redirect(url_for('erate.import_interactive'))
 
-    with open(CSV_FILE, 'rb') as f:
-        file_hash = hashlib.md5(f.read()).hexdigest()
+    # Start background job
+    thread = threading.Thread(target=run_full_hash_import, args=(current_app._get_current_object(),))
+    thread.daemon = True
+    thread.start()
 
-    log(f"=== FULL SMART HASH IMPORT STARTED — User: {session['username']} ===")
+    flash("Smart Import started in background — check Render logs for progress", "success")
+    return redirect(url_for('erate.dashboard'))
 
-    with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
-        reader = csv.DictReader(f)
 
-        updated = 0
-        conn = psycopg.connect(DATABASE_URL)
+def run_full_hash_import(app):
+    with app.app_context():
+        log(f"=== FULL SMART HASH IMPORT STARTED (BACKGROUND) — User: {session['username']} ===")
+        start_time = time.time()
+
         try:
+            with open(CSV_FILE, 'r', encoding='utf-8-sig') as f:
+                reader = csv.DictReader(f)
+                rows = list(reader)
+
+            conn = psycopg.connect(DATABASE_URL)
+            updated = 0
+
             with conn.cursor() as cur:
-                # Get real column names from erate table
-                cur.execute("""
-                    SELECT column_name FROM information_schema.columns 
-                    WHERE table_name = 'erate' AND column_name != 'app_number'
-                """)
+                cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='erate' AND column_name != 'app_number'")
                 valid_columns = {row[0] for row in cur.fetchall()}
 
-                for row in reader:
-                    app_number = (
-                        row.get('Applicant #') or
-                        row.get('Application Number') or
-                        row.get('app_number') or
-                        row.get('App #') or
-                        ''
-                    ).strip()
+                for i, row in enumerate(rows, 1):
+                    if i % 5000 == 0:
+                        elapsed = int(time.time() - start_time)
+                        log(f"PROGRESS: {i:,}/{len(rows):,} rows | Updated: {updated} | Elapsed: {elapsed}s")
 
+                    app_number = (row.get('Applicant #') or row.get('Application Number') or '').strip()
                     if not app_number:
                         continue
 
-                    # Skip NEW records — old import owns them
                     cur.execute("SELECT 1 FROM erate WHERE app_number = %s", (app_number,))
                     if not cur.fetchone():
-                        continue
+                        continue  # skip new
 
-                    # Build clean row and hash
                     clean_row = {}
                     for k, v in row.items():
                         db_col = k.strip()
@@ -1213,43 +1215,28 @@ def import_hash_process():
 
                     row_hash = hashlib.md5(str(sorted(clean_row.items())).encode()).hexdigest()
 
-                    # Compare hash
                     cur.execute("SELECT row_hash FROM erate_hash WHERE app_number = %s", (app_number,))
-                    db_result = cur.fetchone()
+                    db_hash = cur.fetchone()
 
-                    if db_result and db_result[0] != row_hash:
-                        # UPDATE real record
-                        update_parts = [f'"{k}" = %s' for k in clean_row.keys()]
-                        values = list(clean_row.values())
-                        update_sql = f"UPDATE erate SET {', '.join(update_parts)} WHERE app_number = %s"
-                        cur.execute(update_sql, values + [app_number])
-
-                        # Update stored hash
-                        cur.execute(
-                            "INSERT INTO erate_hash (app_number, row_hash) VALUES (%s, %s) "
-                            "ON CONFLICT (app_number) DO UPDATE SET row_hash = EXCLUDED.row_hash",
-                            (app_number, row_hash)
-                        )
-
+                    if db_hash and db_hash[0] != row_hash:
+                        update_parts = [f'"{k}"=%s' for k in clean_row]
+                        cur.execute(f"UPDATE erate SET {', '.join(update_parts)} WHERE app_number = %s",
+                                    list(clean_row.values()) + [app_number])
+                        cur.execute("INSERT INTO erate_hash (app_number, row_hash) VALUES (%s,%s) ON CONFLICT DO UPDATE SET row_hash=EXCLUDED.row_hash",
+                                    (app_number, row_hash))
                         updated += 1
 
                         if updated % 1000 == 0:
                             conn.commit()
-                            log(f"Updated {updated} records so far...")
 
                 conn.commit()
-                log(f"FULL SMART IMPORT COMPLETE — Updated {updated} records")
 
-            flash(f"Smart Import Complete — Updated {updated} records", "success")
+            total_time = int(time.time() - start_time)
+            log(f"FULL SMART HASH IMPORT FINISHED — Updated {updated} records in {total_time}s")
+            # Optional: send yourself a message / flash when done
 
         except Exception as e:
-            conn.rollback()
-            log(f"SMART IMPORT FAILED: {e}")
-            flash(f"Error: {e}", "error")
-        finally:
-            conn.close()
-
-    return redirect(url_for('erate.dashboard'))
+            log(f"SMART HASH IMPORT FAILED: {e}")
 
 # ================================================
 # === AUTH SYSTEM + GUEST → DASHBOARD + LOGOUT ===
