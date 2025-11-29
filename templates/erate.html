@@ -658,17 +658,22 @@
             </div>
         </div>
     </div>
-    <!-- OUT OF POINTS MODAL -->
-    <div class="modal" id="outOfPointsModal">
-        <div class="modal-content">
+    <!-- OUT OF POINTS MODAL — GUEST UPGRADE MESSAGE -->
+    <div class="overlay" id="outOfPointsModal">
+        <div class="modal-content" style="max-width:500px; text-align:center;">
             <div class="modal-header">
                 <div class="modal-title">Out of Points</div>
             </div>
-            <div class="modal-body" id="out-of-points-message" style="text-align:center; font-size:1rem;">
-                Loading...
+            <div class="modal-body" id="out-of-points-message" style="padding:20px; font-size:1.1rem;">
+                <!-- Message will be filled by JS -->
             </div>
-            <div style="text-align:center; margin-top:15px;">
-                <button class="btn btn-primary" onclick="location.reload()">OK</button>
+            <div style="padding:15px 0;">
+                <button class="btn btn-success" id="register-for-points-btn" style="padding:14px 30px; font-size:1.1rem; font-weight:600; display:none;">
+                    Register for 100 Free Points
+                </button>
+                <button class="btn btn-primary" onclick="document.getElementById('outOfPointsModal').classList.remove('show'); location.reload();">
+                    OK
+                </button>
             </div>
         </div>
     </div>
@@ -718,7 +723,8 @@
         function closeModal(type) {
             document.getElementById(type + 'Modal').style.display = 'none';
         }
-        // === POINT COUNTER + OUT-OF-POINTS POPUP ===
+
+        // === POINT COUNTER + OUT-OF-POINTS POPUP (NO BACKEND CHANGE) ===
         function updatePoints() {
             fetch('/erate/points?' + Date.now())
                 .then(r => r.json())
@@ -729,16 +735,28 @@
                         if (data.points <= 5) el.style.color = '#ffc107';
                         if (data.points <= 0) {
                             el.style.color = '#dc3545';
-                            fetch('/erate/out-of-points')
-                                .then(r => r.json())
-                                .then(msg => {
-                                    document.getElementById('out-of-points-message').textContent = msg.message;
-                                    document.getElementById('outOfPointsModal').classList.add('show');
-                                })
-                                .catch(() => {
-                                    document.getElementById('out-of-points-message').textContent = "You have run out of points.";
-                                    document.getElementById('outOfPointsModal').classList.add('show');
-                                });
+
+                            // Detect guest by checking if username exists in session via DOM
+                            const isGuest = !document.body.dataset.username;
+
+                            if (isGuest) {
+                                document.getElementById('out-of-points-message').innerHTML = `
+                                    <strong>You've used all 25 guest points!</strong><br><br>
+                                    Create a free account now and get<br>
+                                    <strong style="color:#27ae60; font-size:1.4rem;">100 more FREE points instantly!</strong>
+                                `;
+                                document.getElementById('register-for-points-btn').style.display = 'inline-block';
+                                document.getElementById('register-for-points-btn').onclick = () => {
+                                    document.getElementById('outOfPointsModal').classList.remove('show');
+                                    document.getElementById('registerModal').classList.add('show');
+                                };
+                            } else {
+                                document.getElementById('out-of-points-message').textContent = 
+                                    data.message || "You're out of points! Contact support for more.";
+                                document.getElementById('register-for-points-btn').style.display = 'none';
+                            }
+
+                            document.getElementById('outOfPointsModal').classList.add('show');
                         }
                     }
                 })
@@ -1403,5 +1421,36 @@
         });
         
     </script>
+
+    <script>
+    // Enhanced out-of-points message for guests
+    function showOutOfPoints(isGuest = false) {
+        const modal = document.getElementById('outOfPointsModal');
+        const message = document.getElementById('out-of-points-message');
+        const registerBtn = document.getElementById('register-for-points-btn');
+
+        if (isGuest) {
+            message.innerHTML = `
+                <strong>You've used all 25 guest points!</strong><br><br>
+                Create a free account now and get<br>
+                <strong style="color:#27ae60; font-size:1.4rem;">100 more FREE points instantly!</strong>
+            `;
+            registerBtn.style.display = 'inline-block';
+            registerBtn.onclick = () => {
+                modal.classList.remove('show');
+                document.getElementById('registerModal').classList.add('show');  // your existing register modal
+            };
+        } else {
+            message.innerHTML = `
+                <strong>You're out of points!</strong><br><br>
+                Contact support to get more.
+            `;
+            registerBtn.style.display = 'none';
+        }
+
+        modal.classList.add('show');
+    }
+    </script>
+    
 </body>
 </html>
