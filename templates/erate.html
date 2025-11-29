@@ -725,7 +725,8 @@
         }
 
         // === FINAL POINT SYSTEM — GUEST NEVER GETS STUCK ===
-        function updatePoints() {
+        // === FINAL — GUESTS ALWAYS SEE REGISTER BUTTON, NEVER STUCK ===
+        function updatePoints(force = false) {
             fetch('/erate/points?' + Date.now())
                 .then(r => r.json())
                 .then(data => {
@@ -734,15 +735,15 @@
 
                     el.textContent = `(${data.points} pts)`;
                     if (data.points <= 5) el.style.color = '#ffc107';
-                    if (data.points > 0) return;
+                    if (data.points > 0 && !force) return;
 
-                    el.style.color = '#dc3545';
-
+                    // FORCE SHOW MODAL IF POINTS <= 0
                     const modal = document.getElementById('outOfPointsModal');
                     const message = document.getElementById('out-of-points-message');
                     const registerBtn = document.getElementById('register-for-points-btn');
 
-                    const isGuest = !document.body.dataset.username;
+                    // TRUE GUEST DETECTION — checks for empty or missing username
+                    const isGuest = !document.body.dataset.username || document.body.dataset.username === '';
 
                     if (isGuest) {
                         message.innerHTML = `
@@ -764,12 +765,9 @@
                 });
         }
 
-        // ← THIS NEW LINE FIXES THE "STUCK" PROBLEM FOREVER
+        // ← THIS RUNS ON EVERY PAGE LOAD — GUESTS NEVER GET STUCK
         document.addEventListener('DOMContentLoaded', () => {
-            if (document.body.dataset.username === '') {
-                // Force check on page load for guests — they ALWAYS see the offer
-                updatePoints();
-            }
+            updatePoints(true);  // force check on load
         });
         
         // === showDetails() — THIS WAS MISSING ===
