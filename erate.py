@@ -1204,7 +1204,8 @@ def run_full_hash_import(app, username):
                         update_parts = [f'"{k}"=%s' for k in clean_row]
                         cur.execute(f"UPDATE erate SET {', '.join(update_parts)} WHERE app_number = %s",
                                     list(clean_row.values()) + [app_number])
-                        cur.execute("INSERT INTO erate_hash (app_number, row_hash) VALUES (%s,%s) ON CONFLICT DO UPDATE SET row_hash=EXCLUDED.row_hash",
+                        cur.execute("""INSERT INTO erate_hash (app_number, row_hash) VALUES (%s,%s) 
+                                       ON CONFLICT (app_number) DO UPDATE SET row_hash = EXCLUDED.row_hash""",
                                     (app_number, row_hash))
                         updated += 1
 
