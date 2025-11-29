@@ -1151,29 +1151,11 @@ def reset_import():
     return redirect(url_for('erate.import_interactive'))
 
 # =====================================================
-# === HASH-BASED SMART IMPORT — DRY RUN MODE (SAFE) ===
+# === HASH-BASED SMART IMPORT — FULL RUN MODE (SAFE) ===
 # =====================================================
-@erate_bp.route('/import-hash')
-def import_hash_start():
-    if 'username' not in session:
-        return redirect(url_for('erate.dashboard'))
-
-    if not os.path.exists(CSV_FILE):
-        flash("470schema.csv not found", "error")
-        return redirect(url_for('erate.import_interactive'))
-
-    # Start background job
-    thread = threading.Thread(target=run_full_hash_import, args=(current_app._get_current_object(),))
-    thread.daemon = True
-    thread.start()
-
-    flash("Smart Import started in background — check Render logs for progress", "success")
-    return redirect(url_for('erate.dashboard'))
-
-
-def run_full_hash_import(app):
+def run_full_hash_import(app, username):
     with app.app_context():
-        log(f"=== FULL SMART HASH IMPORT STARTED (BACKGROUND) — User: {session['username']} ===")
+        log(f"=== FULL SMART HASH IMPORT STARTED (BACKGROUND) — User: {username} ===")
         start_time = time.time()
 
         try:
@@ -1199,7 +1181,7 @@ def run_full_hash_import(app):
 
                     cur.execute("SELECT 1 FROM erate WHERE app_number = %s", (app_number,))
                     if not cur.fetchone():
-                        continue  # skip new
+                        continue
 
                     clean_row = {}
                     for k, v in row.items():
@@ -1233,10 +1215,29 @@ def run_full_hash_import(app):
 
             total_time = int(time.time() - start_time)
             log(f"FULL SMART HASH IMPORT FINISHED — Updated {updated} records in {total_time}s")
-            # Optional: send yourself a message / flash when done
 
         except Exception as e:
             log(f"SMART HASH IMPORT FAILED: {e}")
+        finally:
+            conn.close()
+
+@erate_bp.route('/import-hash')
+def import_hash_start():
+    if 'username' not in session:
+        flash("Login required", "error")
+        return redirect(url_for('erate.dashboard'))
+
+    if not os.path.exists(CSV_FILE):
+        flash("470schema.csv not found", "error")
+        return redirect(url_for('erate.import_interactive'))
+
+    username = session['username']
+    thread = threading.Thread(target=run_full_hash_import, args=(current_app._get_current_object(), username))
+    thread.daemon = True
+    thread.start()
+
+    flash("Smart Import started in background — check Render logs for live progress", "success")
+    return redirect(url_for('erate.dashboard'))
 
 # ================================================
 # === AUTH SYSTEM + GUEST → DASHBOARD + LOGOUT ===
