@@ -724,7 +724,7 @@
             document.getElementById(type + 'Modal').style.display = 'none';
         }
 
-        // === FINAL POINT SYSTEM — GUESTS GET UPGRADE, MEMBERS GET SUPPORT MESSAGE ===
+        // === FINAL POINT SYSTEM — GUESTS GET REGISTER BUTTON ===
         function updatePoints() {
             fetch('/erate/points?' + Date.now())
                 .then(r => r.json())
@@ -734,16 +734,17 @@
 
                     el.textContent = `(${data.points} pts)`;
                     if (data.points <= 5) el.style.color = '#ffc107';
-                    if (data.points > 0) return; // all good
+                    if (data.points > 0) return;
 
-                    // OUT OF POINTS — show modal
+                    // OUT OF POINTS
                     el.style.color = '#dc3545';
 
                     const modal = document.getElementById('outOfPointsModal');
                     const message = document.getElementById('out-of-points-message');
                     const registerBtn = document.getElementById('register-for-points-btn');
 
-                    const isGuest = !document.body.dataset.username; // true if no logged-in user
+                    // Detect guest: no username in body data-attribute
+                    const isGuest = !document.body.dataset.username;
 
                     if (isGuest) {
                         message.innerHTML = `
@@ -759,7 +760,7 @@
                     } else {
                         message.innerHTML = `
                             <strong>You're out of points!</strong><br><br>
-                            Contact support to purchase more points or upgrade your plan.
+                            Contact support for more points.
                         `;
                         registerBtn.style.display = 'none';
                     }
@@ -771,7 +772,7 @@
                     if (el) el.textContent = '(?)';
                 });
         }
-
+        
         // === showDetails() — THIS WAS MISSING ===
         async function showDetails(appNumber) {
             updatePoints();
