@@ -1417,15 +1417,17 @@ def user_settings():
                 "dm": float(row[1]) if row and row[1] is not None else 5.0
             })
 
-# === DYNAMIC COVERAGE REPORT ===
+# === DYNAMIC COVERAGE REPORT — BY PROVIDER OR BY STATE ===
 @erate_bp.route('/coverage-report')
 def coverage_report():
+    view = request.args.get('view', 'by_provider')  # ?view=by_state or by_provider
+
     import zipfile
     import xml.etree.ElementTree as ET
     from collections import defaultdict
     import os
 
-    # Simple state bounding boxes (good enough for fiber routes)
+    # Simple state bounding boxes — good enough for fiber routes
     STATE_BOUNDS = {
         "AL": (30.2, 35.0, -88.5, -84.9), "AK": (51.2, 71.4, -179.2, -129.9),
         "AZ": (31.3, 37.0, -114.8, -109.0), "AR": (33.0, 36.5, -94.6, -89.6),
@@ -1460,12 +1462,13 @@ def coverage_report():
                 return state
         return None
 
-    coverage = defaultdict(set)
+    # Build both views at once
+    provider_to_states = defaultdict(set)
+    state_to_providers = defaultdict(set)
 
-    # Bluebird
-    kmz_path = KMZ_PATH_BLUEBIRD
-    if os.path.exists(kmz_path):
-        with zipfile.ZipFile(kmz_path, 'r') as kmz:
+    # Bluebird Network
+    if os.path.exists(KMZ_PATH_BLUEBIRD):
+        with zipfile.ZipFile(KMZ_PATH_BLUEBIRD, 'r') as kmz:
             kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
             if kml_files:
                 root = ET.fromstring(kmz.read(kml_files[0]))
@@ -1479,7 +1482,8 @@ def coverage_report():
                                     lon, lat = float(parts[0]), float(parts[1])
                                     state = point_in_state(lat, lon)
                                     if state:
-                                        coverage["Bluebird Network"].add(state)
+                                        provider_to_states["Bluebird Network"].add(state)
+                                        state_to_providers[state].add("Bluebird Network")
                                 except: pass
 
     # FNA Members
@@ -1506,19 +1510,32 @@ def coverage_report():
                                     lon, lat = float(parts[0]), float(parts[1])
                                     state = point_in_state(lat, lon)
                                     if state:
-                                        coverage[member_name].add(state)
+                                        provider_to_states[member_name].add(state)
+                                        state_to_providers[state].add(member_name)
                                 except: pass
         except: pass
 
-    # Sort and format
-    lines = []
-    for name in sorted(coverage.keys()):
-        states = sorted(coverage[name])
-        lines.append(f"Member Name = {name}")
-        lines.append(f"States with Coverage = {', '.join(states) if states else 'None'}")
-        lines.append("")
+    # === BUILD HTML OUTPUT ===
+    html = ['<div style="font-family:Segoe UI,sans-serif; line-height:1.6; padding:20px;">']
+    html.append('<h2 style="color:#1a5d57; text-align:center;">Network Coverage Report</h2>')
+    html.append('<p style="text-align:center; margin:20px 0;">')
+    html.append(f'<a href="?view=by_provider" style="margin:0 10px; padding:8px 16px; background:{"#1a5d57" if view=="by_provider" else "#ddd"}; color:white; text-decoration:none; border-radius:6px;">By Provider</a>')
+    html.append(f'<a href="?view=by_state" style="margin:0 10px; padding:8px 16px; background:{"#1a5d57" if view=="by_state" else "#ddd"}; color:white; text-decoration:none; border-radius:6px;">By State</a>')
+    html.append('</p><hr>')
 
-    return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
+    if view == 'by_state':
+        html.append('<h3 style="color:#1a5d57;">Coverage by State</h3>')
+        for state in sorted(state_to_providers.keys()):
+            providers = sorted(state_to_providers[state])
+            html.append(f"<strong>{state}</strong>: {', '.join(providers) or 'None'}<br>")
+    else:
+        html.append('<h3 style="color:#1a5d57;">Coverage by Provider</h3>')
+        for provider in sorted(provider_to_states.keys()):
+            states = sorted(provider_to_states[provider])
+            html.append(f"<strong>{provider}</strong>: {', '.join(states) or 'None'}<br>")
+
+    html.append('</div>')
+    return "<br>".join(html), 200, {'Content-Type': 'text/html; charset=utf-8'}
 
 @erate_bp.route('/add-to-export', methods=['POST'])
 def add_to_export():
