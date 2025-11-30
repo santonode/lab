@@ -207,12 +207,9 @@
         }
         .app-number:hover { color: #0056b3; }
         .entity-name {
-            cursor: pointer;
-            color: var(--accent);
-            text-decoration: underline;
             font-size: 0.9rem;
+            /* no underline, no blue color, no pointer */
         }
-        .entity-name:hover { color: #0056b3; }
         .modified { font-size: 0.8rem; color: #666; }
         .pagination {
             text-align: center;
@@ -833,13 +830,6 @@
             }
             document.querySelectorAll('.app-number').forEach(el => {
                 el.onclick = () => showDetails(el.textContent.trim());
-            });
-            document.querySelectorAll('.entity-name').forEach(el => {
-                el.onclick = () => {
-                    const row = el.closest('tr');
-                    const appNumber = row.querySelector('.app-number').textContent.trim();
-                    checkBluebird(appNumber);
-                };
             });
             // BLUE MAP BUTTON — AUTO-SELECTS NETWORK + DEDUCTS 1 POINT
             document.querySelectorAll('.btn-sm').forEach(btn => {
