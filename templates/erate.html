@@ -552,7 +552,7 @@
         </a>
     </div>
 
-    <!-- DYNAMIC COVERAGE REPORT MODAL WITH SPINNER -->
+    <!-- DYNAMIC COVERAGE REPORT MODAL WITH VIEW SWITCHER -->
     <div class="modal" id="coverage-modal">
         <div class="modal-content" style="max-width:900px; width:95%;">
             <div class="modal-header">
@@ -560,38 +560,55 @@
                 <button class="modal-close" onclick="document.getElementById('coverage-modal').classList.remove('show')">x</button>
             </div>
             <div class="modal-body" style="position:relative; min-height:200px;">
+                <!-- LOADING SPINNER -->
                 <div id="coverage-loading" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; color:#1a5d57; font-weight:600;">
                     <div class="spinner" style="margin:0 auto 15px;"></div>
                     Generating report from 57 KMZ files...
                 </div>
-                <div id="coverage-body" style="font-family: 'Courier New', monospace; white-space: pre-wrap; line-height: 1.7; max-height: 70vh; overflow-y: auto; padding: 10px; background: #f8f9fa; border-radius: 6px; display:none;">
-                    <!-- Content loaded here -->
+
+                <!-- REPORT CONTENT -->
+                <div id="coverage-body" style="display:none; padding:15px;">
+                    <div style="text-align:center; margin-bottom:15px;">
+                        <strong>View:</strong>
+                        <button onclick="switchCoverageView('by_provider')" id="btn-provider" class="btn btn-primary" style="margin:5px;">By Provider</button>
+                        <button onclick="switchCoverageView('by_state')" id="btn-state" class="btn btn-secondary" style="margin:5px;">By State</button>
+                    </div>
+                    <div id="coverage-content" style="font-family: 'Courier New', monospace; white-space: pre-wrap; line-height: 1.7; max-height: 65vh; overflow-y: auto; padding: 15px; background: #f8f9fa; border-radius: 6px;">
+                        Loading...
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
+        // Global function for view switching
+        window.switchCoverageView = function(view) {
+            const content = document.getElementById('coverage-content');
+            const loading = document.getElementById('coverage-loading');
+            const body = document.getElementById('coverage-body');
+
+            loading.style.display = 'block';
+            body.style.display = 'none';
+
+            fetch(`/erate/coverage-report?view=${view}`)
+                .then(r => r.text())
+                .then(html => {
+                    loading.style.display = 'none';
+                    body.style.display = 'block';
+                    content.innerHTML = html;
+
+                    // Update button styles
+                    document.getElementById('btn-provider').className = view === 'by_provider' ? 'btn btn-primary' : 'btn btn-secondary';
+                    document.getElementById('btn-state').className = view === 'by_state' ? 'btn btn-primary' : 'btn btn-secondary';
+                });
+        };
+
         document.getElementById('coverage-link').addEventListener('click', function(e) {
             e.preventDefault();
             const modal = document.getElementById('coverage-modal');
-            const body = document.getElementById('coverage-body');
-            const loading = document.getElementById('coverage-loading');
-            
-            body.style.display = 'none';
-            loading.style.display = 'block';
             modal.classList.add('show');
-
-            fetch('/erate/coverage-report')
-                .then(r => r.text())
-                .then(text => {
-                    loading.style.display = 'none';
-                    body.style.display = 'block';
-                    body.innerHTML = text;
-                })
-                .catch(err => {
-                    loading.innerHTML = '<div style="color:#dc3545;">Error loading report</div>';
-                });
+            switchCoverageView('by_provider'); // default view
         });
     </script>
     
