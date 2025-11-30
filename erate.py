@@ -1427,7 +1427,7 @@ def coverage_report():
     from collections import defaultdict
     import os
 
-    # === STATE BOUNDS (unchanged) ===
+    # === STATE BOUNDS ===
     STATE_BOUNDS = {
         "AL": (30.2, 35.0, -88.5, -84.9), "AK": (51.2, 71.4, -179.2, -129.9),
         "AZ": (31.3, 37.0, -114.8, -109.0), "AR": (33.0, 36.5, -94.6, -89.6),
@@ -1469,7 +1469,6 @@ def coverage_report():
     # Bluebird Network
     if os.path.exists(KMZ_PATH_BLUEBIRD):
         with zipfile.ZipFile(KMZ_PATH_BLUEBIRD, 'r') as kmz:
-:
             kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
             if kml_files:
                 root = ET.fromstring(kmz.read(kml_files[0]))
@@ -1485,7 +1484,8 @@ def coverage_report():
                                     if state:
                                         provider_to_states["Bluebird Network"].add(state)
                                         state_to_providers[state].add("Bluebird Network")
-                                except: pass
+                                except:
+                                    pass
 
     # FNA Members
     for filename in os.listdir(FNA_MEMBERS_DIR):
@@ -1513,8 +1513,10 @@ def coverage_report():
                                     if state:
                                         provider_to_states[member_name].add(state)
                                         state_to_providers[state].add(member_name)
-                                except: pass
-        except: pass
+                                except:
+                                    pass
+        except:
+            pass
 
     # === RETURN PURE LIST — NO HEADERS, NO BUTTONS ===
     lines = []
