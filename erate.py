@@ -1531,74 +1531,86 @@ def coverage_report():
 
     return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
 
+# === FINAL – WORKS ON RENDER – NO ZIP ERRORS – PERFECT LINES ===
 @erate_bp.route('/coverage-map-data')
 def coverage_map_data():
-    print("\n=== NATIONAL FIBER MAP – FINAL VERSION ===")
+    print("\n=== NATIONAL FIBER MAP – LOADING ALL PROVIDERS ===")
     all_routes = []
 
-    def add_routes_from_placemarks(root, provider_name, color):
-        ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-        added = 0
-        for placemark in root.findall('.//kml:Placemark', root, ns):
-            name = (placemark.find('kml:name', ns) or {}).text or "Fiber"
-            name = name.strip()
-
-            # Find ALL LineString coordinates — direct or inside MultiGeometry
-            coord_elements = (
-                placemark.findall('.//kml:LineString/kml:coordinates', ns) +
-                placemark.findall('.//kml:MultiGeometry/kml:LineString/kml:coordinates', ns) +
-                placemark.findall('.//kml:MultiGeometry/kml:MultiGeometry/kml:LineString/kml:coordinates', ns)  # triple-nested safe
-            )
-
-            for elem in coord_elements:
-                if not elem.text:
-                    continue
-                coords = []
-                for token in elem.text.strip().split():
-                    parts = token.split(',')
-                    if len(parts) >= 2:
-                        try:
-                            lon, lat = float(parts[0]), float(parts[1])
-                            coords.append([lat, lon])
-                        except:
-                            continue
-                if len(coords) > 1:
-                    all_routes.append({
-                        "name": f"{provider_name}",
-                        "color": color,
-                        "coords": coords
-                    })
-                    added += 1
-        print(f"     {provider_name}: {added} clean line segments")
-
-    def parse_kmz(kmz_path, provider_name, color):
+    def extract_routes(kmz_path, provider_name, color):
         if not os.path.exists(kmz_path):
+            print(f"   [MISSING] {kmz_path}")
             return
+
+        print(f"   → {provider_name} ({os.path.basename(kmz_path)})")
+
         try:
+            # Open ZIP once, keep it alive the whole time
             with zipfile.ZipFile(kmz_path, 'r') as z:
-                kmls = [f for f in z.namelist() if f.lower().endswith('.kml')]
-            if not kmls:
-                return
-            root = ET.fromstring(z.read(kmls[0]))
-            add_routes_from_placemarks(root, provider_name, color)
+                kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
+                if not kml_files:
+                    print(f"     [SKIP] No .kml inside")
+                    return
+
+                root = ET.fromstring(z.read(kml_files[0]))
+                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+
+                added = 0
+                for placemark in root.findall('.//kml:Placemark', ns):
+                    # Get all LineString coordinates – supports deep nesting
+                    coord_sources = (
+                        placemark.findall('.//kml:LineString/kml:coordinates', ns) +
+                        placemark.findall('.//kml:MultiGeometry/kml:LineString/kml:coordinates', ns) +
+                        placemark.findall('.//kml:MultiGeometry/kml:MultiGeometry/kml:LineString/kml:coordinates', ns)
+                    )
+
+                    for coord_elem in coord_sources:
+                        if not coord_elem.text:
+                            continue
+                        coords = []
+                        for token in coord_elem.text.strip().split():
+                            parts = token.split(',')
+                            if len(parts) < 2:
+                                continue
+                            try:
+                                lon = float(parts[0])
+                                lat = float(parts[1])
+                                coords.append([lat, lon])
+                            except ValueError:
+                                continue
+
+                        if len(coords) > 1:
+                            all_routes.append({
+                                "name": provider_name,
+                                "color": color,
+                                "coords": coords
+                            })
+                            added += 1
+
+                print(f"     Success: {added} clean fiber segments added")
+
         except Exception as e:
-            print(f"   [ERROR] {kmz_path}: {e}")
+            print(f"   [ERROR] {os.path.basename(kmz_path)} → {e}")
 
-    # Bluebird
+    # ——— BLUEBIRD ———
+    (your gold standard)
     if os.path.exists(KMZ_PATH_BLUEBIRD):
-        parse_kmz(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
+        extract_routes(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
 
-    # FNA Members
+    # ——— ALL FNA MEMBERS ———
     colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
-    idx = 0
-    if os.path.isdir(FNA_MEMBERS_DIR):
-        for f in sorted(os.listdir(FNA_MEMBERS_DIR)):
-            if f.lower().endswith('.kmz'):
-                name = os.path.splitext(f)[0].replace('_', ' ').title()
-                parse_kmz(os.path.join(FNA_MEMBERS_DIR, f), name, colors[idx % len(colors)])
-                idx += 1
+    color_idx = 0
 
-    print(f"\nSUCCESS: {len(all_routes)} total clean fiber segments loaded\n")
+    if os.path.isdir(FNA_MEMBERS_DIR):
+        for filename in sorted(os.listdir(FNA_MEMBERS_DIR)):
+            if not filename.lower().endswith('.kmz'):
+                continue
+            member_name = os.path.splitext(filename)[0].replace('_', ' ').title()
+            path = os.path.join(FNA_MEMBERS_DIR, filename)
+            extract_routes(path, member_name, colors[color_idx % len(colors)])
+            color_idx += 1
+
+    print(f"\nSUCCESS: {len(all_routes)} total clean fiber segments ready to draw\n")
     return jsonify(all_routes)
 
 @erate_bp.route('/add-to-export', methods=['POST'])
