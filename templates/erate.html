@@ -549,69 +549,144 @@
         </a>
     </div>
 
-    <!-- COVERAGE REPORT MODAL — ONLY TWO CLEAN BUTTONS AT TOP -->
+    <!-- COVERAGE REPORT MODAL – NOW WITH THREE TABS -->
     <div class="modal" id="coverage-modal">
-        <div class="modal-content" style="max-width:900px; width:95%;">
+        <div class="modal-content" style="max-width:960px; width:95%;">
             <div class="modal-header">
                 <div class="modal-title">National Fiber Coverage</div>
                 <button class="modal-close" onclick="document.getElementById('coverage-modal').classList.remove('show')">×</button>
             </div>
             <div class="modal-body" style="position:relative; min-height:200px;">
+
                 <!-- LOADING SPINNER -->
-                <div id="coverage-loading" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; color:#1a5d57; font-weight:600;">
+                <div id="coverage-loading" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; color:#1a5d57; font-weight:600; z-index:10;">
                     <div class="spinner" style="margin:0 auto 15px;"></div>
                     Loading coverage...
                 </div>
 
-                <!-- TWO BUTTONS + CONTENT -->
+                <!-- TABS + CONTENT CONTAINER -->
                 <div id="coverage-body" style="display:none;">
-                    <div style="text-align:center; padding:20px 0; background:#f0f7ff; border-bottom:2px solid #ddd; margin-bottom:15px;">
-                        <button onclick="switchCoverageView('by_provider')" id="btn-provider" class="btn btn-primary" style="margin:0 12px; padding:12px 28px; font-size:1.1rem; font-weight:600;">
+
+                    <!-- THREE BUTTONS -->
+                    <div style="text-align:center; padding:20px 0; background:#f0f7ff; border-bottom:2px solid #ddd; margin-bottom:0 0 20px 0;">
+                        <button id="btn-provider" class="btn btn-primary tab-btn active" style="margin:0 10px; padding:12px 28px; font-size:1.1rem;">
                             By Provider
                         </button>
-                        <button onclick="switchCoverageView('by_state')" id="btn-state" class="btn btn-primary" style="margin:0 12px; padding:12px 28px; font-size:1.1rem; font-weight:600;">
+                        <button id="btn-state" class="btn btn-primary tab-btn" style="margin:0 10px; padding:12px 28px; font-size:1.1rem;">
                             By State
                         </button>
+                        <button id="btn-map" class="btn btn-primary tab-btn" style="margin:0 10px; padding:12px 28px; font-size:1.1rem;">
+                            Interactive Map
+                        </button>
                     </div>
+
+                    <!-- TEXT CONTENT (Provider / State) -->
                     <div id="coverage-content" style="font-family:'Courier New',monospace; line-height:1.7; max-height:68vh; overflow-y:auto; padding:20px; background:#f8f9fa; border-radius:8px;">
                         Loading...
                     </div>
+
+                    <!-- MAP CONTAINER (hidden by default) -->
+                    <div id="coverage-map-container" style="height:65vh; width:100%; border-radius:8px; overflow:hidden; display:none; box-shadow:0 4px 16px rgba(0,0,0,0.2);">
+                        <div id="coverage-map" style="height:100%;"></div>
+                    </div>
+
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Switch between By Provider and By State views
+        let coverageMap = null;
+
+        // Unified tab switcher
         window.switchCoverageView = function(view) {
-            const content = document.getElementById('coverage-content');
-            const loading = document.getElementById('coverage-loading');
-            const body = document.getElementById('coverage-body');
+            // Hide everything
+            document.getElementById('coverage-content').style.display = 'none';
+            document.getElementById('coverage-map-container').style.display = 'none';
+            document.getElementById('coverage-loading').style.display = 'block';
+            document.getElementById('coverage-body').style.display = 'none';
 
-            loading.style.display = 'block';
-            body.style.display = 'none';
+            // Reset buttons
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                b.classList.remove('active');
+                b.style.background = '#007bff';
+            });
 
-            fetch(`/erate/coverage-report?view=${view}`)
-                .then(r => r.text())
-                .then(html => {
-                    loading.style.display = 'none';
-                    body.style.display = 'block';
-                    content.innerHTML = html;
+            if (view === 'map') {
+                document.getElementById('btn-map').classList.add('active');
+                document.getElementById('btn-map').style.background = '#1a5d57';
+                loadFullFiberMap();
+            } else {
+                const btnId = view === 'by_provider' ? 'btn-provider' : 'btn-state';
+                document.getElementById(btnId).classList.add('active');
+                document.getElementById(btnId).style.background = '#1a5d57';
 
-                    // Highlight active button
-                    document.getElementById('btn-provider').style.background = view === 'by_provider' ? '#1a5d57' : '#007bff';
-                    document.getElementById('btn-state').style.background = view === 'by_state' ? '#1a5d57' : '#007bff';
-                })
-                .catch(() => {
-                    content.innerHTML = '<div style="color:#dc3545; text-align:center;">Error loading report</div>';
-                });
+                fetch(`/erate/coverage-report?view=${view}`)
+                    .then(r => r.text())
+                    .then(html => {
+                        document.getElementById('coverage-loading').style.display = 'none';
+                        document.getElementById('coverage-body').style.display = 'block';
+                        document.getElementById('coverage-content').style.display = 'block';
+                        document.getElementById('coverage-content').innerHTML = html;
+                    });
+            }
         };
 
-        // Open modal and load default view
+        // Load the full interactive map
+        function loadFullFiberMap() {
+            const container = document.getElementById('coverage-map-container');
+            const mapEl = document.getElementById('coverage-map');
+
+            // Destroy old map if exists
+            if (coverageMap) {
+                coverageMap.remove();
+                coverageMap = null;
+            }
+            mapEl.innerHTML = "";
+
+            coverageMap = L.map('coverage-map').setView([39.8, -98.5], 5);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(coverageMap);
+
+            fetch('/erate/coverage-map-data')
+                .then(r => r.json())
+                .then(data => {
+                    data.forEach(item => {
+                        if (item.coords && item.coords.length > 1) {
+                            L.polyline(item.coords, {
+                                color: item.color,
+                                weight: 3,
+                                opacity: 0.85
+                            }).addTo(coverageMap);
+                        }
+                    });
+
+                    document.getElementById('coverage-loading').style.display = 'none';
+                    document.getElementById('coverage-body').style.display = 'block';
+                    container.style.display = 'block';
+                })
+                .catch(err => {
+                    console.error(err);
+                    document.getElementById('coverage-loading').innerHTML = '<div style="color:#dc3545;">Map data error</div>';
+                });
+        }
+
+        // Open modal → default to Provider view
         document.getElementById('coverage-link').addEventListener('click', function(e) {
             e.preventDefault();
             document.getElementById('coverage-modal').classList.add('show');
-            switchCoverageView('by_provider'); // default
+            switchCoverageView('by_provider');
+        });
+
+        // Allow clicking the buttons directly too
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const view = btn.id === 'btn-provider' ? 'by_provider' :
+                             btn.id === 'btn-state'     ? 'by_state'     : 'map';
+                switchCoverageView(view);
+            });
         });
     </script>
     
