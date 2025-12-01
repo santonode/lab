@@ -1531,84 +1531,58 @@ def coverage_report():
 
     return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
 
-# === FINAL – WORKS ON RENDER – NO ERRORS – ALL CLEAN LINES ===
+# === ULTRA-FAST NATIONAL MAP – 60 objects instead of 378k ===
 @erate_bp.route('/coverage-map-data')
 def coverage_map_data():
-    print("\n=== NATIONAL FIBER MAP – LOADING ALL PROVIDERS ===")
-    all_routes = []
+    print("\n=== NATIONAL FIBER MAP – FAST VERSION ===")
+    provider_routes = {}  # provider_name → {color, coords[]}
 
-    def extract_routes(kmz_path, provider_name, color):
+    def add_to_provider(kmz_path, provider_name, color):
         if not os.path.exists(kmz_path):
-            print(f"   [MISSING] {kmz_path}")
             return
-
-        print(f"   → {provider_name} ({os.path.basename(kmz_path)})")
-
         try:
             with zipfile.ZipFile(kmz_path, 'r') as z:
-                kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
-                if not kml_files:
-                    print(f"     [SKIP] No .kml inside")
+                kmls = [f for f in z.namelist() if f.lower().endswith('.kml')]
+                if not kmls:
                     return
-
-                root = ET.fromstring(z.read(kml_files[0]))
+                root = ET.fromstring(z.read(kmls[0]))
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
-                added = 0
+                all_coords = provider_routes.setdefault(provider_name, {"color": color, "coords": []})["coords"]
+
                 for placemark in root.findall('.//kml:Placemark', ns):
-                    coord_sources = (
-                        placemark.findall('.//kml:LineString/kml:coordinates', ns) +
-                        placemark.findall('.//kml:MultiGeometry/kml:LineString/kml:coordinates', ns) +
-                        placemark.findall('.//kml:MultiGeometry/kml:MultiGeometry/kml:LineString/kml:coordinates', ns)
-                    )
-
-                    for coord_elem in coord_sources:
-                        if not coord_elem.text:
+                    for elem in placemark.findall('.//kml:LineString/kml:coordinates', ns) + \
+                                placemark.findall('.//kml:MultiGeometry//kml:LineString/kml:coordinates', ns):
+                        if not elem.text:
                             continue
-                        coords = []
-                        for token in coord_elem.text.strip().split():
-                            parts = token.split(',')
-                            if len(parts) < 2:
-                                continue
-                            try:
-                                lon = float(parts[0])
-                                lat = float(parts[1])
-                                coords.append([lat, lon])
-                            except ValueError:
-                                continue
-
-                        if len(coords) > 1:
-                            all_routes.append({
-                                "name": provider_name,
-                                "color": color,
-                                "coords": coords
-                            })
-                            added += 1
-
-                print(f"     Success: {added} clean fiber segments")
-
+                        for token in elem.text.strip().split():
+                            p = token.split(',')
+                            if len(p) >= 2:
+                                try:
+                                    lon, lat = float(p[0]), float(p[1])
+                                    all_coords.append([lat, lon])
+                                except:
+                                    continue
         except Exception as e:
-            print(f"   [ERROR] {os.path.basename(kmz_path)} → {e}")
+            print(f"   [ERROR] {kmz_path}: {e}")
 
-    # Bluebird Network
+    # Bluebird – one giant blue route
     if os.path.exists(KMZ_PATH_BLUEBIRD):
-        extract_routes(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
+        add_to_provider(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
 
-    # All FNA Members
+    # FNA members – one route per member
     colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
-    color_idx = 0
-
+    idx = 0
     if os.path.isdir(FNA_MEMBERS_DIR):
-        for filename in sorted(os.listdir(FNA_MEMBERS_DIR)):
-            if not filename.lower().endswith('.kmz'):
-                continue
-            member_name = os.path.splitext(filename)[0].replace('_', ' ').title()
-            path = os.path.join(FNA_MEMBERS_DIR, filename)
-            extract_routes(path, member_name, colors[color_idx % len(colors)])
-            color_idx += 1
+        for f in sorted(os.listdir(FNA_MEMBERS_DIR)):
+            if f.lower().endswith('.kmz'):
+                name = os.path.splitext(f)[0].replace('_', ' ').title()
+                add_to_provider(os.path.join(FNA_MEMBERS_DIR, f), name, colors[idx % len(colors)])
+                idx += 1
 
-    print(f"\nSUCCESS: {len(all_routes)} fiber segments loaded – ready to render\n")
-    return jsonify(all_routes)
+    result = [{"name": k, "color": v["color"], "coords": v["coords"]} for k, v in provider_routes.items() if v["coords"]]
+    print(f"FAST MAP READY: {len(result)} providers, {sum(len(r['coords']) for r in result):,} points total")
+    return jsonify(result)
 
 @erate_bp.route('/add-to-export', methods=['POST'])
 def add_to_export():
