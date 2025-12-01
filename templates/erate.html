@@ -635,24 +635,26 @@
             }
         };
 
-        // Load the full interactive map
+        // Load Full Network Map
         function loadFullFiberMap() {
             const container = document.getElementById('coverage-map-container');
             const mapEl = document.getElementById('coverage-map');
 
-            // INSTANT FEEDBACK
-            document.body.style.cursor = 'wait';
+            // Make container visible immediately so Leaflet can measure it correctly
+            container.style.display = 'block';
+            document.getElementById('coverage-body').style.display = 'block';
             document.getElementById('coverage-loading').style.display = 'block';
-            document.getElementById('coverage-body').style.display = 'none';
+            document.body.style.cursor = 'wait';
 
-            // Destroy old map
+            // Clean previous map
             if (coverageMap) {
                 coverageMap.remove();
                 coverageMap = null;
             }
-            mapEl.innerHTML = "<div style='height:100%; display:flex; align-items:center; justify-content:center; color:#666; font-size:1.1rem;'>Drawing 58+ fiber networks…</div>";
+            mapEl.innerHTML = "";
 
-            coverageMap = L.map('coverage-map').setView([39.8, -98.5], 5);
+            // Create new map
+            coverageMap = L.map('coverage-map', { zoomControl: true }).setView([39.8, -98.5], 5);
 
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap'
@@ -660,32 +662,31 @@
 
             fetch('/erate/coverage-map-data')
                 .then(r => r.json())
-                .then(data => {
-                    let added = 0;
-                    data.forEach(item => {
-                        if (item.coords && item.coords.length > 1) {
-                            L.polyline(item.coords, {
-                                color: item.color || '#0066cc',
-                                weight: 3,
-                                opacity: 0.8
+                .then(routes => {
+                    routes.forEach(r => {
+                        if (r.coords && r.coords.length > 1) {
+                            L.polyline(r.coords, {
+                                color: r.color,
+                                weight: 2.5,
+                                opacity: 0.9
                             }).addTo(coverageMap);
-                            added++;
                         }
                     });
 
-                    console.log(`National map: ${added} routes rendered`);
+                    // Critical: Force Leaflet to recalculate size after content is visible
+                    setTimeout(() => {
+                        if (coverageMap) coverageMap.invalidateSize();
+                    }, 150);
 
-                    // ALL DONE
-                    document.body.style.cursor = 'default';
                     document.getElementById('coverage-loading').style.display = 'none';
-                    document.getElementById('coverage-body').style.display = 'block';
-                    container.style.display = 'block';
+                    document.body.style.cursor = 'default';
+                    console.log(`National map loaded: ${routes.length} clean fiber segments`);
                 })
                 .catch(err => {
-                    console.error(err);
-                    document.body.style.cursor = 'default';
+                    console.error("Map load failed:", err);
                     document.getElementById('coverage-loading').innerHTML = 
-                        '<div style="color:#dc3545; font-weight:600;">Failed to load fiber routes</div>';
+                        '<div style="color:#dc3545; font-weight:600;">Failed to load map data</div>';
+                    document.body.style.cursor = 'default';
                 });
         }
 
