@@ -15,17 +15,35 @@ Live at: https://erate.santoelectronics.com
 - Responsive design – works great on phones and tablets
 
 ## Database Schema (PostgreSQL)
-
+<pre>
 | Name             | Type  | Owner
 |------------------|-------|----------------
-| public           | erate            | table | wurdle_db_user
-| public           | erate_hash       | table | wurdle_db_user  
-| public           | import_hash_log  | table | wurdle_db_user
-| public           | users            | table | wurdle_db_user
-| public           | user_stats       | table | wurdle_db_user
-| public           | daily_word       | table | wurdle_db_user ← (legacy, will be dropped)
-| public           | game_logs        | table | wurdle_db_user ← (legacy)
-| public           | memes            | table | wurdle_db_user ← (legacy)
-| public           | votes            | table | wurdle_db_user ← (legacy)
+| erate            | table | wurdle_db_user
+| erate_hash       | table | wurdle_db_user  
+| import_hash_log  | table | wurdle_db_user
+| users            | table | wurdle_db_user
+| user_stats       | table | wurdle_db_user
+| daily_word       | table | wurdle_db_user ← (legacy, will be dropped)
+| game_logs        | table | wurdle_db_user ← (legacy)
+| memes            | table | wurdle_db_user ← (legacy)
+| votes            | table | wurdle_db_user ← (legacy)
+</pre>
 
 ## Project Structure
+<pre>
+/src
+├── app.py                     # Main Flask app
+├── db.py                      # Database connection & queries
+├── erate.py                   # All E-Rate routes and logic
+├── models.py                  # SQLAlchemy models
+├── split_fna_kmz.py           # Script that parses and splits FNA KMZ per member
+├── recreate_erate.sql         # Full schema + indexes for fresh deploy
+├── render.yaml                # Render.com deployment config
+├── requirements.txt
+└── /templates
+    ├── erate.html            # Main dashboard
+    ├── eadmin.html           # Admin/import page
+    ├── erate_import.html
+    └── erate_import_complete.html
+  
+</pre>
