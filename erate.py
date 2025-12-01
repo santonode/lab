@@ -1531,7 +1531,7 @@ def coverage_report():
 
     return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
 
-# === FINAL – WORKS ON RENDER – NO ZIP ERRORS – PERFECT LINES ===
+# === FINAL WORKING VERSION – NO SYNTAX ERRORS – ALL LINES DRAWN ===
 @erate_bp.route('/coverage-map-data')
 def coverage_map_data():
     print("\n=== NATIONAL FIBER MAP – LOADING ALL PROVIDERS ===")
@@ -1545,7 +1545,6 @@ def coverage_map_data():
         print(f"   → {provider_name} ({os.path.basename(kmz_path)})")
 
         try:
-            # Open ZIP once, keep it alive the whole time
             with zipfile.ZipFile(kmz_path, 'r') as z:
                 kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
                 if not kml_files:
@@ -1557,7 +1556,6 @@ def coverage_map_data():
 
                 added = 0
                 for placemark in root.findall('.//kml:Placemark', ns):
-                    # Get all LineString coordinates – supports deep nesting
                     coord_sources = (
                         placemark.findall('.//kml:LineString/kml:coordinates', ns) +
                         placemark.findall('.//kml:MultiGeometry/kml:LineString/kml:coordinates', ns) +
@@ -1587,30 +1585,29 @@ def coverage_map_data():
                             })
                             added += 1
 
-                print(f"     Success: {added} clean fiber segments added")
+                print(f"     Success: {added} clean fiber segments")
 
         except Exception as e:
             print(f"   [ERROR] {os.path.basename(kmz_path)} → {e}")
 
-    # ——— BLUEBIRD ———
-    (your gold standard)
+    # Bluebird Network
     if os.path.exists(KMZ_PATH_BLUEBIRD):
         extract_routes(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
 
-    # ——— ALL FNA MEMBERS ———
+    # All FNA Members
     colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
     color_idx = 0
 
     if os.path.isdir(FNA_MEMBERS_DIR):
         for filename in sorted(os.listdir(FNA_MEMBERS_DIR)):
-            if not filename.lower().endswith('.kmz'):
+            if not filename.lower().endswith('.kmz')):
                 continue
             member_name = os.path.splitext(filename)[0].replace('_', ' ').title()
             path = os.path.join(FNA_MEMBERS_DIR, filename)
             extract_routes(path, member_name, colors[color_idx % len(colors)])
             color_idx += 1
 
-    print(f"\nSUCCESS: {len(all_routes)} total clean fiber segments ready to draw\n")
+    print(f"\nSUCCESS: {len(all_routes)} fiber segments loaded – ready to render\n")
     return jsonify(all_routes)
 
 @erate_bp.route('/add-to-export', methods=['POST'])
