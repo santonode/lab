@@ -585,6 +585,9 @@
                         Loading...
                     </div>
 
+                    <div id="map-error" style="display:none; color:#dc3545; padding:15px; background:#ffebee; border-radius:6px; margin:10px 0; text-align:center; font-weight:600;">
+                    </div>
+                    
                     <!-- MAP CONTAINER (hidden by default) -->
                     <div id="coverage-map-container" style="height:65vh; width:100%; border-radius:8px; overflow:hidden; display:none; box-shadow:0 4px 16px rgba(0,0,0,0.2);">
                         <div id="coverage-map" style="height:100%;"></div>
@@ -668,8 +671,11 @@
                     container.style.display = 'block';
                 })
                 .catch(err => {
-                    console.error(err);
-                    document.getElementById('coverage-loading').innerHTML = '<div style="color:#dc3545;">Map data error</div>';
+                    console.error("Map data fetch failed:", err);
+                    document.getElementById('coverage-loading').style.display = 'none';
+                    const errDiv = document.getElementById('map-error');
+                    errDiv.style.display = 'block';
+                    errDiv.textContent = 'Failed to load fiber routes – check server logs';
                 });
         }
 
