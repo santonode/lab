@@ -1531,80 +1531,74 @@ def coverage_report():
 
     return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
 
-# === FINAL NATIONAL MAP — CLEAN LINES ONLY, SAME AS PER-APPLICANT MAP ===
 @erate_bp.route('/coverage-map-data')
 def coverage_map_data():
-    print("\n=== Loading national fiber map (clean lines only) ===")
+    print("\n=== NATIONAL FIBER MAP – FINAL VERSION ===")
     all_routes = []
-    files_processed = 0
 
-    def parse_kmz_for_routes(kmz_path, provider_name, route_color):
-        nonlocal files_processed
-        if not os.path.exists(kmz_path):
-            print(f"   [ERROR] Missing: {kmz_path}")
-            return
+    def add_routes_from_placemarks(root, provider_name, color):
+        ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+        added = 0
+        for placemark in root.findall('.//kml:Placemark', root, ns):
+            name = (placemark.find('kml:name', ns) or {}).text or "Fiber"
+            name = name.strip()
 
-        files_processed += 1
-        print(f"   → Loading {provider_name}")
+            # Find ALL LineString coordinates — direct or inside MultiGeometry
+            coord_elements = (
+                placemark.findall('.//kml:LineString/kml:coordinates', ns) +
+                placemark.findall('.//kml:MultiGeometry/kml:LineString/kml:coordinates', ns) +
+                placemark.findall('.//kml:MultiGeometry/kml:MultiGeometry/kml:LineString/kml:coordinates', ns)  # triple-nested safe
+            )
 
-        try:
-            with zipfile.ZipFile(kmz_path, 'r') as kmz:
-                kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
-                if not kml_files:
-                    return
-                root = ET.fromstring(kmz.read(kml_files[0]))
-                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-
-                route_count = 0
-                for placemark in root.findall('.//kml:Placemark', ns):
-                    name_elem = placemark.find('kml:name', ns)
-                    segment_name = name_elem.text.strip() if name_elem is not None and name_elem.text else "Fiber"
-
-                    # Support both direct LineString and MultiGeometry
-                    line_coords = []
-                    for coords_elem in placemark.findall('.//kml:LineString/kml:coordinates', ns) + \
-                                       placemark.findall('.//kml:MultiGeometry/kml:LineString/kml:coordinates', ns):
-                        if not coords_elem.text:
+            for elem in coord_elements:
+                if not elem.text:
+                    continue
+                coords = []
+                for token in elem.text.strip().split():
+                    parts = token.split(',')
+                    if len(parts) >= 2:
+                        try:
+                            lon, lat = float(parts[0]), float(parts[1])
+                            coords.append([lat, lon])
+                        except:
                             continue
-                        for pair in coords_elem.text.strip().split():
-                            parts = pair.split(',')
-                            if len(parts) >= 2:
-                                try:
-                                    lon, lat = float(parts[0]), float(parts[1])
-                                    line_coords.append([lat, lon])
-                                except ValueError:
-                                    continue
+                if len(coords) > 1:
+                    all_routes.append({
+                        "name": f"{provider_name}",
+                        "color": color,
+                        "coords": coords
+                    })
+                    added += 1
+        print(f"     {provider_name}: {added} clean line segments")
 
-                    if len(line_coords) > 1:
-                        all_routes.append({
-                            "name": f"{provider_name}: {segment_name}",
-                            "color": route_color,
-                            "coords": line_coords
-                        })
-                        route_count += 1
-
-                print(f"     Added {route_count} clean fiber segments")
-
+    def parse_kmz(kmz_path, provider_name, color):
+        if not os.path.exists(kmz_path):
+            return
+        try:
+            with zipfile.ZipFile(kmz_path, 'r') as z:
+                kmls = [f for f in z.namelist() if f.lower().endswith('.kml')]
+            if not kmls:
+                return
+            root = ET.fromstring(z.read(kmls[0]))
+            add_routes_from_placemarks(root, provider_name, color)
         except Exception as e:
-            print(f"   [ERROR] Failed {kmz_path}: {e}")
+            print(f"   [ERROR] {kmz_path}: {e}")
 
-    # === 1. Bluebird Network ===
+    # Bluebird
     if os.path.exists(KMZ_PATH_BLUEBIRD):
-        parse_kmz_for_routes(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
+        parse_kmz(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
 
-    # === 2. All FNA Members ===
-    colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e3e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
-    color_idx = 0
+    # FNA Members
+    colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
+    idx = 0
     if os.path.isdir(FNA_MEMBERS_DIR):
-        for filename in sorted(os.listdir(FNA_MEMBERS_DIR)):
-            if not filename.lower().endswith('.kmz'):
-                continue
-            member_name = os.path.splitext(filename)[0].replace('_', ' ').title()
-            path = os.path.join(FNA_MEMBERS_DIR, filename)
-            parse_kmz_for_routes(path, member_name, colors[color_idx % len(colors)])
-            color_idx += 1
+        for f in sorted(os.listdir(FNA_MEMBERS_DIR)):
+            if f.lower().endswith('.kmz'):
+                name = os.path.splitext(f)[0].replace('_', ' ').title()
+                parse_kmz(os.path.join(FNA_MEMBERS_DIR, f), name, colors[idx % len(colors)])
+                idx += 1
 
-    print(f"\n=== NATIONAL MAP LOADED: {len(all_routes)} individual fiber segments from {files_processed} files ===\n")
+    print(f"\nSUCCESS: {len(all_routes)} total clean fiber segments loaded\n")
     return jsonify(all_routes)
 
 @erate_bp.route('/add-to-export', methods=['POST'])
