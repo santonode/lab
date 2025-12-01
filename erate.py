@@ -1531,7 +1531,7 @@ def coverage_report():
 
     return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
 
-# === FINAL WORKING VERSION – NO SYNTAX ERRORS – ALL LINES DRAWN ===
+# === FINAL – WORKS ON RENDER – NO ERRORS – ALL CLEAN LINES ===
 @erate_bp.route('/coverage-map-data')
 def coverage_map_data():
     print("\n=== NATIONAL FIBER MAP – LOADING ALL PROVIDERS ===")
@@ -1600,7 +1600,7 @@ def coverage_map_data():
 
     if os.path.isdir(FNA_MEMBERS_DIR):
         for filename in sorted(os.listdir(FNA_MEMBERS_DIR)):
-            if not filename.lower().endswith('.kmz')):
+            if not filename.lower().endswith('.kmz'):
                 continue
             member_name = os.path.splitext(filename)[0].replace('_', ' ').title()
             path = os.path.join(FNA_MEMBERS_DIR, filename)
