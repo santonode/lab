@@ -1531,42 +1531,43 @@ def coverage_report():
 
     return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
 
-# === FINAL 100% WORKING VERSION – NO POLYGONS, PURE LINES, ElementTree SAFE ===
+# === FINAL NATIONAL MAP — CLEAN LINES ONLY, SAME AS PER-APPLICANT MAP ===
 @erate_bp.route('/coverage-map-data')
 def coverage_map_data():
-    print("\n=== /coverage-map-data called ===")
-    data = []
-    total_files = 0
-    successful_files = 0
+    print("\n=== Loading national fiber map (clean lines only) ===")
+    all_routes = []
+    files_processed = 0
 
-    def extract_lines_from_kmz(kmz_path, provider_name, color):
-        nonlocal total_files, successful_files
-        total_files += 1
-        print(f" → Processing: {provider_name}")
-
+    def parse_kmz_for_routes(kmz_path, provider_name, route_color):
+        nonlocal files_processed
         if not os.path.exists(kmz_path):
-            print(f"     [ERROR] File not found: {kmz_path}")
+            print(f"   [ERROR] Missing: {kmz_path}")
             return
 
-        all_line_coords = []
+        files_processed += 1
+        print(f"   → Loading {provider_name}")
 
         try:
             with zipfile.ZipFile(kmz_path, 'r') as kmz:
                 kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
                 if not kml_files:
-                    print("     [WARNING] No .kml inside KMZ")
                     return
-
                 root = ET.fromstring(kmz.read(kml_files[0]))
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
-                # === STEP 1: Use real <LineString> elements first (this works 99% of the time) ===
-                line_coords = []
-                for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
-                    if coord_elem.text:
-                        points = coord_elem.text.strip().replace('\n', ' ').split()
-                        for p in points:
-                            parts = p.split(',')
+                route_count = 0
+                for placemark in root.findall('.//kml:Placemark', ns):
+                    name_elem = placemark.find('kml:name', ns)
+                    segment_name = name_elem.text.strip() if name_elem is not None and name_elem.text else "Fiber"
+
+                    # Support both direct LineString and MultiGeometry
+                    line_coords = []
+                    for coords_elem in placemark.findall('.//kml:LineString/kml:coordinates', ns) + \
+                                       placemark.findall('.//kml:MultiGeometry/kml:LineString/kml:coordinates', ns):
+                        if not coords_elem.text:
+                            continue
+                        for pair in coords_elem.text.strip().split():
+                            parts = pair.split(',')
                             if len(parts) >= 2:
                                 try:
                                     lon, lat = float(parts[0]), float(parts[1])
@@ -1574,69 +1575,37 @@ def coverage_map_data():
                                 except ValueError:
                                     continue
 
-                if line_coords:
-                    data.append({"name": provider_name, "color": color, "coords": line_coords})
-                    successful_files += 1
-                    print(f"     Success: {len(line_coords):,} points from <LineString>")
-                    return  # ← We’re done! No need to look at raw coordinates
+                    if len(line_coords) > 1:
+                        all_routes.append({
+                            "name": f"{provider_name}: {segment_name}",
+                            "color": route_color,
+                            "coords": line_coords
+                        })
+                        route_count += 1
 
-                # === STEP 2: Fallback – only if no LineString found ===
-                print(f"     No <LineString> found → checking raw coordinates (skipping polygons)")
-                raw_coords = []
-                for coord_elem in root.findall('.//kml:coordinates', ns):
-                    # Walk up the tree manually to see if we're inside a Polygon
-                    current = coord_elem
-                    is_polygon = False
-                    while current is not None:
-                        tag_name = current.tag.split('}')[-1]  # remove namespace
-                        if tag_name in ('Polygon', 'LinearRing'):
-                            is_polygon = True
-                            break
-                        current = current.getparent() if hasattr(current, 'getparent') else None
-                        # After first None, stop (safety)
-                        if current is None:
-                            break
-
-                    if is_polygon:
-                        continue  # skip anything inside a polygon
-
-                    if coord_elem.text:
-                        points = coord_elem.text.strip().replace('\n', ' ').split()
-                        for p in points:
-                            parts = p.split(',')
-                            if len(parts) >= 2:
-                                try:
-                                    lon, lat = float(parts[0]), float(parts[1])
-                                    raw_coords.append([lat, lon])
-                                except ValueError:
-                                    continue
-
-                if raw_coords:
-                    data.append({"name": provider_name, "color": color, "coords": raw_coords})
-                    successful_files += 1
-                    print(f"     Success: {len(raw_coords):,} points from raw coordinates")
-                else:
-                    print(f"     [INFO] No line data found – only polygons")
+                print(f"     Added {route_count} clean fiber segments")
 
         except Exception as e:
-            print(f"     [ERROR] {kmz_path}: {e}")
-            import traceback; traceback.print_exc()
+            print(f"   [ERROR] Failed {kmz_path}: {e}")
 
-    # ——— Bluebird ———
+    # === 1. Bluebird Network ===
     if os.path.exists(KMZ_PATH_BLUEBIRD):
-        extract_lines_from_kmz(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
+        parse_kmz_for_routes(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
 
-    # ——— FNA Members ———
+    # === 2. All FNA Members ===
+    colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e3e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
+    color_idx = 0
     if os.path.isdir(FNA_MEMBERS_DIR):
-        for f in sorted(os.listdir(FNA_MEMBERS_DIR)):
-            if f.lower().endswith('.kmz'):
-                name = os.path.splitext(f)[0].replace('_', ' ').replace('  ', ' ').title()
-                path = os.path.join(FNA_MEMBERS_DIR, f)
-                color = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"][successful_files % 10]
-                extract_lines_from_kmz(path, name, color)
+        for filename in sorted(os.listdir(FNA_MEMBERS_DIR)):
+            if not filename.lower().endswith('.kmz'):
+                continue
+            member_name = os.path.splitext(filename)[0].replace('_', ' ').title()
+            path = os.path.join(FNA_MEMBERS_DIR, filename)
+            parse_kmz_for_routes(path, member_name, colors[color_idx % len(colors)])
+            color_idx += 1
 
-    print(f"\n=== DONE === {successful_files} clean line routes loaded\n")
-    return jsonify(data)
+    print(f"\n=== NATIONAL MAP LOADED: {len(all_routes)} individual fiber segments from {files_processed} files ===\n")
+    return jsonify(all_routes)
 
 @erate_bp.route('/add-to-export', methods=['POST'])
 def add_to_export():
