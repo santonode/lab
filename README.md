@@ -24,9 +24,9 @@ Live at: https://lab.santoelectronics.com/erate
 | users            | table | wurdle_db_user
 | user_stats       | table | wurdle_db_user
 | daily_word       | table | wurdle_db_user ← (legacy, will be dropped)
-| game_logs        | table | wurdle_db_user ← (legacy)
-| memes            | table | wurdle_db_user ← (legacy)
-| votes            | table | wurdle_db_user ← (legacy)
+| game_logs        | table | wurdle_db_user ← (legacy, will be dropped)
+| memes            | table | wurdle_db_user ← (legacy, will be dropped)
+| votes            | table | wurdle_db_user ← (legacy, will be dropped)
 </pre>
 
 ## Project Structure
