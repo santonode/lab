@@ -1531,6 +1531,59 @@ def coverage_report():
 
     return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
 
+# === NEW ENDPOINT: FULL FIBER MAP DATA (JSON) ===
+@erate_bp.route('/coverage-map-data')
+def coverage_map_data():
+    routes = []
+
+    def extract_coords(kmz_path, color):
+        if not os.path.exists(kmz_path):
+            return
+        try:
+            with zipfile.ZipFile(kmz_path, 'r') as kmz:
+                kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
+                if not kml_files:
+                    return
+                root = ET.fromstring(kmz.read(kml_files[0]))
+                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+                for coords_elem in root.findall('.//kml:coordinates', ns):
+                    if not coords_elem.text:
+                        continue
+                    for point_str in coords_elem.text.strip().split():
+                        parts = point_str.split(',')
+                        if len(parts) < 2:
+                            continue
+                        try:
+                            lon = float(parts[0])
+                            lat = float(parts[1])
+                            routes.append([lat, lon])  # Leaflet uses [lat, lng]
+                        except ValueError:
+                            continue
+                if routes:
+                    # One route object per KMZ file
+                    data.append({"color": color, "coords": routes[:]})
+                    routes.clear()  # reset for next file
+        except Exception as e:
+            print(f"Error reading {kmz_path}: {e}")
+
+    data = []  # final list
+
+    # Bluebird Network (single file)
+    if os.path.exists(KMZ_PATH_BLUEBIRD):
+        extract_coords(KMZ_PATH_BLUEBIRD, "#007bff")  # Blue
+
+    # FNA Members – cycle through colors
+    colors = ["#dc3545", "#28a745", "#fd7e14", "#6f42c1", "#20c997", "#e83e8c", "#6610f2", "#17a2b8"]
+    color_idx = 0
+    if os.path.isdir(FNA_MEMBERS_DIR):
+        for fname in sorted(os.listdir(FNA_MEMBERS_DIR)):
+            if fname.lower().endswith('.kmz'):
+                fpath = os.path.join(FNA_MEMBERS_DIR, fname)
+                extract_coords(fpath, colors[color_idx % len(colors)])
+                color_idx += 1
+
+    return jsonify(data)
+
 @erate_bp.route('/add-to-export', methods=['POST'])
 def add_to_export():
     if 'username' not in session:
