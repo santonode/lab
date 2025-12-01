@@ -2,7 +2,7 @@
 
 Fast, mobile-first web application for searching and analyzing live USAC E-Rate 470/471 open data.
 
-Live at: https://erate.santoelectronics.com
+Live at: https://lab.santoelectronics.com/erate
 
 ## Features
 - Real-time search of all active FCC Form 470s from USAC open data
