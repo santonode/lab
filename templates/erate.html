@@ -640,42 +640,52 @@
             const container = document.getElementById('coverage-map-container');
             const mapEl = document.getElementById('coverage-map');
 
-            // Destroy old map if exists
+            // INSTANT FEEDBACK
+            document.body.style.cursor = 'wait';
+            document.getElementById('coverage-loading').style.display = 'block';
+            document.getElementById('coverage-body').style.display = 'none';
+
+            // Destroy old map
             if (coverageMap) {
                 coverageMap.remove();
                 coverageMap = null;
             }
-            mapEl.innerHTML = "";
+            mapEl.innerHTML = "<div style='height:100%; display:flex; align-items:center; justify-content:center; color:#666; font-size:1.1rem;'>Drawing 58+ fiber networks…</div>";
 
             coverageMap = L.map('coverage-map').setView([39.8, -98.5], 5);
 
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors'
+                attribution: '© OpenStreetMap'
             }).addTo(coverageMap);
 
             fetch('/erate/coverage-map-data')
                 .then(r => r.json())
                 .then(data => {
+                    let added = 0;
                     data.forEach(item => {
                         if (item.coords && item.coords.length > 1) {
                             L.polyline(item.coords, {
-                                color: item.color,
+                                color: item.color || '#0066cc',
                                 weight: 3,
-                                opacity: 0.85
+                                opacity: 0.8
                             }).addTo(coverageMap);
+                            added++;
                         }
                     });
 
+                    console.log(`National map: ${added} routes rendered`);
+
+                    // ALL DONE
+                    document.body.style.cursor = 'default';
                     document.getElementById('coverage-loading').style.display = 'none';
                     document.getElementById('coverage-body').style.display = 'block';
                     container.style.display = 'block';
                 })
                 .catch(err => {
-                    console.error("Map data fetch failed:", err);
-                    document.getElementById('coverage-loading').style.display = 'none';
-                    const errDiv = document.getElementById('map-error');
-                    errDiv.style.display = 'block';
-                    errDiv.textContent = 'Failed to load fiber routes – check server logs';
+                    console.error(err);
+                    document.body.style.cursor = 'default';
+                    document.getElementById('coverage-loading').innerHTML = 
+                        '<div style="color:#dc3545; font-weight:600;">Failed to load fiber routes</div>';
                 });
         }
 
