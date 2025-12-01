@@ -1531,56 +1531,91 @@ def coverage_report():
 
     return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
 
-# === NEW ENDPOINT: FULL FIBER MAP DATA (JSON) ===
+# === FIXED + DEBUGGED: Full Fiber Map Data ===
 @erate_bp.route('/coverage-map-data')
 def coverage_map_data():
-    routes = []
+    print("\n=== /coverage-map-data called ===")
+    data = []  # Final list of routes
+    total_files = 0
+    successful_files = 0
 
-    def extract_coords(kmz_path, color):
+    def extract_coords_from_kmz(kmz_path, provider_name, color):
+        nonlocal successful_files, total_files
+        total_files += 1
+        print(f"  → Processing: {provider_name} → {os.path.basename(kmz_path)}")
+
         if not os.path.exists(kmz_path):
+            print(f"     [ERROR] File not found: {kmz_path}")
             return
+
+        route_coords = []
         try:
             with zipfile.ZipFile(kmz_path, 'r') as kmz:
                 kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
                 if not kml_files:
+                    print(f"     [WARNING] No .kml found inside {os.path.basename(kmz_path)}")
                     return
-                root = ET.fromstring(kmz.read(kml_files[0]))
+
+                print(f"     Found KML: {kml_files[0]}")
+                kml_data = kmz.read(kml_files[0])
+                root = ET.fromstring(kml_data)
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-                for coords_elem in root.findall('.//kml:coordinates', ns):
-                    if not coords_elem.text:
+
+                coord_elements = root.findall('.//kml:coordinates', ns)
+                print(f"     Found {len(coord_elements)} <coordinates> blocks")
+
+                for elem in coord_elements:
+                    if not elem.text:
                         continue
-                    for point_str in coords_elem.text.strip().split():
-                        parts = point_str.split(',')
-                        if len(parts) < 2:
-                            continue
-                        try:
-                            lon = float(parts[0])
-                            lat = float(parts[1])
-                            routes.append([lat, lon])  # Leaflet uses [lat, lng]
-                        except ValueError:
-                            continue
-                if routes:
-                    # One route object per KMZ file
-                    data.append({"color": color, "coords": routes[:]})
-                    routes.clear()  # reset for next file
+                    raw = elem.text.strip()
+                    points = raw.replace('\n', ' ').split()
+                    for point in points:
+                        parts = point.split(',')
+                        if len(parts) >= 2:
+                            try:
+                                lon = float(parts[0])
+                                lat = float(parts[1])
+                                route_coords.append([lat, lon])
+                            except ValueError:
+                                continue
+
+                if route_coords:
+                    data.append({
+                        "name": provider_name,
+                        "color": color,
+                        "coords": route_coords
+                    })
+                    successful_files += 1
+                    print(f"     Success: Added {len(route_coords):,} points")
+                else:
+                    print(f"     [WARNING] No valid coordinates found")
+
         except Exception as e:
-            print(f"Error reading {kmz_path}: {e}")
+            print(f"     [ERROR] Exception: {e}")
+            import traceback
+            traceback.print_exc()
 
-    data = []  # final list
-
-    # Bluebird Network (single file)
+    # ——— Bluebird Network ———
     if os.path.exists(KMZ_PATH_BLUEBIRD):
-        extract_coords(KMZ_PATH_BLUEBIRD, "#007bff")  # Blue
+        extract_coords_from_kmz(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
+    else:
+        print(f"[ERROR] Bluebird KMZ not found at {KMZ_PATH_BLUEBIRD}")
 
-    # FNA Members – cycle through colors
-    colors = ["#dc3545", "#28a745", "#fd7e14", "#6f42c1", "#20c997", "#e83e8c", "#6610f2", "#17a2b8"]
-    color_idx = 0
-    if os.path.isdir(FNA_MEMBERS_DIR):
-        for fname in sorted(os.listdir(FNA_MEMBERS_DIR)):
-            if fname.lower().endswith('.kmz'):
-                fpath = os.path.join(FNA_MEMBERS_DIR, fname)
-                extract_coords(fpath, colors[color_idx % len(colors)])
-                color_idx += 1
+    # ——— FNA Members ———
+    if not os.path.isdir(FNA_MEMBERS_DIR):
+        print(f"[ERROR] FNA members directory not found:", FNA_MEMBERS_DIR)
+    else:
+        kmz_files = sorted([f for f in os.listdir(FNA_MEMBERS_DIR) if f.lower().endswith('.kmz')])
+        print(f"Found {len(kmz_files)} FNA KMZ files")
+
+        colors = ["#dc3545", "#28a745", "#fd7e14", "#6f42c1", "#20c997", "#e83e8c", "#6610f2", "#17a2b8", "#ffc107", "#6c757d"]
+        for i, filename in enumerate(kmz_files):
+            member_name = os.path.splitext(filename)[0].replace('_', ' ').title()
+            filepath = os.path.join(FNA_MEMBERS_DIR, filename)
+            extract_coords_from_kmz(filepath, member_name, colors[i % len(colors)])
+
+    print(f"\n=== SUMMARY === Files processed: {total_files}, Routes added: {successful_files}, Total routes: {len(data)}")
+    print("Returning JSON with", len(data), "routes\n")
 
     return jsonify(data)
 
