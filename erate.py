@@ -26,43 +26,6 @@ from models import Erate  # ← For querying the applicant
 EXPORT_DIR = "exports"
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
-# === ONE TIME SAFE PATCH
-def safe_parse_kml(kmz_path):
-    with zipfile.ZipFile(kmz_path, 'r') as z:
-        kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
-        if not kml_files:
-            return None
-        data = z.read(kml_files[0])
-        # Clean the garbage
-        if data[:3] == b'\xef\xbb\xbf':
-            data = data[3:]
-        data = data.replace(b'\x00', b'')
-        data = data.decode('utf-8', errors='ignore').encode('utf-8')
-        return ET.fromstring(data)
-
-# === CLEAN PROVIDER NAME ===
-def clean_provider_name(filename):
-    """
-    Turns any KMZ filename into a beautiful, consistent display name.
-    Special handling for SEGRA East/West and future-proof for others.
-    """
-    name = os.path.splitext(filename)[0]           # strip .kmz
-    name = name.replace('_', ' ').strip()          # underscores → spaces
-    name = ' '.join(word.capitalize() for word in name.split())  # Title Case
-
-    # SEGRA SPECIAL RULES (works forever)
-    if 'EAST' in name.upper() and 'SEGRA' in name.upper():
-        return "SEGRA East"
-    if 'WEST' in name.upper() and 'SEGRA' in name.upper():
-        return "SEGRA West"
-    if name.upper().startswith('SEGRA'):
-        return "SEGRA"  # fallback if no East/West
-
-    # Add more special cases here in the future if needed
-    # e.g. if 'WOW' in name.upper(): return "WOW!"
-
-    return name
-
 # === TRUE NEAREST FIBER DISTANCE (for table column) ===
 def get_nearest_fiber_distance(lat, lon, kmz_path):
     if not lat or not lon or not os.path.exists(kmz_path):
@@ -72,29 +35,31 @@ def get_nearest_fiber_distance(lat, lon, kmz_path):
     min_dist = float('inf')
 
     try:
-        root = safe_parse_kml(kmz_path)
-        if root is None:
-            return None
-        ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+        with zipfile.ZipFile(kmz_path, 'r') as kmz:
+            kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
+            if not kml_files:
+                return None
+            root = ET.fromstring(kmz.read(kml_files[0]))
+            ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
-        for coord_elem in root.findall('.//kml:coordinates', ns):
-            if not coord_elem.text:
-                continue
-            for point in coord_elem.text.strip().split():
-                parts = point.split(',')
-                if len(parts) < 2:
+            for coord_elem in root.findall('.//kml:coordinates', ns):
+                if not coord_elem.text:
                     continue
-                try:
-                    p_lon, p_lat = float(parts[0]), float(parts[1])
-                    dlat = radians(p_lat - lat)
-                    dlon = radians(p_lon - lon)
-                    a = sin(dlat/2)**2 + cos(radians(lat)) * cos(radians(p_lat)) * sin(dlon/2)**2
-                    c = 2 * atan2(sqrt(a), sqrt(1-a))
-                    distance = R * c
-                    if distance < min_dist:
-                        min_dist = distance
-                except:
-                    continue
+                for point in coord_elem.text.strip().split():
+                    parts = point.split(',')
+                    if len(parts) < 2:
+                        continue
+                    try:
+                        p_lon, p_lat = float(parts[0]), float(parts[1])
+                        dlat = radians(p_lat - lat)
+                        dlon = radians(p_lon - lon)
+                        a = sin(dlat/2)**2 + cos(radians(lat)) * cos(radians(p_lat)) * sin(dlon/2)**2
+                        c = 2 * atan2(sqrt(a), sqrt(1-a))
+                        distance = R * c
+                        if distance < min_dist:
+                            min_dist = distance
+                    except:
+                        continue
         return round(min_dist, 1) if min_dist != float('inf') else None
     except:
         return None
@@ -521,18 +486,11 @@ def _load_fna_members():
         return
     for file in os.listdir(FNA_MEMBERS_DIR):
         if file.lower().endswith('.kmz'):
-            member_name = clean_provider_name(file)
+            member_name = os.path.splitext(file)[0].replace('_', ' ')
             FNA_MEMBERS[member_name] = os.path.join(FNA_MEMBERS_DIR, file)
     log("Loaded %d FNA members", len(FNA_MEMBERS))
 
 _load_fna_members()
-
-# === FORCE FRESH FNA MEMBERS ON EVERY REQUEST (safe + fixes missing SEGRA West) ===
-@erate_bp.before_request
-def ensure_fna_members_loaded():
-    global FNA_MEMBERS
-    FNA_MEMBERS = {}              # clear old cache
-    _load_fna_members()           # reload from disk with latest files
 
 # === GLOBAL MAP DATA (LAZY LOADED) ===
 MAP_DATA = {
@@ -553,13 +511,15 @@ def _load_kmz(provider):
         return
     try:
         log("Loading KMZ [%s]...", provider.upper())
-        root = safe_parse_kml(path)
-        if root is None:
-            log("Failed to parse KML in %s", path)
-            MAP_DATA[provider]["loaded"] = True
-            MAP_DATA[provider]["pops"] = []
-            MAP_DATA[provider]["routes"] = []
-            return
+        with zipfile.ZipFile(path, 'r') as kmz:
+            kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
+            if not kml_files:
+                log("No .kml in %s", path)
+                MAP_DATA[provider]["loaded"] = True
+                MAP_DATA[provider]["pops"] = []
+                MAP_DATA[provider]["routes"] = []
+                return
+            kml_data = kmz.read(kml_files[0])
       
         root = ET.fromstring(kml_data)
         ns = {'kml': 'http://www.opengis.net/kml/2.2'}
@@ -687,27 +647,12 @@ def bbmap(app_number):
             if not os.path.exists(path):
                 continue
             try:
-                root = safe_parse_kml(path)
-                if root is None:
-                    continue
-
-                    # ROBUST KML PARSING – works on every real-world KMZ (including SEGRA)
-                    kml_data = kmz.read(kml_files[0])
-
-                    # Fix encoding issues, BOM, null bytes, and invalid XML declarations
-                    if kml_data[:3] == b'\xef\xbb\xbf':  # UTF-8 BOM
-                        kml_data = kml_data[3:]
-                    kml_data = kml_data.replace(b'\x00', b'')  # remove null bytes
-                    kml_data = kml_data.decode('utf-8', errors='ignore').encode('utf-8')
-
-                    # Parse safely
-                    root = ET.fromstring(kml_data)
-                    
-                    ns = {
-                        'kml': 'http://www.opengis.net/kml/2.2',
-                        'gx': 'http://www.google.com/kml/ext/2.2',
-                        'atom': 'http://www.w3.org/2005/Atom'
-                    }
+                with zipfile.ZipFile(path, 'r') as kmz:
+                    kml_file = next((f for f in kmz.namelist() if f.lower().endswith('.kml')), None)
+                    if not kml_file:
+                        continue
+                    root = ET.fromstring(kmz.read(kml_file))
+                    ns = {'kml': 'http://www.opengis.net/kml/2.2'}
                     coords = []
                     for c in root.findall('.//kml:coordinates', ns):
                         if c.text:
@@ -760,18 +705,11 @@ def bbmap(app_number):
         path = FNA_MEMBERS.get(clean) or FNA_MEMBERS.get(fna_member)
         if not path or not os.path.exists(path):
             return jsonify({"error": "Member not found"}), 404
-        
-        # ONE LINE TO RULE THEM ALL — fixes SEGRA West forever
-        root = safe_parse_kml(path)
-        if root is None:
-            log("Failed to parse FNA member KMZ: %s", path)
-            return jsonify({"error": "Invalid fiber data"}), 500
-           
-            ns = {
-                'kml': 'http://www.opengis.net/kml/2.2',
-                'gx': 'http://www.google.com/kml/ext/2.2',
-                'atom': 'http://www.w3.org/2005/Atom'
-            }
+        kmz_path = path
+        with zipfile.ZipFile(path, 'r') as kmz:
+            kml = [f for f in kmz.namelist() if f.lower().endswith('.kml')][0]
+            root = ET.fromstring(kmz.read(kml))
+            ns = {'kml': 'http://www.opengis.net/kml/2.2'}
             for pm in root.findall('.//kml:Placemark', ns):
                 name = pm.find('kml:name', ns)
                 name = name.text.strip() if name is not None and name.text else "Fiber"
@@ -1528,54 +1466,57 @@ def coverage_report():
     provider_to_states = defaultdict(set)
     state_to_providers = defaultdict(set)
 
-    # Bluebird Network — NOW USES safe_parse_kml() (was broken)
+    # Bluebird Network
     if os.path.exists(KMZ_PATH_BLUEBIRD):
-        root = safe_parse_kml(KMZ_PATH_BLUEBIRD)
-        if root is not None:
-            ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-            for coord_elem in root.findall('.//kml:coordinates', ns):
-                if coord_elem.text:
-                    for point in coord_elem.text.strip().split():
-                        parts = point.split(',')
-                        if len(parts) >= 2:
-                            try:
-                                lon, lat = float(parts[0]), float(parts[1])
-                                state = point_in_state(lat, lon)
-                                if state:
-                                    provider_to_states["Bluebird Network"].add(state)
-                                    state_to_providers[state].add("Bluebird Network")
-                            except:
-                                pass
+        with zipfile.ZipFile(KMZ_PATH_BLUEBIRD, 'r') as kmz:
+            kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
+            if kml_files:
+                root = ET.fromstring(kmz.read(kml_files[0]))
+                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+                for coord_elem in root.findall('.//kml:coordinates', ns):
+                    if coord_elem.text:
+                        for point in coord_elem.text.strip().split():
+                            parts = point.split(',')
+                            if len(parts) >= 2:
+                                try:
+                                    lon, lat = float(parts[0]), float(parts[1])
+                                    state = point_in_state(lat, lon)
+                                    if state:
+                                        provider_to_states["Bluebird Network"].add(state)
+                                        state_to_providers[state].add("Bluebird Network")
+                                except:
+                                    pass
 
-    # FNA Members – now uses safe_parse_kml() and no more stray except:
+    # FNA Members
     for filename in os.listdir(FNA_MEMBERS_DIR):
         if not filename.lower().endswith('.kmz'):
             continue
-        
-        member_name = clean_provider_name(filename)
+        member_name = os.path.splitext(filename)[0].replace('_', ' ').strip()
         path = os.path.join(FNA_MEMBERS_DIR, filename)
         if not os.path.exists(path):
             continue
-
-        # USE THE BULLETPROOF PARSER — fixes SEGRA West forever
-        root = safe_parse_kml(path)
-        if root is None:
-            continue
-
-        ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-        for coord_elem in root.findall('.//kml:coordinates', ns):
-            if coord_elem.text:
-                for point in coord_elem.text.strip().split():
-                    parts = point.split(',')
-                    if len(parts) >= 2:
-                        try:
-                            lon, lat = float(parts[0]), float(parts[1])
-                            state = point_in_state(lat, lon)
-                            if state:
-                                provider_to_states[member_name].add(state)
-                                state_to_providers[state].add(member_name)
-                        except:
-                            pass
+        try:
+            with zipfile.ZipFile(path, 'r') as kmz:
+                kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
+                if not kml_files:
+                    continue
+                root = ET.fromstring(kmz.read(kml_files[0]))
+                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+                for coord_elem in root.findall('.//kml:coordinates', ns):
+                    if coord_elem.text:
+                        for point in coord_elem.text.strip().split():
+                            parts = point.split(',')
+                            if len(parts) >= 2:
+                                try:
+                                    lon, lat = float(parts[0]), float(parts[1])
+                                    state = point_in_state(lat, lon)
+                                    if state:
+                                        provider_to_states[member_name].add(state)
+                                        state_to_providers[state].add(member_name)
+                                except:
+                                    pass
+        except:
+            pass
 
     # === RETURN PURE LIST — NO HEADERS, NO BUTTONS ===
     lines = []
@@ -1595,20 +1536,21 @@ def coverage_report():
 def coverage_map_data():
     print("\n=== NATIONAL FIBER MAP – BEST OF BOTH WORLDS ===")
     all_routes = []
-    
+
     def extract_individual_lines(kmz_path, provider_name, color):
         if not os.path.exists(kmz_path):
             return
+
         try:
             with zipfile.ZipFile(kmz_path, 'r') as z:
                 kmls = [f for f in z.namelist() if f.lower().endswith('.kml')]
                 if not kmls:
                     return
-                root = safe_parse_kml(kmz_path)
-                if root is None:
-                    continue
+                root = ET.fromstring(z.read(kmls[0]))
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+
                 added = 0
+                # Extract ONLY real LineString elements — each becomes its own clean line
                 for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
                     if not coord_elem.text:
                         continue
@@ -1628,15 +1570,17 @@ def coverage_map_data():
                             "coords": coords
                         })
                         added += 1
-                print(f" {provider_name}: {added} clean individual fiber lines")
-        except Exception as e:
-            print(f" [ERROR] {kmz_path}: {e}")
 
-    # Bluebird
+                print(f"   {provider_name}: {added} clean individual fiber lines")
+
+        except Exception as e:
+            print(f"   [ERROR] {kmz_path}: {e}")
+
+    # Bluebird — thousands of perfect blue lines
     if os.path.exists(KMZ_PATH_BLUEBIRD):
         extract_individual_lines(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
 
-    # FNA Members
+    # FNA Members — each gets own color
     colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
     idx = 0
     if os.path.isdir(FNA_MEMBERS_DIR):
