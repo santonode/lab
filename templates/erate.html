@@ -20,6 +20,21 @@
         animation: spin 1s linear infinite;
         margin: 0 auto 20px;
     }
+    /* ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←← */
+    /* FIX: Spinning cursor hidden under Leaflet on iOS Safari */
+    body.cursor-wait,
+    body.cursor-wait * {
+        cursor: wait !important;
+    }
+
+    /* Make sure loading overlay is always on top of the map */
+    #coverage-loading {
+        z-index: 10000 !important;
+        position: absolute !important;
+        background: rgba(255, 255, 255, 0.95);
+        inset: 0;
+    }
+    /* ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←← */
     </style>
     <style>
         :root {
@@ -646,12 +661,14 @@
             }
         };
 
-        // Load Full Network Map
+        // *******************************************************************
+        // Load Full Network Map – iOS Safari spinning cursor FIXED
+        // *******************************************************************
         function loadFullFiberMap() {
             const container = document.getElementById('coverage-map-container');
             const mapEl = document.getElementById('coverage-map');
 
-            // Show spinner instantly
+            // Show container + loading overlay immediately
             container.style.display = 'block';
             document.getElementById('coverage-body').style.display = 'block';
             document.getElementById('coverage-loading').innerHTML = `
@@ -661,14 +678,20 @@
                     <small style="color:#666;">60+ networks • ~380k miles</small></div>
                 </div>`;
             document.getElementById('coverage-loading').style.display = 'block';
-            document.body.style.cursor = 'wait';
 
+            // SPINNING CURSOR FIX – use class instead of inline style
+            document.body.classList.add('cursor-wait');
+
+            // Clean any old map
             if (coverageMap) coverageMap.remove();
             mapEl.innerHTML = "";
 
-            // New — give it an ID so we can be 100% sure we kill the right one
-            if (coverageMap) coverageMap.remove();
-            coverageMap = L.map('coverage-map', {reuseMap: false}).setView([39.8, -98.5], 5);
+            // Create fresh map
+            coverageMap = L.map('coverage-map', {
+                preferCanvas: true,           // helps iOS performance
+                zoomControl: true
+            }).setView([39.8, -98.5], 5);
+
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap'
             }).addTo(coverageMap);
@@ -677,7 +700,7 @@
                 .then(r => r.json())
                 .then(providers => {
                     providers.forEach(p => {
-                        if (p.coords.length > 1) {
+                        if (p.coords && p.coords.length > 1) {
                             L.polyline(p.coords, {
                                 color: p.color,
                                 weight: 3,
@@ -688,33 +711,22 @@
 
                     setTimeout(() => coverageMap.invalidateSize(), 200);
                     document.getElementById('coverage-loading').style.display = 'none';
-                    document.body.style.cursor = 'default';
+                    document.body.classList.remove('cursor-wait');  // ←←← removes spinner cursor
                     console.log(`Map loaded: ${providers.length} providers`);
                 })
                 .catch(err => {
                     console.error(err);
-                    document.getElementById('coverage-loading').innerHTML = 
+                    document.getElementById('coverage-loading').innerHTML =
                         '<div style="color:#dc3545; padding:30px;">Map failed to load</div>';
-                    document.body.style.cursor = 'default';
+                    document.body.classList.remove('cursor-wait');
                 });
         }
-
-        // Open modal → default to Provider view
-        document.getElementById('coverage-link').addEventListener('click', function(e) {
-            e.preventDefault();
-            document.getElementById('coverage-modal').classList.add('show');
-            switchCoverageView('by_provider');
-        });
-
-        // Allow clicking the buttons directly too
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const view = btn.id === 'btn-provider' ? 'by_provider' :
-                             btn.id === 'btn-state'     ? 'by_state'     : 'map';
-                switchCoverageView(view);
-            });
-        });
+        // *******************************************************************
+        // End Load Full Network Map
+        // *******************************************************************
+        
     </script>
+
     
     <!-- DETAILS MODAL -->
     <div class="modal" id="detail-modal">
