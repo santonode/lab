@@ -666,7 +666,9 @@
             if (coverageMap) coverageMap.remove();
             mapEl.innerHTML = "";
 
-            coverageMap = L.map('coverage-map').setView([39.8, -98.5], 5);
+            // New — give it an ID so we can be 100% sure we kill the right one
+            if (coverageMap) coverageMap.remove();
+            coverageMap = L.map('coverage-map', {reuseMap: false}).setView([39.8, -98.5], 5);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap'
             }).addTo(coverageMap);
@@ -1505,6 +1507,23 @@
             // Also re-run distance calculation if toggle is ON
             if (distanceFilterEnabled) {
                 applyDistanceFilter();
+            }
+        });
+
+        // === MEMORY CLEANUP – RUNS WHEN USER CLOSES THE MODAL ===
+        document.getElementById('coverage-modal').addEventListener('click', function(e) {
+            if (e.target === this || e.target.classList.contains('modal-close')) {
+                this.classList.remove('show');
+                
+                // FULL MEMORY RELEASE
+                if (coverageMap) {
+                    coverageMap.remove();           // removes all layers + event listeners
+                    coverageMap = null;
+                }
+                const mapEl = document.getElementById('coverage-map');
+                if (mapEl) mapEl.innerHTML = "";
+                
+                console.log("National map cleaned from memory");
             }
         });
 
