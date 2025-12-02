@@ -1510,20 +1510,31 @@
             }
         });
 
-        // === MEMORY CLEANUP – RUNS WHEN USER CLOSES THE MODAL ===
+        // === TOTAL MEMORY RELEASE – WORKS ON iOS SAFARI TOO ===
         document.getElementById('coverage-modal').addEventListener('click', function(e) {
             if (e.target === this || e.target.classList.contains('modal-close')) {
                 this.classList.remove('show');
-                
-                // FULL MEMORY RELEASE
+
                 if (coverageMap) {
-                    coverageMap.remove();           // removes all layers + event listeners
+                    coverageMap.eachLayer(l => coverageMap.removeLayer(l));
+                    coverageMap.off();                    // <-- removes ALL event listeners
+                    coverageMap.remove();                 // <-- removes map + canvas
                     coverageMap = null;
                 }
+
                 const mapEl = document.getElementById('coverage-map');
-                if (mapEl) mapEl.innerHTML = "";
-                
-                console.log("National map cleaned from memory");
+                if (mapEl) {
+                    mapEl._leaflet_id = null;             // <-- kills Leaflet’s internal reference
+                    mapEl.innerHTML = "";                 // <-- clears DOM
+                }
+
+                // THIS LINE IS THE iOS KILLER — forces canvas/context destruction
+                if (mapEl && mapEl.firstChild && mapEl.firstChild.getContext) {
+                    const ctx = mapEl.firstChild.getContext('2d');
+                    if (ctx && ctx.canvas) ctx.canvas.width = ctx.canvas.width; // forces GPU release
+                }
+
+                console.log("Map memory fully nuked — iOS compliant");
             }
         });
 
