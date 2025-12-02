@@ -1531,15 +1531,14 @@ def coverage_report():
 
     return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
 
-# === FINAL – WORKS 100% – NO BLOBS, NO ERRORS, PERFECT LINES ===
+# === FINAL WINNER: INDIVIDUAL SEGMENTS + NO POLYGONS + FAST + MOBILE PERFECT ===
 @erate_bp.route('/coverage-map-data')
 def coverage_map_data():
-    print("\n=== NATIONAL FIBER MAP – FINAL CLEAN VERSION ===")
-    provider_routes = {}
+    print("\n=== NATIONAL FIBER MAP – BEST OF BOTH WORLDS ===")
+    all_routes = []
 
-    def add_clean_lines(kmz_path, provider_name, color):
+    def extract_individual_lines(kmz_path, provider_name, color):
         if not os.path.exists(kmz_path):
-            print(f"   [MISSING] {kmz_path}")
             return
 
         try:
@@ -1550,78 +1549,53 @@ def coverage_map_data():
                 root = ET.fromstring(z.read(kmls[0]))
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
-                line_coords = []
-
-                # 1. Prefer real <LineString> — this is the clean and safe
+                added = 0
+                # Extract ONLY real LineString elements — each becomes its own clean line
                 for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
-                    if coord_elem.text:
-                        for token in coord_elem.text.strip().split():
-                            p = token.split(',')
-                            if len(p) >= 2:
-                                try:
-                                    lon, lat = float(p[0]), float(p[1])
-                                    line_coords.append([lat, lon])
-                                except:
-                                    pass
+                    if not coord_elem.text:
+                        continue
+                    coords = []
+                    for token in coord_elem.text.strip().split():
+                        p = token.split(',')
+                        if len(p) >= 2:
+                            try:
+                                lon, lat = float(p[0]), float(p[1])
+                                coords.append([lat, lon])
+                            except:
+                                continue
+                    if len(coords) > 1:
+                        all_routes.append({
+                            "name": provider_name,
+                            "color": color,
+                            "coords": coords
+                        })
+                        added += 1
 
-                # 2. Only if no LineString found → fallback with polygon filter
-                if not line_coords:
-                    for coord_elem in root.findall('.//kml:coordinates', ns):
-                        current = coord_elem
-                        is_polygon = False
-                        while current is not None:
-                            tag = current.tag.split('}')[-1]
-                            if tag in ('Polygon', 'LinearRing'):
-                                is_polygon = True
-                                break
-                            current = current.getparent()
-                        if is_polygon:
-                            continue
-                        if coord_elem.text:
-                            for token in coord_elem.text.strip().split():
-                                p = token.split(',')
-                                if len(p) >= 2:
-                                    try:
-                                        lon, lat = float(p[0]), float(p[1])
-                                        line_coords.append([lat, lon])
-                                    except:
-                                        pass
-
-                # Add to provider if we have any clean lines
-                if line_coords:
-                    if provider_name not in provider_routes:
-                        provider_routes[provider_name] = {"color": color, "coords": []}
-                    provider_routes[provider_name]["coords"].extend(line_coords)
+                print(f"   {provider_name}: {added} clean individual fiber lines")
 
         except Exception as e:
             print(f"   [ERROR] {kmz_path}: {e}")
 
-    # Bluebird Network
+    # Bluebird — thousands of perfect blue lines
     if os.path.exists(KMZ_PATH_BLUEBIRD):
-        add_clean_lines(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
+        extract_individual_lines(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
 
-    # All FNA Members
+    # FNA Members — each gets own color
     colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
-    color_idx = 0
-
+    idx = 0
     if os.path.isdir(FNA_MEMBERS_DIR):
-        for filename in sorted(os.listdir(FNA_MEMBERS_DIR)):
-            if not filename.lower().endswith('.kmz'):
-                continue
-            member_name = os.path.splitext(filename)[0].replace('_', ' ').title()
-            path = os.path.join(FNA_MEMBERS_DIR, filename)
-            add_clean_lines(path, member_name, colors[color_idx % len(colors)])
-            color_idx += 1
+        for f in sorted(os.listdir(FNA_MEMBERS_DIR)):
+            if f.lower().endswith('.kmz'):
+                name = os.path.splitext(f)[0].replace('_', ' ').title()
+                extract_individual_lines(
+                    os.path.join(FNA_MEMBERS_DIR, f),
+                    name,
+                    colors[idx % len(colors)]
+                )
+                idx += 1
 
-    # Build final result
-    result = [
-        {"name": name, "color": data["color"], "coords": data["coords"]}
-        for name, data in provider_routes.items()
-        if data["coords"]
-    ]
-
-    print(f"\nPERFECT MAP READY: {len(result)} providers • {sum(len(r['coords']) for r in result):,} clean line points\n")
-    return jsonify(result)
+    print(f"\nBEST MAP EVER: {len(all_routes)} individual fiber lines loaded — no blobs, full detail\n")
+    return jsonify(all_routes)
 
 @erate_bp.route('/add-to-export', methods=['POST'])
 def add_to_export():
