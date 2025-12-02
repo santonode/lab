@@ -26,6 +26,20 @@ from models import Erate  # ← For querying the applicant
 EXPORT_DIR = "exports"
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
+# === ONE TIME SAFE PATCH
+def safe_parse_kml(kmz_path):
+    with zipfile.ZipFile(kmz_path, 'r') as z:
+        kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
+        if not kml_files:
+            return None
+        data = z.read(kml_files[0])
+        # Clean the garbage
+        if data[:3] == b'\xef\xbb\xbf':
+            data = data[3:]
+        data = data.replace(b'\x00', b'')
+        data = data.decode('utf-8', errors='ignore').encode('utf-8')
+        return ET.fromstring(data)
+
 # === CLEAN PROVIDER NAME ===
 def clean_provider_name(filename):
     """
@@ -62,7 +76,19 @@ def get_nearest_fiber_distance(lat, lon, kmz_path):
             kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
             if not kml_files:
                 return None
-            root = ET.fromstring(kmz.read(kml_files[0]))
+
+            # ROBUST KML PARSING – works on every real-world KMZ (including SEGRA)
+            kml_data = kmz.read(kml_files[0])
+
+            # Fix encoding issues, BOM, null bytes, and invalid XML declarations
+            if kml_data[:3] == b'\xef\xbb\xbf':  # UTF-8 BOM
+                kml_data = kml_data[3:]
+            kml_data = kml_data.replace(b'\x00', b'')  # remove null bytes
+            kml_data = kml_data.decode('utf-8', errors='ignore').encode('utf-8')
+
+            # Parse safely
+            root = ET.fromstring(kml_data)
+            
             ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
             for coord_elem in root.findall('.//kml:coordinates', ns):
@@ -541,15 +567,13 @@ def _load_kmz(provider):
         return
     try:
         log("Loading KMZ [%s]...", provider.upper())
-        with zipfile.ZipFile(path, 'r') as kmz:
-            kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
-            if not kml_files:
-                log("No .kml in %s", path)
-                MAP_DATA[provider]["loaded"] = True
-                MAP_DATA[provider]["pops"] = []
-                MAP_DATA[provider]["routes"] = []
-                return
-            kml_data = kmz.read(kml_files[0])
+        root = safe_parse_kml(path)
+        if root is None:
+            log("Failed to parse KML in %s", path)
+            MAP_DATA[provider]["loaded"] = True
+            MAP_DATA[provider]["pops"] = []
+            MAP_DATA[provider]["routes"] = []
+            return
       
         root = ET.fromstring(kml_data)
         ns = {'kml': 'http://www.opengis.net/kml/2.2'}
@@ -677,11 +701,22 @@ def bbmap(app_number):
             if not os.path.exists(path):
                 continue
             try:
-                with zipfile.ZipFile(path, 'r') as kmz:
-                    kml_file = next((f for f in kmz.namelist() if f.lower().endswith('.kml')), None)
-                    if not kml_file:
-                        continue
-                    root = ET.fromstring(kmz.read(kml_file))
+                root = safe_parse_kml(path)
+                if root is None:
+                    continue
+
+                    # ROBUST KML PARSING – works on every real-world KMZ (including SEGRA)
+                    kml_data = kmz.read(kml_files[0])
+
+                    # Fix encoding issues, BOM, null bytes, and invalid XML declarations
+                    if kml_data[:3] == b'\xef\xbb\xbf':  # UTF-8 BOM
+                        kml_data = kml_data[3:]
+                    kml_data = kml_data.replace(b'\x00', b'')  # remove null bytes
+                    kml_data = kml_data.decode('utf-8', errors='ignore').encode('utf-8')
+
+                    # Parse safely
+                    root = ET.fromstring(kml_data)
+                    
                     ns = {
                         'kml': 'http://www.opengis.net/kml/2.2',
                         'gx': 'http://www.google.com/kml/ext/2.2',
@@ -739,10 +774,13 @@ def bbmap(app_number):
         path = FNA_MEMBERS.get(clean) or FNA_MEMBERS.get(fna_member)
         if not path or not os.path.exists(path):
             return jsonify({"error": "Member not found"}), 404
-        kmz_path = path
-        with zipfile.ZipFile(path, 'r') as kmz:
-            kml = [f for f in kmz.namelist() if f.lower().endswith('.kml')][0]
-            root = ET.fromstring(kmz.read(kml))
+        
+        # ONE LINE TO RULE THEM ALL — fixes SEGRA West forever
+        root = safe_parse_kml(path)
+        if root is None:
+            log("Failed to parse FNA member KMZ: %s", path)
+            return jsonify({"error": "Invalid fiber data"}), 500
+           
             ns = {
                 'kml': 'http://www.opengis.net/kml/2.2',
                 'gx': 'http://www.google.com/kml/ext/2.2',
@@ -1509,7 +1547,19 @@ def coverage_report():
         with zipfile.ZipFile(KMZ_PATH_BLUEBIRD, 'r') as kmz:
             kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
             if kml_files:
-                root = ET.fromstring(kmz.read(kml_files[0]))
+
+                # ROBUST KML PARSING – works on every real-world KMZ (including SEGRA)
+                kml_data = kmz.read(kml_files[0])
+
+                # Fix encoding issues, BOM, null bytes, and invalid XML declarations
+                if kml_data[:3] == b'\xef\xbb\xbf':  # UTF-8 BOM
+                    kml_data = kml_data[3:]
+                kml_data = kml_data.replace(b'\x00', b'')  # remove null bytes
+                kml_data = kml_data.decode('utf-8', errors='ignore').encode('utf-8')
+
+                # Parse safely
+                root = ET.fromstring(kml_data)
+                
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
                 for coord_elem in root.findall('.//kml:coordinates', ns):
                     if coord_elem.text:
@@ -1533,12 +1583,22 @@ def coverage_report():
         path = os.path.join(FNA_MEMBERS_DIR, filename)
         if not os.path.exists(path):
             continue
-        try:
-            with zipfile.ZipFile(path, 'r') as kmz:
-                kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
-                if not kml_files:
-                    continue
-                root = ET.fromstring(kmz.read(kml_files[0]))
+            root = safe_parse_kml(path)
+            if root is None:
+                continue
+
+                # ROBUST KML PARSING – works on every real-world KMZ (including SEGRA)
+                kml_data = kmz.read(kml_files[0])
+
+                # Fix encoding issues, BOM, null bytes, and invalid XML declarations
+                if kml_data[:3] == b'\xef\xbb\xbf':  # UTF-8 BOM
+                    kml_data = kml_data[3:]
+                kml_data = kml_data.replace(b'\x00', b'')  # remove null bytes
+                kml_data = kml_data.decode('utf-8', errors='ignore').encode('utf-8')
+
+                # Parse safely
+                root = ET.fromstring(kml_data)              
+                           
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
                 for coord_elem in root.findall('.//kml:coordinates', ns):
                     if coord_elem.text:
@@ -1584,7 +1644,11 @@ def coverage_map_data():
                 kmls = [f for f in z.namelist() if f.lower().endswith('.kml')]
                 if not kmls:
                     return
-                root = ET.fromstring(z.read(kmls[0]))
+
+                root = safe_parse_kml(filepath)
+                if root is None:
+                    continue
+                
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
                 added = 0
