@@ -515,6 +515,13 @@ def _load_fna_members():
 
 _load_fna_members()
 
+# === FORCE FRESH FNA MEMBERS ON EVERY REQUEST (safe + fixes missing SEGRA West) ===
+@erate_bp.before_request
+def ensure_fna_members_loaded():
+    global FNA_MEMBERS
+    FNA_MEMBERS = {}              # clear old cache
+    _load_fna_members()           # reload from disk with latest files
+
 # === GLOBAL MAP DATA (LAZY LOADED) ===
 MAP_DATA = {
     "bluebird": {"pops": None, "routes": None, "loaded": False},
