@@ -26,6 +26,29 @@ from models import Erate  # ← For querying the applicant
 EXPORT_DIR = "exports"
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
+# === CLEAN PROVIDER NAME ===
+def clean_provider_name(filename):
+    """
+    Turns any KMZ filename into a beautiful, consistent display name.
+    Special handling for SEGRA East/West and future-proof for others.
+    """
+    name = os.path.splitext(filename)[0]           # strip .kmz
+    name = name.replace('_', ' ').strip()          # underscores → spaces
+    name = ' '.join(word.capitalize() for word in name.split())  # Title Case
+
+    # SEGRA SPECIAL RULES (works forever)
+    if 'EAST' in name.upper() and 'SEGRA' in name.upper():
+        return "SEGRA East"
+    if 'WEST' in name.upper() and 'SEGRA' in name.upper():
+        return "SEGRA West"
+    if name.upper().startswith('SEGRA'):
+        return "SEGRA"  # fallback if no East/West
+
+    # Add more special cases here in the future if needed
+    # e.g. if 'WOW' in name.upper(): return "WOW!"
+
+    return name
+
 # === TRUE NEAREST FIBER DISTANCE (for table column) ===
 def get_nearest_fiber_distance(lat, lon, kmz_path):
     if not lat or not lon or not os.path.exists(kmz_path):
@@ -486,7 +509,7 @@ def _load_fna_members():
         return
     for file in os.listdir(FNA_MEMBERS_DIR):
         if file.lower().endswith('.kmz'):
-            member_name = os.path.splitext(file)[0].replace('_', ' ')
+            member_name = clean_provider_name(file)
             FNA_MEMBERS[member_name] = os.path.join(FNA_MEMBERS_DIR, file)
     log("Loaded %d FNA members", len(FNA_MEMBERS))
 
@@ -1491,7 +1514,7 @@ def coverage_report():
     for filename in os.listdir(FNA_MEMBERS_DIR):
         if not filename.lower().endswith('.kmz'):
             continue
-        member_name = os.path.splitext(filename)[0].replace('_', ' ').strip()
+        member_name = clean_provider_name(filename)
         path = os.path.join(FNA_MEMBERS_DIR, filename)
         if not os.path.exists(path):
             continue
