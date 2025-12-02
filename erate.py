@@ -64,6 +64,7 @@ def clean_provider_name(filename):
     return name
 
 # === TRUE NEAREST FIBER DISTANCE (for table column) ===
+# === TRUE NEAREST FIBER DISTANCE (for table column) ===
 def get_nearest_fiber_distance(lat, lon, kmz_path):
     if not lat or not lon or not os.path.exists(kmz_path):
         return None
@@ -72,43 +73,30 @@ def get_nearest_fiber_distance(lat, lon, kmz_path):
     min_dist = float('inf')
 
     try:
-        with zipfile.ZipFile(kmz_path, 'r') as kmz:
-            kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
-            if not kml_files:
-                return None
+        root = safe_parse_kml(kmz_path)
+        if root is None:
+            return None
 
-            # ROBUST KML PARSING – works on every real-world KMZ (including SEGRA)
-            kml_data = kmz.read(kml_files[0])
+        ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
-            # Fix encoding issues, BOM, null bytes, and invalid XML declarations
-            if kml_data[:3] == b'\xef\xbb\xbf':  # UTF-8 BOM
-                kml_data = kml_data[3:]
-            kml_data = kml_data.replace(b'\x00', b'')  # remove null bytes
-            kml_data = kml_data.decode('utf-8', errors='ignore').encode('utf-8')
-
-            # Parse safely
-            root = ET.fromstring(kml_data)
-            
-            ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-
-            for coord_elem in root.findall('.//kml:coordinates', ns):
-                if not coord_elem.text:
+        for coord_elem in root.findall('.//kml:coordinates', ns):
+            if not coord_elem.text:
+                continue
+            for point in coord_elem.text.strip().split():
+                parts = point.split(',')
+                if len(parts) < 2:
                     continue
-                for point in coord_elem.text.strip().split():
-                    parts = point.split(',')
-                    if len(parts) < 2:
-                        continue
-                    try:
-                        p_lon, p_lat = float(parts[0]), float(parts[1])
-                        dlat = radians(p_lat - lat)
-                        dlon = radians(p_lon - lon)
-                        a = sin(dlat/2)**2 + cos(radians(lat)) * cos(radians(p_lat)) * sin(dlon/2)**2
-                        c = 2 * atan2(sqrt(a), sqrt(1-a))
-                        distance = R * c
-                        if distance < min_dist:
-                            min_dist = distance
-                    except:
-                        continue
+                try:
+                    p_lon, p_lat = float(parts[0]), float(parts[1])
+                    dlat = radians(p_lat - lat)
+                    dlon = radians(p_lon - lon)
+                    a = sin(dlat/2)**2 + cos(radians(lat)) * cos(radians(p_lat)) * sin(dlon/2)**2
+                    c = 2 * atan2(sqrt(a), sqrt(1-a))
+                    distance = R * c
+                    if distance < min_dist:
+                        min_dist = distance
+                except:
+                    continue
         return round(min_dist, 1) if min_dist != float('inf') else None
     except:
         return None
