@@ -1530,79 +1530,54 @@ def coverage_report():
     provider_to_states = defaultdict(set)
     state_to_providers = defaultdict(set)
 
-    # Bluebird Network
+    # Bluebird Network — NOW USES safe_parse_kml() (was broken)
     if os.path.exists(KMZ_PATH_BLUEBIRD):
-        with zipfile.ZipFile(KMZ_PATH_BLUEBIRD, 'r') as kmz:
-            kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
-            if kml_files:
+        root = safe_parse_kml(KMZ_PATH_BLUEBIRD)
+        if root is not None:
+            ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+            for coord_elem in root.findall('.//kml:coordinates', ns):
+                if coord_elem.text:
+                    for point in coord_elem.text.strip().split():
+                        parts = point.split(',')
+                        if len(parts) >= 2:
+                            try:
+                                lon, lat = float(parts[0]), float(parts[1])
+                                state = point_in_state(lat, lon)
+                                if state:
+                                    provider_to_states["Bluebird Network"].add(state)
+                                    state_to_providers[state].add("Bluebird Network")
+                            except:
+                                pass
 
-                # ROBUST KML PARSING – works on every real-world KMZ (including SEGRA)
-                kml_data = kmz.read(kml_files[0])
-
-                # Fix encoding issues, BOM, null bytes, and invalid XML declarations
-                if kml_data[:3] == b'\xef\xbb\xbf':  # UTF-8 BOM
-                    kml_data = kml_data[3:]
-                kml_data = kml_data.replace(b'\x00', b'')  # remove null bytes
-                kml_data = kml_data.decode('utf-8', errors='ignore').encode('utf-8')
-
-                # Parse safely
-                root = ET.fromstring(kml_data)
-                
-                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-                for coord_elem in root.findall('.//kml:coordinates', ns):
-                    if coord_elem.text:
-                        for point in coord_elem.text.strip().split():
-                            parts = point.split(',')
-                            if len(parts) >= 2:
-                                try:
-                                    lon, lat = float(parts[0]), float(parts[1])
-                                    state = point_in_state(lat, lon)
-                                    if state:
-                                        provider_to_states["Bluebird Network"].add(state)
-                                        state_to_providers[state].add("Bluebird Network")
-                                except:
-                                    pass
-
-    # FNA Members
+    # FNA Members – now uses safe_parse_kml() and no more stray except:
     for filename in os.listdir(FNA_MEMBERS_DIR):
         if not filename.lower().endswith('.kmz'):
             continue
+        
         member_name = clean_provider_name(filename)
         path = os.path.join(FNA_MEMBERS_DIR, filename)
         if not os.path.exists(path):
             continue
-            root = safe_parse_kml(path)
-            if root is None:
-                continue
 
-                # ROBUST KML PARSING – works on every real-world KMZ (including SEGRA)
-                kml_data = kmz.read(kml_files[0])
+        # USE THE BULLETPROOF PARSER — fixes SEGRA West forever
+        root = safe_parse_kml(path)
+        if root is None:
+            continue
 
-                # Fix encoding issues, BOM, null bytes, and invalid XML declarations
-                if kml_data[:3] == b'\xef\xbb\xbf':  # UTF-8 BOM
-                    kml_data = kml_data[3:]
-                kml_data = kml_data.replace(b'\x00', b'')  # remove null bytes
-                kml_data = kml_data.decode('utf-8', errors='ignore').encode('utf-8')
-
-                # Parse safely
-                root = ET.fromstring(kml_data)              
-                           
-                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-                for coord_elem in root.findall('.//kml:coordinates', ns):
-                    if coord_elem.text:
-                        for point in coord_elem.text.strip().split():
-                            parts = point.split(',')
-                            if len(parts) >= 2:
-                                try:
-                                    lon, lat = float(parts[0]), float(parts[1])
-                                    state = point_in_state(lat, lon)
-                                    if state:
-                                        provider_to_states[member_name].add(state)
-                                        state_to_providers[state].add(member_name)
-                                except:
-                                    pass
-        except:
-            pass
+        ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+        for coord_elem in root.findall('.//kml:coordinates', ns):
+            if coord_elem.text:
+                for point in coord_elem.text.strip().split():
+                    parts = point.split(',')
+                    if len(parts) >= 2:
+                        try:
+                            lon, lat = float(parts[0]), float(parts[1])
+                            state = point_in_state(lat, lon)
+                            if state:
+                                provider_to_states[member_name].add(state)
+                                state_to_providers[state].add(member_name)
+                        except:
+                            pass
 
     # === RETURN PURE LIST — NO HEADERS, NO BUTTONS ===
     lines = []
@@ -1633,7 +1608,7 @@ def coverage_map_data():
                 if not kmls:
                     return
 
-                root = safe_parse_kml(filepath)
+                root = safe_parse_kml(kmz_path)
                 if root is None:
                     continue
                 
