@@ -682,7 +682,11 @@ def bbmap(app_number):
                     if not kml_file:
                         continue
                     root = ET.fromstring(kmz.read(kml_file))
-                    ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+                    ns = {
+                        'kml': 'http://www.opengis.net/kml/2.2',
+                        'gx': 'http://www.google.com/kml/ext/2.2',
+                        'atom': 'http://www.w3.org/2005/Atom'
+                    }
                     coords = []
                     for c in root.findall('.//kml:coordinates', ns):
                         if c.text:
@@ -739,7 +743,11 @@ def bbmap(app_number):
         with zipfile.ZipFile(path, 'r') as kmz:
             kml = [f for f in kmz.namelist() if f.lower().endswith('.kml')][0]
             root = ET.fromstring(kmz.read(kml))
-            ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+            ns = {
+                'kml': 'http://www.opengis.net/kml/2.2',
+                'gx': 'http://www.google.com/kml/ext/2.2',
+                'atom': 'http://www.w3.org/2005/Atom'
+            }
             for pm in root.findall('.//kml:Placemark', ns):
                 name = pm.find('kml:name', ns)
                 name = name.text.strip() if name is not None and name.text else "Fiber"
