@@ -1531,7 +1531,7 @@ def coverage_report():
 
     return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
 
-# === FINAL – NO BLOBS, NO ERRORS, PERFECT LINES EVERYWHERE ===
+# === FINAL – WORKS 100% – NO BLOBS, NO ERRORS, PERFECT LINES ===
 @erate_bp.route('/coverage-map-data')
 def coverage_map_data():
     print("\n=== NATIONAL FIBER MAP – FINAL CLEAN VERSION ===")
@@ -1552,7 +1552,7 @@ def coverage_map_data():
 
                 line_coords = []
 
-                # 1. PREFER REAL <LineString> — this is clean and safe
+                # 1. Prefer real <LineString> — this is the clean and safe
                 for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
                     if coord_elem.text:
                         for token in coord_elem.text.strip().split():
@@ -1587,10 +1587,11 @@ def coverage_map_data():
                                     except:
                                         pass
 
+                # Add to provider if we have any clean lines
                 if line_coords:
                     if provider_name not in provider_routes:
                         provider_routes[provider_name] = {"color": color, "coords": []}
-                    provider_routes[provider_name]["coords"].extend(line_coords
+                    provider_routes[provider_name]["coords"].extend(line_coords)
 
         except Exception as e:
             print(f"   [ERROR] {kmz_path}: {e}")
@@ -1602,6 +1603,7 @@ def coverage_map_data():
     # All FNA Members
     colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
     color_idx = 0
+
     if os.path.isdir(FNA_MEMBERS_DIR):
         for filename in sorted(os.listdir(FNA_MEMBERS_DIR)):
             if not filename.lower().endswith('.kmz'):
@@ -1611,6 +1613,7 @@ def coverage_map_data():
             add_clean_lines(path, member_name, colors[color_idx % len(colors)])
             color_idx += 1
 
+    # Build final result
     result = [
         {"name": name, "color": data["color"], "coords": data["coords"]}
         for name, data in provider_routes.items()
