@@ -1597,25 +1597,20 @@ def coverage_report():
 def coverage_map_data():
     print("\n=== NATIONAL FIBER MAP – BEST OF BOTH WORLDS ===")
     all_routes = []
-
+    
     def extract_individual_lines(kmz_path, provider_name, color):
         if not os.path.exists(kmz_path):
             return
-
         try:
             with zipfile.ZipFile(kmz_path, 'r') as z:
                 kmls = [f for f in z.namelist() if f.lower().endswith('.kml')]
                 if not kmls:
                     return
-
                 root = safe_parse_kml(kmz_path)
                 if root is None:
                     continue
-                
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-
                 added = 0
-                # Extract ONLY real LineString elements — each becomes its own clean line
                 for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
                     if not coord_elem.text:
                         continue
@@ -1635,17 +1630,15 @@ def coverage_map_data():
                             "coords": coords
                         })
                         added += 1
-
-                print(f"   {provider_name}: {added} clean individual fiber lines")
-
+                print(f" {provider_name}: {added} clean individual fiber lines")
         except Exception as e:
-            print(f"   [ERROR] {kmz_path}: {e}")
+            print(f" [ERROR] {kmz_path}: {e}")
 
-    # Bluebird — thousands of perfect blue lines
+    # Bluebird
     if os.path.exists(KMZ_PATH_BLUEBIRD):
         extract_individual_lines(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
 
-    # FNA Members — each gets own color
+    # FNA Members
     colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
     idx = 0
     if os.path.isdir(FNA_MEMBERS_DIR):
