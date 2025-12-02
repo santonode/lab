@@ -75,7 +75,6 @@ def get_nearest_fiber_distance(lat, lon, kmz_path):
         root = safe_parse_kml(kmz_path)
         if root is None:
             return None
-
         ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
         for coord_elem in root.findall('.//kml:coordinates', ns):
@@ -527,6 +526,13 @@ def _load_fna_members():
     log("Loaded %d FNA members", len(FNA_MEMBERS))
 
 _load_fna_members()
+
+# === FORCE FRESH FNA MEMBERS ON EVERY REQUEST (safe + fixes missing SEGRA West) ===
+@erate_bp.before_request
+def ensure_fna_members_loaded():
+    global FNA_MEMBERS
+    FNA_MEMBERS = {}              # clear old cache
+    _load_fna_members()           # reload from disk with latest files
 
 # === GLOBAL MAP DATA (LAZY LOADED) ===
 MAP_DATA = {
