@@ -64,7 +64,6 @@ def clean_provider_name(filename):
     return name
 
 # === TRUE NEAREST FIBER DISTANCE (for table column) ===
-# === TRUE NEAREST FIBER DISTANCE (for table column) ===
 def get_nearest_fiber_distance(lat, lon, kmz_path):
     if not lat or not lon or not os.path.exists(kmz_path):
         return None
