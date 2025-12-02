@@ -20,21 +20,6 @@
         animation: spin 1s linear infinite;
         margin: 0 auto 20px;
     }
-    /* ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←← */
-    /* FIX: Spinning cursor hidden under Leaflet on iOS Safari */
-    body.cursor-wait,
-    body.cursor-wait * {
-        cursor: wait !important;
-    }
-
-    /* Make sure loading overlay is always on top of the map */
-    #coverage-loading {
-        z-index: 10000 !important;
-        position: absolute !important;
-        background: rgba(255, 255, 255, 0.95);
-        inset: 0;
-    }
-    /* ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←← */
     </style>
     <style>
         :root {
@@ -661,14 +646,12 @@
             }
         };
 
-        // *******************************************************************
-        // Load Full Network Map – iOS Safari spinning cursor FIXED
-        // *******************************************************************
+        // Load Full Network Map
         function loadFullFiberMap() {
             const container = document.getElementById('coverage-map-container');
             const mapEl = document.getElementById('coverage-map');
 
-            // Show container + loading overlay immediately
+            // Show spinner instantly
             container.style.display = 'block';
             document.getElementById('coverage-body').style.display = 'block';
             document.getElementById('coverage-loading').innerHTML = `
@@ -678,20 +661,12 @@
                     <small style="color:#666;">60+ networks • ~380k miles</small></div>
                 </div>`;
             document.getElementById('coverage-loading').style.display = 'block';
+            document.body.style.cursor = 'wait';
 
-            // SPINNING CURSOR FIX – use class instead of inline style
-            document.body.classList.add('cursor-wait');
-
-            // Clean any old map
             if (coverageMap) coverageMap.remove();
             mapEl.innerHTML = "";
 
-            // Create fresh map
-            coverageMap = L.map('coverage-map', {
-                preferCanvas: true,           // helps iOS performance
-                zoomControl: true
-            }).setView([39.8, -98.5], 5);
-
+            coverageMap = L.map('coverage-map').setView([39.8, -98.5], 5);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap'
             }).addTo(coverageMap);
@@ -700,7 +675,7 @@
                 .then(r => r.json())
                 .then(providers => {
                     providers.forEach(p => {
-                        if (p.coords && p.coords.length > 1) {
+                        if (p.coords.length > 1) {
                             L.polyline(p.coords, {
                                 color: p.color,
                                 weight: 3,
@@ -711,22 +686,33 @@
 
                     setTimeout(() => coverageMap.invalidateSize(), 200);
                     document.getElementById('coverage-loading').style.display = 'none';
-                    document.body.classList.remove('cursor-wait');  // ←←← removes spinner cursor
+                    document.body.style.cursor = 'default';
                     console.log(`Map loaded: ${providers.length} providers`);
                 })
                 .catch(err => {
                     console.error(err);
-                    document.getElementById('coverage-loading').innerHTML =
+                    document.getElementById('coverage-loading').innerHTML = 
                         '<div style="color:#dc3545; padding:30px;">Map failed to load</div>';
-                    document.body.classList.remove('cursor-wait');
+                    document.body.style.cursor = 'default';
                 });
         }
-        // *******************************************************************
-        // End Load Full Network Map
-        // *******************************************************************
-        
-    </script>
 
+        // Open modal → default to Provider view
+        document.getElementById('coverage-link').addEventListener('click', function(e) {
+            e.preventDefault();
+            document.getElementById('coverage-modal').classList.add('show');
+            switchCoverageView('by_provider');
+        });
+
+        // Allow clicking the buttons directly too
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const view = btn.id === 'btn-provider' ? 'by_provider' :
+                             btn.id === 'btn-state'     ? 'by_state'     : 'map';
+                switchCoverageView(view);
+            });
+        });
+    </script>
     
     <!-- DETAILS MODAL -->
     <div class="modal" id="detail-modal">
@@ -1519,34 +1505,6 @@
             // Also re-run distance calculation if toggle is ON
             if (distanceFilterEnabled) {
                 applyDistanceFilter();
-            }
-        });
-
-        // === TOTAL MEMORY RELEASE – WORKS ON iOS SAFARI TOO ===
-        document.getElementById('coverage-modal').addEventListener('click', function(e) {
-            if (e.target === this || e.target.classList.contains('modal-close')) {
-                this.classList.remove('show');
-
-                if (coverageMap) {
-                    coverageMap.eachLayer(l => coverageMap.removeLayer(l));
-                    coverageMap.off();                    // <-- removes ALL event listeners
-                    coverageMap.remove();                 // <-- removes map + canvas
-                    coverageMap = null;
-                }
-
-                const mapEl = document.getElementById('coverage-map');
-                if (mapEl) {
-                    mapEl._leaflet_id = null;             // <-- kills Leaflet’s internal reference
-                    mapEl.innerHTML = "";                 // <-- clears DOM
-                }
-
-                // THIS LINE IS THE iOS KILLER — forces canvas/context destruction
-                if (mapEl && mapEl.firstChild && mapEl.firstChild.getContext) {
-                    const ctx = mapEl.firstChild.getContext('2d');
-                    if (ctx && ctx.canvas) ctx.canvas.width = ctx.canvas.width; // forces GPU release
-                }
-
-                console.log("Map memory fully nuked — iOS compliant");
             }
         });
 
