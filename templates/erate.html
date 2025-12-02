@@ -551,166 +551,163 @@
         {% endif %}
     </div>
     
-    <!-- FOOTER LINKS + DYNAMIC COVERAGE REPORT -->
+<!-- FOOTER LINKS + DYNAMIC COVERAGE REPORT -->
     <div class="footer-links">
         <a href="mailto:sales@santoelectronics.com">sales@santoelectronics.com</a>
         <a href="https://santoelectronics.com/toser">Terms of Service</a>
-        <a href="#" id="coverage-link">
-            Our Fiber Networks
-        </a>
+        <a href="#" id="coverage-link">Our Fiber Networks</a>
     </div>
 
-    <!-- COVERAGE REPORT MODAL – NOW WITH THREE TABS -->
+    <!-- COVERAGE REPORT MODAL -->
     <div class="modal" id="coverage-modal">
         <div class="modal-content" style="max-width:960px; width:95%;">
             <div class="modal-header">
                 <div class="modal-title">National Fiber Coverage</div>
-                <button class="modal-close" onclick="document.getElementById('coverage-modal').classList.remove('show')">×</button>
+                <button class="modal-close">×</button>
             </div>
             <div class="modal-body" style="position:relative; min-height:200px;">
 
-                <!-- LOADING SPINNER -->
-                <div id="coverage-loading" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; color:#1a5d57; font-weight:600; z-index:10;">
-                    <div class="spinner" style="margin:0 auto 15px;"></div>
-                    Loading coverage...
+                <!-- LOADING OVERLAY -->
+                <div id="coverage-loading" style="display:none; position:absolute; inset:0; background:rgba(255,255,255,0.95); z-index:10000; justify-content:center; align-items:center; flex-direction:column;">
+                    <div class="spinner"></div>
+                    <div style="margin-top:20px; font-size:1.3rem; font-weight:600; color:#1a5d57;">Loading national fiber map...</div>
+                    <div style="margin-top:8px; color:#666;">60+ networks • ~380k miles</div>
                 </div>
 
-                <!-- TABS + CONTENT CONTAINER -->
-                <div id="coverage-body" style="display:none;">
+                <!-- TABS -->
+                <div style="text-align:center; padding:20px 0; background:#f0f7ff; border-bottom:2px solid #ddd;">
+                    <button id="btn-provider" class="btn btn-primary tab-btn active">By Provider</button>
+                    <button id="btn-state" class="btn btn-primary tab-btn">By State</button>
+                    <button id="btn-map" class="btn btn-primary tab-btn">Interactive Map</button>
+                </div>
 
-                    <!-- THREE BUTTONS -->
-                    <div style="text-align:center; padding:20px 0; background:#f0f7ff; border-bottom:2px solid #ddd; margin-bottom:0 0 20px 0;">
-                        <button id="btn-provider" class="btn btn-primary tab-btn active" style="margin:0 10px; padding:12px 28px; font-size:1.1rem;">
-                            By Provider
-                        </button>
-                        <button id="btn-state" class="btn btn-primary tab-btn" style="margin:0 10px; padding:12px 28px; font-size:1.1rem;">
-                            By State
-                        </button>
-                        <button id="btn-map" class="btn btn-primary tab-btn" style="margin:0 10px; padding:12px 28px; font-size:1.1rem;">
-                            Interactive Map
-                        </button>
-                    </div>
+                <!-- TEXT CONTENT -->
+                <div id="coverage-content" style="padding:20px; background:#f8f9fa; border-radius:8px; max-height:65vh; overflow-y:auto;"></div>
 
-                    <!-- TEXT CONTENT (Provider / State) -->
-                    <div id="coverage-content" style="font-family:'Courier New',monospace; line-height:1.7; max-height:68vh; overflow-y:auto; padding:20px; background:#f8f9fa; border-radius:8px;">
-                        Loading...
-                    </div>
-
-                    <div id="map-error" style="display:none; color:#dc3545; padding:15px; background:#ffebee; border-radius:6px; margin:10px 0; text-align:center; font-weight:600;">
-                    </div>
-                    
-                    <!-- MAP CONTAINER (hidden by default) -->
-                    <div id="coverage-map-container" style="height:65vh; width:100%; border-radius:8px; overflow:hidden; display:none; box-shadow:0 4px 16px rgba(0,0,0,0.2);">
-                        <div id="coverage-map" style="height:100%;"></div>
-                    </div>
-
+                <!-- MAP CONTAINER -->
+                <div id="coverage-map-container" style="display:none; height:65vh; border-radius:8px; overflow:hidden; box-shadow:0 4px 16px rgba(0,0,0,0.2);">
+                    <div id="coverage-map" style="height:100%;"></div>
                 </div>
             </div>
         </div>
     </div>
 
+    <style>
+        /* SPINNING CURSOR ALWAYS ON TOP – iOS SAFARI FIX */
+        body.cursor-wait,
+        body.cursor-wait * {
+            cursor: wait !important;
+        }
+        #coverage-loading .spinner {
+            border: 6px solid #f0f7ff;
+            border-top: 6px solid #1a5d57;
+            border-radius: 50%;
+            width: 70px;
+            height: 70px;
+            animation: spin 1s linear infinite;
+        }
+    </style>
+
     <script>
         let coverageMap = null;
 
-        // Unified tab switcher
-        window.switchCoverageView = function(view) {
-            // Hide everything
-            document.getElementById('coverage-content').style.display = 'none';
-            document.getElementById('coverage-map-container').style.display = 'none';
-            document.getElementById('coverage-loading').style.display = 'block';
-            document.getElementById('coverage-body').style.display = 'none';
-
-            // Reset buttons
-            document.querySelectorAll('.tab-btn').forEach(b => {
-                b.classList.remove('active');
-                b.style.background = '#007bff';
-            });
-
-            if (view === 'map') {
-                document.getElementById('btn-map').classList.add('active');
-                document.getElementById('btn-map').style.background = '#1a5d57';
-                loadFullFiberMap();
-            } else {
-                const btnId = view === 'by_provider' ? 'btn-provider' : 'btn-state';
-                document.getElementById(btnId).classList.add('active');
-                document.getElementById(btnId).style.background = '#1a5d57';
-
-                fetch(`/erate/coverage-report?view=${view}`)
-                    .then(r => r.text())
-                    .then(html => {
-                        document.getElementById('coverage-loading').style.display = 'none';
-                        document.getElementById('coverage-body').style.display = 'block';
-                        document.getElementById('coverage-content').style.display = 'block';
-                        document.getElementById('coverage-content').innerHTML = html;
-                    });
-            }
-        };
-
-        // Load Full Network Map
+        // MAIN FUNCTION – LOAD THE BIG MAP
         function loadFullFiberMap() {
             const container = document.getElementById('coverage-map-container');
-            const mapEl = document.getElementById('coverage-map');
 
-            // Show spinner instantly
+            // Show loading + spinner cursor
+            document.getElementById('coverage-loading').style.display = 'flex';
+            document.getElementById('coverage-content').style.display = 'none';
             container.style.display = 'block';
-            document.getElementById('coverage-body').style.display = 'block';
-            document.getElementById('coverage-loading').innerHTML = `
-                <div style="text-align:center; padding:40px; color:#1a5d57;">
-                    <div class="spinner" style="width:60px; height:60px; margin:0 auto 20px;"></div>
-                    <div style="font-size:1.2rem; font-weight:600;">Loading national fiber map...<br>
-                    <small style="color:#666;">60+ networks • ~380k miles</small></div>
-                </div>`;
-            document.getElementById('coverage-loading').style.display = 'block';
-            document.body.style.cursor = 'wait';
+            document.body.classList.add('cursor-wait');
 
+            // Clean old map
             if (coverageMap) coverageMap.remove();
-            mapEl.innerHTML = "";
+            document.getElementById('coverage-map').innerHTML = "";
 
-            coverageMap = L.map('coverage-map').setView([39.8, -98.5], 5);
+            // Create map
+            coverageMap = L.map('coverage-map', { preferCanvas: true }).setView([39.8, -98.5], 5);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap'
             }).addTo(coverageMap);
 
             fetch('/erate/coverage-map-data')
                 .then(r => r.json())
-                .then(providers => {
-                    providers.forEach(p => {
-                        if (p.coords.length > 1) {
-                            L.polyline(p.coords, {
-                                color: p.color,
+                .then(data => {
+                    data.forEach(item => {
+                        if (item.coords?.length > 1) {
+                            L.polyline(item.coords, {
+                                color: item.color,
                                 weight: 3,
                                 opacity: 0.85
                             }).addTo(coverageMap);
                         }
                     });
-
                     setTimeout(() => coverageMap.invalidateSize(), 200);
                     document.getElementById('coverage-loading').style.display = 'none';
-                    document.body.style.cursor = 'default';
-                    console.log(`Map loaded: ${providers.length} providers`);
+                    document.body.classList.remove('cursor-wait');
                 })
                 .catch(err => {
                     console.error(err);
-                    document.getElementById('coverage-loading').innerHTML = 
-                        '<div style="color:#dc3545; padding:30px;">Map failed to load</div>';
-                    document.body.style.cursor = 'default';
+                    document.getElementById('coverage-loading').innerHTML = '<div style="color:#dc3545;padding:40px;">Failed to load map</div>';
+                    document.body.classList.remove('cursor-wait');
                 });
         }
 
-        // Open modal → default to Provider view
+        // FOOTER LINK – opens modal + goes straight to map
         document.getElementById('coverage-link').addEventListener('click', function(e) {
             e.preventDefault();
             document.getElementById('coverage-modal').classList.add('show');
-            switchCoverageView('by_provider');
+
+            // Activate map tab
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                b.classList.remove('active');
+                b.style.background = '#007bff';
+            });
+            document.getElementById('btn-map').classList.add('active');
+            document.getElementById('btn-map').style.background = '#1a5d57';
+
+            loadFullFiberMap();
         });
 
-        // Allow clicking the buttons directly too
+        // TAB BUTTONS
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                const view = btn.id === 'btn-provider' ? 'by_provider' :
-                             btn.id === 'btn-state'     ? 'by_state'     : 'map';
-                switchCoverageView(view);
+                document.querySelectorAll('.tab-btn').forEach(b => {
+                    b.classList.remove('active');
+                    b.style.background = '#007bff';
+                });
+                btn.classList.add('active');
+                btn.style.background = '#1a5d57';
+
+                if (btn.id === 'btn-map') {
+                    loadFullFiberMap();
+                } else {
+                    document.getElementById('coverage-map-container').style.display = 'none';
+                    document.getElementById('coverage-content').style.display = 'block';
+                    document.getElementById('coverage-loading').style.display = 'block';
+                    const view = btn.id === 'btn-provider' ? 'by_provider' : 'by_state';
+                    fetch(`/erate/coverage-report?view=${view}`)
+                        .then(r => r.text())
+                        .then(html => {
+                            document.getElementById('coverage-content').innerHTML = html;
+                            document.getElementById('coverage-loading').style.display = 'none';
+                        });
+                }
             });
+        });
+
+        // MEMORY CLEANUP ON CLOSE
+        document.getElementById('coverage-modal').addEventListener('click', function(e) {
+            if (e.target === this || e.target.classList.contains('modal-close')) {
+                this.classList.remove('show');
+                if (coverageMap) {
+                    coverageMap.remove();
+                    coverageMap = null;
+                }
+                document.getElementById('coverage-map').innerHTML = "";
+                document.body.classList.remove('cursor-wait');
+            }
         });
     </script>
     
