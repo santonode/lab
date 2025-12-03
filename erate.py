@@ -1541,63 +1541,35 @@ def coverage_map_data():
 
     def extract_individual_lines(kmz_path, provider_name, color):
         if not os.path.exists(kmz_path):
-            print(f"   [MISSING] {kmz_path}")
             return
 
         try:
             with zipfile.ZipFile(kmz_path, 'r') as z:
-                kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
-                if not kml_files:
+                kmls = [f for f in z.namelist() if f.lower().endswith('.kml')]
+                if not kmls:
                     return
 
-                raw_text = z.read(kml_files[0]).decode('utf-8', errors='replace')
-
-                # Remove ALL xmlns declarations
-                raw_text = re.sub(r'\s*xmlns(?::\w+)?=["\'][^"\']*["\']', '', raw_text)
-                raw_text = re.sub(r'<\?xml[^>]*>', '', raw_text)
-                raw_text = re.sub(r'\s*xsi:[^=]+=["\'][^"\']*["\']', '', raw_text)
-
-                # Convert ALL prefixed tags → unprefixed with underscore
-                raw_text = re.sub(r'<(\w+):', r'<\1_', raw_text)
-                raw_text = re.sub(r'</(\w+):', r'</\1_', raw_text)
-
-                root = ET.fromstring(raw_text.encode('utf-8'))
+                raw = z.read(kmls[0]).decode('utf-8', errors='ignore')
 
                 added = 0
-
-                # Search for LineString in ANY possible location
-                for ls in root.findall('.//LineString') + root.findall('.//kml_LineString') + root.findall('.//LineString_'):
-                    # coordinates can be direct or inside MultiGeometry
-                    coord_sources = [
-                        ls.find('coordinates'),
-                        ls.find('kml_coordinates'),
-                        ls.find('coordinates_'),
-                        ls.find('.//MultiGeometry/LineString/coordinates'),
-                        ls.find('.//kml_MultiGeometry/kml_LineString/kml_coordinates'),
-                    ]
-                    coord_elem = None
-                    for c in coord_sources:
-                        if c is not None and c.text and c.text.strip():
-                            coord_elem = c
-                            break
-
-                    if coord_elem and coord_elem.text:
-                        coords = []
-                        for token in coord_elem.text.strip().split():
-                            parts = token.split(',')
-                            if len(parts) >= 2:
-                                try:
-                                    lon, lat = float(parts[0]), float(parts[1])
-                                    coords.append([lat, lon])
-                                except:
-                                    continue
-                        if len(coords) >= 2:
-                            all_routes.append({
-                                "name": provider_name,
-                                "color": color,
-                                "coords": coords
-                            })
-                            added += 1
+                # Find every <coordinates> block — works no matter what namespace garbage is around it
+                for block in re.finditer(r'<coordinates[^>]*>(.*?)</coordinates>', raw, re.DOTALL):
+                    coords = []
+                    for token in block.group(1).strip().split():
+                        parts = token.split(',')
+                        if len(parts) >= 2:
+                            try:
+                                lon, lat = float(parts[0]), float(parts[1])
+                                coords.append([lat, lon])
+                            except:
+                                continue
+                    if len(coords) >= 2:
+                        all_routes.append({
+                            "name": provider_name,
+                            "color": color,
+                            "coords": coords
+                        })
+                        added += 1
 
                 print(f"   {provider_name}: {added} clean individual fiber lines")
 
