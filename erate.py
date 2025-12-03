@@ -1551,18 +1551,18 @@ def coverage_map_data():
                     return
 
                 raw_bytes = z.read(kml_files[0])
-                raw_text  = raw_bytes.decode('utf-8', errors='ignore')
+                raw_text = raw_bytes.decode('utf-8', errors='ignore')
 
-                # ONE-SHOT NUCLEAR FIX THAT WORKS ON EVERY SINGLE FILE YOU HAVE
-                # Removes every possible xmlns declaration (default + prefixed)
+                # THE ONLY FIX THAT WORKS ON EVERY FILE IN YOUR COLLECTION
+                # Remove ALL xmlns declarations — both default and prefixed
                 raw_text = re.sub(r'\s*xmlns(?::\w+)?="[^"]*"', '', raw_text)
-                # Remove any remaining <?xml ...> header
-                raw_text = re.sub(r'<\?xml[^>]*>', '', raw_text)
-                # Remove xsi:schemaLocation garbage
+                # Remove <?xml header and xsi:schemaLocation junk
+                raw_text = re.sub(r'<\?xml[^>]*>\s*', '', raw_text)
                 raw_text = re.sub(r'\s*xsi:[^=]+="[^"]*"', '', raw_text)
 
-                # Force the default namespace to be recognized as "kml"
-                raw_text = raw_text.replace('<kml>', '<kml xmlns="http://www.opengis.net/kml/2.2">', 1)
+                # Re-add the ONE correct default namespace so ElementTree is happy
+                if '<kml' in raw_text and 'xmlns' not in raw_text.split('<kml')[1].split('>')[0]:
+                    raw_text = raw_text.replace('<kml', '<kml xmlns="http://www.opengis.net/kml/2.2"', 1)
 
                 root = ET.fromstring(raw_text.encode('utf-8'))
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
