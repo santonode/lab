@@ -1549,30 +1549,28 @@ def coverage_map_data():
 
                 root = ET.fromstring(z.read(kmls[0]))
 
-                # DYNAMIC NAMESPACE HANDLING — fixes SEGRA_WEST.kmz and all future variants
-                nsmap = root.nsmap  # contains default (None) + any prefixed namespaces
-                ns = {}
-                if None in nsmap:
-                    ns['kml'] = nsmap[None]           # default namespace (most common)
-                else:
-                    ns['kml'] = 'http://www.opengis.net/kml/2.2'  # safe fallback
+                # ── ROBUST NAMESPACE HANDLING (works on Python 3.13 stdlib ET and all KML variants) ──
+                # Extract default namespace from the <kml> tag itself
+                default_ns = root.tag.split('}')[0][1:] if '}' in root.tag else 'http://www.opengis.net/kml/2.2'
+                ns = {'kml': default_ns}
 
-                # Add any prefixed namespaces (gx, atom, etc.) so findall still works
-                for prefix, uri in nsmap.items():
-                    if prefix is not None:
-                        ns[prefix] = uri
+                # Also support common prefixed namespaces (gx:, atom:, etc.)
+                # This regex finds xmlns:prefix="uri" in the root tag
+                import re
+                prefixed = re.findall(r'xmlns:([^=]+)="([^"]+)"', root.tag)
+                for prefix, uri in prefixed:
+                    ns[prefix] = uri
 
                 added = 0
-                # Now safely find LineString coordinates regardless of namespace quirks
                 for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
                     if not coord_elem.text:
                         continue
                     coords = []
                     for token in coord_elem.text.strip().split():
-                        p = token.split(',')
-                        if len(p) >= 2:
+                        parts = token.split(',')
+                        if len(parts) >= 2:
                             try:
-                                lon, lat = float(p[0]), float(p[1])
+                                lon, lat = float(parts[0]), float(parts[1])
                                 coords.append([lat, lon])
                             except ValueError:
                                 continue
@@ -1589,12 +1587,11 @@ def coverage_map_data():
         except Exception as e:
             print(f"   [ERROR] {kmz_path}: {e}")
 
-    # Bluebird — thousands of perfect blue lines
+    # ── Bluebird Network ──
     if os.path.exists(KMZ_PATH_BLUEBIRD):
         extract_individual_lines(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
 
-    # FNA Members — each gets own color
-    colors
+    # ── FNA Members (fixed duplicate/broken colors line) ──
     colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
     idx = 0
     if os.path.isdir(FNA_MEMBERS_DIR):
