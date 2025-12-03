@@ -1553,10 +1553,11 @@ def coverage_map_data():
                 raw_bytes = z.read(kml_files[0])
                 raw_text = raw_bytes.decode('utf-8', errors='ignore')
 
-                # FINAL FIX — removes the FIRST occurrence of ANY xmlns="..." (works on ALL files that have it on line 1 or line 2)
+                # THE ONLY LINE THAT WORKS ON ALL THREE PROBLEM FILES
+                # Removes the FIRST xmlns= declaration — no matter where it is or what it contains
                 raw_text = re.sub(r'xmlns="[^"]*"', '', raw_text, count=1)
 
-                # Optional but safe — remove gx namespace
+                # Remove gx namespace if present (safe)
                 raw_text = raw_text.replace('xmlns:gx="http://www.google.com/kml/ext/2.2"', '')
 
                 root = ET.fromstring(raw_text.encode('utf-8'))
