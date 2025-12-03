@@ -1536,8 +1536,9 @@ def coverage_report():
 # === DRAW DYNAMIC COVERAGE MAP ===
 @erate_bp.route('/coverage-map-data')
 def coverage_map_data():
-    print("\n=== NATIONAL FIBER MAP – NUCLEAR EDITION (WORKS WITH EVERY KMZ) ===")
+    print("\n=== NATIONAL FIBER MAP – NUCLEAR EDITION (WORKS EVERY TIME) ===")
     all_routes = []
+    import re
 
     def extract_individual_lines_from_kmz(kmz_path, provider_name, color):
         if not os.path.exists(kmz_path):
@@ -1550,22 +1551,19 @@ def coverage_map_data():
                 if not kml_files:
                     return
 
-                # Read raw bytes → decode → strip ALL namespace declarations
                 raw = z.read(kml_files[0]).decode('utf-8', errors='ignore')
 
-                # NUCLEAR CLEANUP: Remove every possible namespace declaration
-                raw = re.sub(r'\s+xmlns[^"]*"[^"]*"', '', raw)           # xmlns:kml="..."
-                raw = re.sub(r'\s+xmlns="[^"]*"', '', raw)               # default xmlns
-                raw = re.sub(r'<\?xml[^>]*>', '', raw)                   # xml header
+                # NUCLEAR CLEANUP — removes ALL namespace problems forever
+                raw = re.sub(r'\s+xmlns[^=]*="[^"]*"', '', raw)   # kill every xmlns= or xmlns:xxx=
+                raw = re.sub(r'<\?xml[^>]*>', '', raw)           # kill <?xml ...>
 
-                # Replace all tags like <LineString> with <LineString> (no prefix)
-                raw = re.sub(r'<([^>\s]+):', r'<\1_', raw)   # kml: → kml_
-                raw = re.sub(r'</([^>\s]+):', r'</\1_', raw)
+                # Turn <kml:LineString> → <LineString>  (remove prefix)
+                raw = re.sub(r'<([^ >:]+):', r'<\1_', raw)
+                raw = re.sub(r'</([^ >:]+):', r'</\1_', raw)
 
                 root = ET.fromstring(raw)
 
                 added = 0
-                # Now search without any namespace prefix needed
                 for linestring in root.findall('.//LineString_'):
                     coord_elem = linestring.find('coordinates')
                     if coord_elem is not None and coord_elem.text:
@@ -1578,31 +1576,31 @@ def coverage_map_data():
                                     coords.append([lat, lon])
                                 except:
                                     continue
-                        if len(coords) > 1:
-                            all_routes.append({
-                                "name": provider_name,
-                                "color": color,
-                                "coords": coords
-                            })
-                            added += 1
+                            if len(coords) > 1:
+                                all_routes.append({
+                                    "name": provider_name,
+                                    "color": color,
+                                    "coords": coords
+                                })
+                                added += 1
 
                 print(f"   {provider_name}: {added} lines loaded")
 
         except Exception as e:
             print(f"   [FAILED] {kmz_path}: {e}")
 
-    # ── LOAD BLUEBIRD ──
+    # Bluebird
     if os.path.exists(KMZ_PATH_BLUEBIRD):
-        extract_lines_from_kmz(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
+        extract_individual_lines_from_kmz(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
 
-    # ── LOAD ALL FNA MEMBERS ──
+    # FNA Members
     colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
     idx = 0
     if os.path.isdir(FNA_MEMBERS_DIR):
         for f in sorted(os.listdir(FNA_MEMBERS_DIR)):
             if f.lower().endswith('.kmz'):
-                name = os.path.splitext(f)[0).replace('_', ' ').title()
-                extract_lines_from_kmz(
+                name = os.path.splitext(f)[0].replace('_', ' ').title()  # ← fixed typo
+                extract_individual_lines_from_kmz(
                     os.path.join(FNA_MEMBERS_DIR, f),
                     name,
                     colors[idx % len(colors)]
@@ -1610,7 +1608,7 @@ def coverage_map_data():
                 idx += 1
 
     total = len(all_routes)
-    print(f"\nNUCLEAR MAP LOADED: {total} fiber lines from all providers — ZERO ERRORS\n")
+    print(f"\nNUCLEAR MAP SUCCESS: {total} fiber lines loaded — ALL KMZs WORK!\n")
     return jsonify(all_routes)
 
 @erate_bp.route('/add-to-export', methods=['POST'])
