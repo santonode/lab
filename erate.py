@@ -1553,15 +1553,13 @@ def coverage_map_data():
                 raw_bytes = z.read(kml_files[0])
                 raw_text = raw_bytes.decode('utf-8', errors='ignore')
 
-                # CRITICAL FIX — remove ONLY the first xmlns (fixes SEGRA_WEST duplicate)
-                raw_text = re.sub(r'\s*xmlns="[^"]*"', '', raw_text, count=1)
-                # Remove gx namespace if present (harmless)
+                # FINAL FIX — removes the FIRST occurrence of ANY xmlns="..." (works on ALL files that have it on line 1 or line 2)
+                raw_text = re.sub(r'xmlns="[^"]*"', '', raw_text, count=1)
+
+                # Optional but safe — remove gx namespace
                 raw_text = raw_text.replace('xmlns:gx="http://www.google.com/kml/ext/2.2"', '')
 
-                # Re-encode for ElementTree
-                raw_bytes = raw_text.encode('utf-8')
-
-                root = ET.fromstring(raw_bytes)
+                root = ET.fromstring(raw_text.encode('utf-8'))
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
                 added = 0
