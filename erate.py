@@ -1554,10 +1554,14 @@ def coverage_map_data():
 
                 added = 0
 
-                # Primary method: <coordinates>...</coordinates>
-                coord_blocks = re.findall(r'<coordinates[^>]*>(.*?)</coordinates>', raw, re.DOTALL | re.IGNORECASE)
-                if coord_blocks:
-                    for block in coord_blocks:
+                # METHOD 1: Standard <coordinates> inside LineString (Bluebird, Segra, most)
+                blocks = re.findall(r'<LineString.*?<coordinates[^>]*>(.*?)</coordinates>', raw, re.DOTALL | re.IGNORECASE)
+                if not blocks:
+                    # METHOD 2: Some files use <MultiGeometry><LineString>...</LineString>
+                    blocks = re.findall(r'<LineString.*?<coordinates[^>]*>(.*?)</coordinates>', raw.replace('</LineString>', '</LineString>', re.DOTALL), re.DOTALL | re.IGNORECASE)
+
+                if blocks:
+                    for block in blocks:
                         coords = []
                         for token in re.split(r'[\s,]+', block.strip()):
                             parts = token.split(',')
@@ -1576,9 +1580,8 @@ def coverage_map_data():
                                 "coords": coords
                             })
                             added += 1
-
-                # Fallback: raw lon,lat pairs anywhere in the file (for broken FNA files)
                 else:
+                    # METHOD 3: Nuclear fallback — grab every lon,lat pair in the file and make ONE big line
                     pairs = re.findall(r'(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)', raw)
                     if pairs and len(pairs) >= 2:
                         coords = []
