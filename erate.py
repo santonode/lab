@@ -1554,11 +1554,31 @@ def coverage_map_data():
 
                 added = 0
 
-                # Find all <coordinates>...</coordinates> blocks — works on every file
-                for match_list = re.findall(r'<coordinates[^>]*>(.*?)</coordinates>', raw, re.DOTALL | re.IGNORECASE)
-                if not match_list:
-                    # Fallback for files that use <gx:coord> or raw numbers inside LineString
-                    # This catches the old FNA files that don't have proper <coordinates> tags
+                # Find all <coordinates>...</coordinates> blocks (SEGRA, Bluebird, most files)
+                coord_blocks = re.findall(r'<coordinates[^>]*>(.*?)</coordinates>', raw, re.DOTALL | re.IGNORECASE)
+
+                if coord_blocks:
+                    for block in coord_blocks:
+                        coords = []
+                        for token in re.split(r'[\s,]+', block.strip()):
+                            parts = token.split(',')
+                            if len(parts) >= 2:
+                                try:
+                                    lon = float(parts[0])
+                                    lat = float(parts[1])
+                                    if -180 <= lon <= 180 and -90 <= lat <= 90:
+                                        coords.append([lat, lon])
+                                except:
+                                    continue
+                        if len(coords) >= 2:
+                            all_routes.append({
+                                "name": provider_name,
+                                "color": color,
+                                "coords": coords
+                            })
+                            added +=  # count each line
+                else:
+                    # Fallback for old FNA files that just dump raw numbers inside LineString
                     number_pairs = re.findall(r'(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)', raw)
                     if number_pairs and len(number_pairs) >= 2:
                         coords = []
@@ -1576,31 +1596,9 @@ def coverage_map_data():
                                 "color": color,
                                 "coords": coords
                             })
-                            added = 1  # at least one big line
+                            added = 1
 
-                else:
-                    for block in match_list:
-                        coords = []
-                        # Split by whitespace or commas
-                        for token in re.split(r'[\s,]+', block.strip()):
-                            parts = token.split(',')
-                            if len(parts) >= 2:
-                                try:
-                                    lon = float(parts[0])
-                                    lat = float(parts[1])
-                                    if -180 <= lon <= 180 and -90 <= lat <= 90:
-                                        coords.append([lat, lon])
-                                except:
-                                    continue
-                        if len(coords) >= 2:
-                            all_routes.append({
-                                "name": provider_name,
-                                "color": color,
-                                "coords": coords
-                            })
-                            added += 1
-
-                print(f"   {provider_name}: {added} clean individual fiber lines")
+                print(f"   {provider_name}: {added} clean individual fiber lines loaded")
 
         except Exception as e:
             print(f"   [ERROR] {kmz_path}: {e}")
