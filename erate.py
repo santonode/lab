@@ -1553,17 +1553,18 @@ def coverage_map_data():
                 raw_bytes = z.read(kml_files[0])
                 raw_text = raw_bytes.decode('utf-8', errors='ignore')
 
-                # ONLY FIX NEEDED: Remove duplicate or conflicting xmlns that breaks only SEGRA_WEST
-                raw_text = re.sub(r'\s*xmlns="[^"]*"', '', raw_text, count=1)  # remove first xmlns only
+                # CRITICAL FIX — remove ONLY the first xmlns (fixes SEGRA_WEST duplicate)
+                raw_text = re.sub(r'\s*xmlns="[^"]*"', '', raw_text, count=1)
+                # Remove gx namespace if present (harmless)
                 raw_text = raw_text.replace('xmlns:gx="http://www.google.com/kml/ext/2.2"', '')
 
+                # Re-encode for ElementTree
                 raw_bytes = raw_text.encode('utf-8')
 
                 root = ET.fromstring(raw_bytes)
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
                 added = 0
-                # This works on EVERY file you have — including Bluebird, Segra, Hargray, WOW, etc.
                 for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
                     if not coord_elem.text:
                         continue
@@ -1573,8 +1574,7 @@ def coverage_map_data():
                         if len(parts) >= 2:
                             try:
                                 lon, lat = float(parts[0]), float(parts[1])
-                                if -180 <= lon <= 180 and -90 <= lat <= 90:
-                                    coords.append([lat, lon])
+                                coords.append([lat, lon])
                             except:
                                 continue
                     if len(coords) >= 2:
