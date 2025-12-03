@@ -1546,11 +1546,24 @@ def coverage_map_data():
                 kmls = [f for f in z.namelist() if f.lower().endswith('.kml')]
                 if not kmls:
                     return
+
                 root = ET.fromstring(z.read(kmls[0]))
-                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+
+                # DYNAMIC NAMESPACE HANDLING — fixes SEGRA_WEST.kmz and all future variants
+                nsmap = root.nsmap  # contains default (None) + any prefixed namespaces
+                ns = {}
+                if None in nsmap:
+                    ns['kml'] = nsmap[None]           # default namespace (most common)
+                else:
+                    ns['kml'] = 'http://www.opengis.net/kml/2.2'  # safe fallback
+
+                # Add any prefixed namespaces (gx, atom, etc.) so findall still works
+                for prefix, uri in nsmap.items():
+                    if prefix is not None:
+                        ns[prefix] = uri
 
                 added = 0
-                # Extract ONLY real LineString elements — each becomes its own clean line
+                # Now safely find LineString coordinates regardless of namespace quirks
                 for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
                     if not coord_elem.text:
                         continue
@@ -1561,7 +1574,7 @@ def coverage_map_data():
                             try:
                                 lon, lat = float(p[0]), float(p[1])
                                 coords.append([lat, lon])
-                            except:
+                            except ValueError:
                                 continue
                     if len(coords) > 1:
                         all_routes.append({
@@ -1581,6 +1594,7 @@ def coverage_map_data():
         extract_individual_lines(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
 
     # FNA Members — each gets own color
+    colors
     colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
     idx = 0
     if os.path.isdir(FNA_MEMBERS_DIR):
