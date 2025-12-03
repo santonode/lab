@@ -1540,7 +1540,7 @@ def coverage_map_data():
     all_routes = []
     import re
 
-    def extract_individual_lines_from_kmz(kmz_path, provider_name, color):
+    def extract_individual_lines(kmz_path, provider_name, color):
         if not os.path.exists(kmz_path):
             print(f"   [MISSING] {kmz_path}")
             return
@@ -1553,41 +1553,51 @@ def coverage_map_data():
 
                 raw = z.read(kml_files[0]).decode('utf-8', errors='ignore')
 
-                # NUCLEAR CLEANUP — removes ALL namespace problems forever
-                raw = re.sub(r'\s+xmlns[^=]*="[^"]*"', '', raw)   # kill every xmlns= or xmlns:xxx=
-                raw = re.sub(r'<\?xml[^>]*>', '', raw)           # kill <?xml ...>
+                # KILL ALL NAMESPACES — the only thing that truly works
+                raw = re.sub(r'xmlns(?::\w+)?="[^"]*"', '', raw)      # xmlns="..." or xmlns:kml="..."
+                raw = re.sub(r'<\?xml[^>]*>', '', raw)               # <?xml version="1.0"?>
+                raw = re.sub(r'\s+xsi:[^=]+="[^"]*"', '', raw)       # xsi:schemaLocation garbage
 
-                # Turn <kml:LineString> → <LineString>  (remove prefix)
-                raw = re.sub(r'<([^ >:]+):', r'<\1_', raw)
-                raw = re.sub(r'</([^ >:]+):', r'</\1_', raw)
+                # Turn kml:LineString → LineString  (remove any prefix)
+                raw = re.sub(r'<(\w+):', r'<\1_', raw)
+                raw = re.sub(r'</(\w+):', r'</\1_', raw)
 
                 root = ET.fromstring(raw)
 
                 added = 0
-                for linestring in root.findall('.//LineString_'):
-                    coord_elem = linestring.find('coordinates')
-                    if coord_elem is not None and coord_elem.text:
+                # Look for LineString in every possible mangled form
+                for tag in ['LineString', 'kml_LineString', 'LineString_']:
+                    for ls in root.findall(f'.//{tag}'):
+                        # coordinates can also be mangled
+                        coord_elem = None
+                        for coord_tag in ['coordinates', 'kml_coordinates', 'coordinates_']:
+                            coord_elem = ls.find(coord_tag)
+                            if coord_elem is not None and coord_elem.text:
+                                break
+                        if not coord_elem or not coord_elem.text:
+                            continue
+
                         coords = []
                         for token in coord_elem.text.strip().split():
-                            parts = token.split(',')
+                            parts = [p.strip() for p in token.split(',') if p.strip() and p.strip() != '0']
                             if len(parts) >= 2:
                                 try:
                                     lon, lat = float(parts[0]), float(parts[1])
                                     coords.append([lat, lon])
                                 except:
                                     continue
-                            if len(coords) > 1:
-                                all_routes.append({
-                                    "name": provider_name,
-                                    "color": color,
-                                    "coords": coords
-                                })
-                                added += 1
+                        if len(coords) >= 2:
+                            all_routes.append({
+                                "name": provider_name,
+                                "color": color,
+                                "coords": coords
+                            })
+                            added += 1
 
                 print(f"   {provider_name}: {added} lines loaded")
 
         except Exception as e:
-            print(f"   [FAILED] {kmz_path}: {e}")
+            print(f"   [ERROR] {kmz_path}: {e}")
 
     # Bluebird
     if os.path.exists(KMZ_PATH_BLUEBIRD):
