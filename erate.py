@@ -1549,18 +1549,20 @@ def coverage_map_data():
                 if not kmls:
                     return
 
-                raw = z.read(kmls[0]).decode('utf-8', errors='ignore')
+                raw = z.read(kmls[0]).decode('utf-8', errors='ignore').lower()  # lowercase for case-insensitivity
 
                 added = 0
-                # Find every <coordinates> block — works no matter what namespace garbage is around it
-                for block in re.finditer(r'<coordinates[^>]*>(.*?)</coordinates>', raw, re.DOTALL):
+
+                # Match ANY <coordinates> block — even inside MultiGeometry, even multiline, even with attributes
+                for match in re.finditer(r'<coordinates[^>]*>(.*?)</coordinates>', raw, re.DOTALL | re.IGNORECASE):
                     coords = []
-                    for token in block.group(1).strip().split():
+                    for token in re.split(r'[\s,]+', match.group(1).strip()):
                         parts = token.split(',')
                         if len(parts) >= 2:
                             try:
                                 lon, lat = float(parts[0]), float(parts[1])
-                                coords.append([lat, lon])
+                                if -180 <= lon <= 180 and -90 <= lat <= 90:  # sanity check
+                                    coords.append([lat, lon])
                             except:
                                 continue
                     if len(coords) >= 2:
