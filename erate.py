@@ -1541,6 +1541,7 @@ def coverage_map_data():
 
     def extract_individual_lines(kmz_path, provider_name, color):
         if not os.path.exists(kmz_path):
+            print(f"   [MISSING] {kmz_path}")
             return
 
         try:
@@ -1553,25 +1554,36 @@ def coverage_map_data():
 
                 added = 0
 
-                # Find ANYTHING that looks like coordinates — the most permissive regex ever
-                # Works on: <coordinates>, <gx:coord>, raw text inside <LineString>, <MultiGeometry>, etc.
-                coord_blocks = re.findall(r'(?i)<(?:coordinates|gx:coord)[^>]*>([^<]+)', raw)
-                if not coord_blocks:
-                    # Fallback: grab any sequence of "number,number" inside LineString/MultiGeometry
-                    import re
-                    blocks = re.findall(r'(?i)<(?:linestring|multigeometry).*?</(?:linestring|multigeometry)>', raw, re.DOTALL)
-                    for block in blocks:
-                        coords = re.findall(r'(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)', block)
-                        if coords and len(coords) >= 2:
-                            line = [[float(lat), float(lon)] for lon, lat in coords]
-                            all_routes.append({"name": provider_name, "color": color, "coords": line})
-                            added += len(line) - 1
+                # Find all <coordinates>...</coordinates> blocks — works on every file
+                for match_list = re.findall(r'<coordinates[^>]*>(.*?)</coordinates>', raw, re.DOTALL | re.IGNORECASE)
+                if not match_list:
+                    # Fallback for files that use <gx:coord> or raw numbers inside LineString
+                    # This catches the old FNA files that don't have proper <coordinates> tags
+                    number_pairs = re.findall(r'(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)', raw)
+                    if number_pairs and len(number_pairs) >= 2:
+                        coords = []
+                        for lon_str, lat_str in number_pairs:
+                            try:
+                                lon = float(lon_str)
+                                lat = float(lat_str)
+                                if -180 <= lon <= 180 and -90 <= lat <= 90:
+                                    coords.append([lat, lon])
+                            except:
+                                continue
+                        if len(coords) >= 2:
+                            all_routes.append({
+                                "name": provider_name,
+                                "color": color,
+                                "coords": coords
+                            })
+                            added = 1  # at least one big line
 
                 else:
-                    for block in coord_blocks:
+                    for block in match_list:
                         coords = []
-                        for pair in re.split(r'\s+', block.strip()):
-                            parts = pair.split(',')
+                        # Split by whitespace or commas
+                        for token in re.split(r'[\s,]+', block.strip()):
+                            parts = token.split(',')
                             if len(parts) >= 2:
                                 try:
                                     lon = float(parts[0])
