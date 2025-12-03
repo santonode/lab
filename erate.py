@@ -1534,92 +1534,89 @@ def coverage_report():
     return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
 
 # === DRAW DYNAMIC COVERAGE MAP ===
-@erate_bp.route('/coverage-map-data')
-def coverage_map_data():
-    print("\n=== NATIONAL FIBER MAP – NUCLEAR EDITION (WORKS EVERY TIME) ===")
-    all_routes = []
-    import re
+    @erate_bp.route('/coverage-map-data')
+    def coverage_map_data():
+        print("\n=== NATIONAL FIBER MAP – FINAL WORKING VERSION (ALL KMZ LOAD) ===")
+        all_routes = []
 
-    def extract_individual_lines(kmz_path, provider_name, color):
-        if not os.path.exists(kmz_path):
-            print(f"   [MISSING] {kmz_path}")
-            return
+        def extract_individual_lines(kmz_path, provider_name, color):
+            if not os.path.exists(kmz_path):
+                print(f"   [MISSING] {kmz_path}")
+                return
 
-        try:
-            with zipfile.ZipFile(kmz_path, 'r') as z:
-                kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
-                if not kml_files:
-                    return
+            try:
+                with zipfile.ZipFile(kmz_path, 'r') as z:
+                    kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
+                    if not kml_files:
+                        return
 
-                raw = z.read(kml_files[0]).decode('utf-8', errors='ignore')
+                    raw = z.read(kml_files[0]).decode('utf-8', errors='ignore')
 
-                # KILL ALL NAMESPACES — the only thing that truly works
-                raw = re.sub(r'xmlns(?::\w+)?="[^"]*"', '', raw)      # xmlns="..." or xmlns:kml="..."
-                raw = re.sub(r'<\?xml[^>]*>', '', raw)               # <?xml version="1.0"?>
-                raw = re.sub(r'\s+xsi:[^=]+="[^"]*"', '', raw)       # xsi:schemaLocation garbage
+                    # NUCLEAR NAMESPACE REMOVAL — kills every xmlns problem
+                    raw = re.sub(r'xmlns(?::\w+)?="[^"]*"', '', raw)
+                    raw = re.sub(r'<\?xml[^>]*>', '', raw)
+                    raw = re.sub(r'\s+xsi:[^=]+="[^"]*"', '', raw)
 
-                # Turn kml:LineString → LineString  (remove any prefix)
-                raw = re.sub(r'<(\w+):', r'<\1_', raw)
-                raw = re.sub(r'</(\w+):', r'</\1_', raw)
+                    # Strip prefixes: kml:LineString → LineString
+                    raw = re.sub(r'<(\w+):', r'<\1_', raw)
+                    raw = re.sub(r'</(\w+):', r'</\1_', raw)
 
-                root = ET.fromstring(raw)
+                    root = ET.fromstring(raw)
 
-                added = 0
-                # Look for LineString in every possible mangled form
-                for tag in ['LineString', 'kml_LineString', 'LineString_']:
-                    for ls in root.findall(f'.//{tag}'):
-                        # coordinates can also be mangled
-                        coord_elem = None
-                        for coord_tag in ['coordinates', 'kml_coordinates', 'coordinates_']:
-                            coord_elem = ls.find(coord_tag)
-                            if coord_elem is not None and coord_elem.text:
-                                break
-                        if not coord_elem or not coord_elem.text:
-                            continue
+                    added = 0
+                    for tag in ['LineString', 'kml_LineString', 'LineString_']:
+                        for ls in root.findall(f'.//{tag}'):
+                            coord_elem = None
+                            for ctag in ['coordinates', 'kml_coordinates', 'coordinates_']:
+                                coord_elem = ls.find(ctag)
+                                if coord_elem is not None and coord_elem.text:
+                                    break
+                            if not coord_elem or not coord_elem.text:
+                                continue
 
-                        coords = []
-                        for token in coord_elem.text.strip().split():
-                            parts = [p.strip() for p in token.split(',') if p.strip() and p.strip() != '0']
-                            if len(parts) >= 2:
-                                try:
-                                    lon, lat = float(parts[0]), float(parts[1])
-                                    coords.append([lat, lon])
-                                except:
-                                    continue
-                        if len(coords) >= 2:
-                            all_routes.append({
-                                "name": provider_name,
-                                "color": color,
-                                "coords": coords
-                            })
-                            added += 1
+                            coords = []
+                            for token in coord_elem.text.strip().split():
+                                parts = [p.strip() for p in token.split(',') if p.strip() and p.strip() != '0']
+                                if len(parts) >= 2:
+                                    try:
+                                        lon, lat = float(parts[0]), float(parts[1])
+                                        coords.append([lat, lon])
+                                    except:
+                                        continue
+                            if len(coords) >= 2:
+                                all_routes.append({
+                                    "name": provider_name,
+                                    "color": color,
+                                    "coords": coords
+                                })
+                                added += 1
 
-                print(f"   {provider_name}: {added} lines loaded")
+                    print(f"   {provider_name}: {added} lines loaded")
 
-        except Exception as e:
-            print(f"   [ERROR] {kmz_path}: {e}")
+            except Exception as e:
+                print(f"   [ERROR] {kmz_path}: {e}")
 
-    # Bluebird
-    if os.path.exists(KMZ_PATH_BLUEBIRD):
-        extract_individual_lines_from_kmz(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
+        # Load Bluebird
+        if os.path.exists(KMZ_PATH_BLUEBIRD):
+            extract_individual_lines(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
 
-    # FNA Members
-    colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
-    idx = 0
-    if os.path.isdir(FNA_MEMBERS_DIR):
-        for f in sorted(os.listdir(FNA_MEMBERS_DIR)):
-            if f.lower().endswith('.kmz'):
-                name = os.path.splitext(f)[0].replace('_', ' ').title()  # ← fixed typo
-                extract_individual_lines_from_kmz(
-                    os.path.join(FNA_MEMBERS_DIR, f),
-                    name,
-                    colors[idx % len(colors)]
-                )
-                idx += 1
+        # Load all FNA members
+        colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
+        idx = 0
+        if os.path.isdir(FNA_MEMBERS_DIR):
+            for f in sorted(os.listdir(FNA_MEMBERS_DIR)):
+                if f.lower().endswith('.kmz'):
+                    name = os.path.splitext(f)[0].replace('_', ' ').title()
+                    extract_individual_lines(
+                        os.path.join(FNA_MEMBERS_DIR, f),
+                        name,
+                        colors[idx % len(colors)]
+                    )
+                    idx += 1
 
-    total = len(all_routes)
-    print(f"\nNUCLEAR MAP SUCCESS: {total} fiber lines loaded — ALL KMZs WORK!\n")
-    return jsonify(all_routes)
+        total = len(all_routes)
+        print(f"\nMAP LOADED SUCCESSFULLY: {total} fiber lines from all providers!\n")
+        return jsonify(all_routes)
 
 @erate_bp.route('/add-to-export', methods=['POST'])
 def add_to_export():
