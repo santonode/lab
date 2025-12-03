@@ -1531,11 +1531,11 @@ def coverage_report():
 
     return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
 
-# === FINAL WINNER: INDIVIDUAL SEGMENTS + NO POLYGONS + FAST + MOBILE PERFECT ===
 @erate_bp.route('/coverage-map-data')
 def coverage_map_data():
     print("\n=== NATIONAL FIBER MAP – BEST OF BOTH WORLDS ===")
     all_routes = []
+    import re  # Make sure this is at top of file or here
 
     def extract_individual_lines(kmz_path, provider_name, color):
         if not os.path.exists(kmz_path):
@@ -1547,42 +1547,34 @@ def coverage_map_data():
                 if not kmls:
                     return
 
-                raw_kml = z.read(kmls[0])
-                # CRITICAL FIX: Rewrite ALL namespace declarations to use a known prefix
-                # This defeats ANY "unbound prefix" error forever
-                fixed_kml = raw_kml.decode('utf-8')
-                fixed_kml = fixed_kml.replace(
-                    'xmlns="http://www.opengis.net/kml/2.2"',
-                    'xmlns:kml="http://www.opengis.net/kml/2.2"'
-                )
-                fixed_kml = fixed_kml.replace(
-                    'xmlns:gx="http://www.google.com/kml/ext/2.2"',
-                    'xmlns:gx="http://www.google.com/kml/ext/2.2"'
-                )
+                raw_kml = z.read(kmls[0]).decode('utf-8', errors='ignore')
 
-                root = ET.fromstring(fixed_kml.encode('utf-8'))
+                # FIX DUPLICATE XMLNS (SEGRA files)
+                raw_kml = re.sub(r'\s+xmlns="[^"]*"', '', raw_kml, count=1)
+                raw_kml = raw_kml.replace('xmlns="http://www.opengis.net/kml/2.2"', 'xmlns:kml="http://www.opengis.net/kml/2.2"')
+                raw_kml = re.sub(r'<kml(?!\w)', '<kml:kml', raw_kml)
+                raw_kml = re.sub(r'</kml(?=>)', '</kml:kml', raw_kml)
+                raw_kml = re.sub(r'\s+xsi:schemaLocation="[^"]*"', '', raw_kml)
+
+                root = ET.fromstring(raw_kml.encode('utf-8'))
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-
                 added = 0
+
                 for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
                     if not coord_elem.text:
                         continue
                     coords = []
                     for token in coord_elem.text.strip().split():
-                        parts = token.split(',')
-                        if len(parts) >= 2:
+                        p = token.split(',')
+                        if len(p) >= 2:
                             try:
-                                lon, lat = float(parts[0]), float(parts[1])
+                                lon, lat = float(p[0]), float(p[1])
                                 coords.append([lat, lon])
-                            except ValueError:
+                            except:
                                 continue
-                    if len(coords) > 1:
-                        all_routes.append({
-                            "name": provider_name,
-                            "color": color,
-                            "coords": coords
-                        })
-                        added += 1
+                        if len(coords) > 1:
+                            all_routes.append({"name": provider_name, "color": color, "coords": coords})
+                            added += 1
 
                 print(f"   {provider_name}: {added} clean individual fiber lines")
 
@@ -1600,11 +1592,7 @@ def coverage_map_data():
         for f in sorted(os.listdir(FNA_MEMBERS_DIR)):
             if f.lower().endswith('.kmz'):
                 name = os.path.splitext(f)[0].replace('_', ' ').title()
-                extract_individual_lines(
-                    os.path.join(FNA_MEMBERS_DIR, f),
-                    name,
-                    colors[idx % len(colors)]
-                )
+                extract_individual_lines(os.path.join(FNA_MEMBERS_DIR, f), name, colors[idx % len(colors)])
                 idx += 1
 
     print(f"\nBEST MAP EVER: {len(all_routes)} individual fiber lines loaded — no blobs, full detail\n")
