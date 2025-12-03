@@ -19,7 +19,9 @@ from math import radians, cos, sin, sqrt, atan2
 import zipfile
 import xml.etree.ElementTree as ET
 import hashlib
+import re
 
+from flask import jsonify
 from models import Erate  # ← For querying the applicant
 
 # === EXPORT SYSTEM — ADDED HERE ===
