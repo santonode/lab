@@ -1547,19 +1547,21 @@ def coverage_map_data():
                 if not kmls:
                     return
 
-                root = ET.fromstring(z.read(kmls[0]))
+                raw_kml = z.read(kmls[0])
+                # CRITICAL FIX: Rewrite ALL namespace declarations to use a known prefix
+                # This defeats ANY "unbound prefix" error forever
+                fixed_kml = raw_kml.decode('utf-8')
+                fixed_kml = fixed_kml.replace(
+                    'xmlns="http://www.opengis.net/kml/2.2"',
+                    'xmlns:kml="http://www.opengis.net/kml/2.2"'
+                )
+                fixed_kml = fixed_kml.replace(
+                    'xmlns:gx="http://www.google.com/kml/ext/2.2"',
+                    'xmlns:gx="http://www.google.com/kml/ext/2.2"'
+                )
 
-                # ── ROBUST NAMESPACE HANDLING (works on Python 3.13 stdlib ET and all KML variants) ──
-                # Extract default namespace from the <kml> tag itself
-                default_ns = root.tag.split('}')[0][1:] if '}' in root.tag else 'http://www.opengis.net/kml/2.2'
-                ns = {'kml': default_ns}
-
-                # Also support common prefixed namespaces (gx:, atom:, etc.)
-                # This regex finds xmlns:prefix="uri" in the root tag
-                import re
-                prefixed = re.findall(r'xmlns:([^=]+)="([^"]+)"', root.tag)
-                for prefix, uri in prefixed:
-                    ns[prefix] = uri
+                root = ET.fromstring(fixed_kml.encode('utf-8'))
+                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
                 added = 0
                 for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
@@ -1587,11 +1589,11 @@ def coverage_map_data():
         except Exception as e:
             print(f"   [ERROR] {kmz_path}: {e}")
 
-    # ── Bluebird Network ──
+    # Bluebird
     if os.path.exists(KMZ_PATH_BLUEBIRD):
         extract_individual_lines(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
 
-    # ── FNA Members (fixed duplicate/broken colors line) ──
+    # FNA Members
     colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
     idx = 0
     if os.path.isdir(FNA_MEMBERS_DIR):
