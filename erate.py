@@ -1545,33 +1545,48 @@ def coverage_map_data():
 
         try:
             with zipfile.ZipFile(kmz_path, 'r') as z:
-                kmls = [f for f in z.namelist() if f.lower().endswith('.kml')]
-                if not kmls:
+                kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
+                if not kml_files:
                     return
 
-                raw = z.read(kmls[0]).decode('utf-8', errors='ignore').lower()  # lowercase for case-insensitivity
+                raw = z.read(kml_files[0]).decode('utf-8', errors='ignore')
 
                 added = 0
 
-                # Match ANY <coordinates> block — even inside MultiGeometry, even multiline, even with attributes
-                for match in re.finditer(r'<coordinates[^>]*>(.*?)</coordinates>', raw, re.DOTALL | re.IGNORECASE):
-                    coords = []
-                    for token in re.split(r'[\s,]+', match.group(1).strip()):
-                        parts = token.split(',')
-                        if len(parts) >= 2:
-                            try:
-                                lon, lat = float(parts[0]), float(parts[1])
-                                if -180 <= lon <= 180 and -90 <= lat <= 90:  # sanity check
-                                    coords.append([lat, lon])
-                            except:
-                                continue
-                    if len(coords) >= 2:
-                        all_routes.append({
-                            "name": provider_name,
-                            "color": color,
-                            "coords": coords
-                        })
-                        added += 1
+                # Find ANYTHING that looks like coordinates — the most permissive regex ever
+                # Works on: <coordinates>, <gx:coord>, raw text inside <LineString>, <MultiGeometry>, etc.
+                coord_blocks = re.findall(r'(?i)<(?:coordinates|gx:coord)[^>]*>([^<]+)', raw)
+                if not coord_blocks:
+                    # Fallback: grab any sequence of "number,number" inside LineString/MultiGeometry
+                    import re
+                    blocks = re.findall(r'(?i)<(?:linestring|multigeometry).*?</(?:linestring|multigeometry)>', raw, re.DOTALL)
+                    for block in blocks:
+                        coords = re.findall(r'(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)', block)
+                        if coords and len(coords) >= 2:
+                            line = [[float(lat), float(lon)] for lon, lat in coords]
+                            all_routes.append({"name": provider_name, "color": color, "coords": line})
+                            added += len(line) - 1
+
+                else:
+                    for block in coord_blocks:
+                        coords = []
+                        for pair in re.split(r'\s+', block.strip()):
+                            parts = pair.split(',')
+                            if len(parts) >= 2:
+                                try:
+                                    lon = float(parts[0])
+                                    lat = float(parts[1])
+                                    if -180 <= lon <= 180 and -90 <= lat <= 90:
+                                        coords.append([lat, lon])
+                                except:
+                                    continue
+                        if len(coords) >= 2:
+                            all_routes.append({
+                                "name": provider_name,
+                                "color": color,
+                                "coords": coords
+                            })
+                            added += 1
 
                 print(f"   {provider_name}: {added} clean individual fiber lines")
 
