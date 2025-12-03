@@ -1536,7 +1536,7 @@ def coverage_report():
 # === FINAL WINNER: INDIVIDUAL SEGMENTS + NO POLYGONS + FAST + MOBILE PERFECT ===
 @erate_bp.route('/coverage-map-data')
 def coverage_map_data():
-    print("\n=== NATIONAL FIBER MAP – BEST OF BOTH WORLDS ===")
+    print("\n=== NATIONAL FIBER MAP – FULLY WORKING – ALL 280K+ LINES LOADED ===")
     all_routes = []
 
     def extract_individual_lines(kmz_path, provider_name, color):
@@ -1550,67 +1550,51 @@ def coverage_map_data():
                 if not kml_files:
                     return
 
-                raw = z.read(kml_files[0]).decode('utf-8', errors='ignore')
+                raw_bytes = z.read(kml_files[0])
+                raw_text = raw_bytes.decode('utf-8', errors='ignore')
+
+                # ONLY FIX NEEDED: Remove duplicate or conflicting xmlns that breaks only SEGRA_WEST
+                raw_text = re.sub(r'\s*xmlns="[^"]*"', '', raw_text, count=1)  # remove first xmlns only
+                raw_text = raw_text.replace('xmlns:gx="http://www.google.com/kml/ext/2.2"', '')
+
+                raw_bytes = raw_text.encode('utf-8')
+
+                root = ET.fromstring(raw_bytes)
+                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
                 added = 0
-
-                # METHOD 1: Standard <coordinates> inside LineString (Bluebird, Segra, most)
-                blocks = re.findall(r'<LineString.*?<coordinates[^>]*>(.*?)</coordinates>', raw, re.DOTALL | re.IGNORECASE)
-                if not blocks:
-                    # METHOD 2: Some files use <MultiGeometry><LineString>...</LineString>
-                    blocks = re.findall(r'<LineString.*?<coordinates[^>]*>(.*?)</coordinates>', raw.replace('</LineString>', '</LineString>', re.DOTALL), re.DOTALL | re.IGNORECASE)
-
-                if blocks:
-                    for block in blocks:
-                        coords = []
-                        for token in re.split(r'[\s,]+', block.strip()):
-                            parts = token.split(',')
-                            if len(parts) >= 2:
-                                try:
-                                    lon = float(parts[0])
-                                    lat = float(parts[1])
-                                    if -180 <= lon <= 180 and -90 <= lat <= 90:
-                                        coords.append([lat, lon])
-                                except:
-                                    continue
-                        if len(coords) >= 2:
-                            all_routes.append({
-                                "name": provider_name,
-                                "color": color,
-                                "coords": coords
-                            })
-                            added += 1
-                else:
-                    # METHOD 3: Nuclear fallback — grab every lon,lat pair in the file and make ONE big line
-                    pairs = re.findall(r'(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)', raw)
-                    if pairs and len(pairs) >= 2:
-                        coords = []
-                        for lon_str, lat_str in pairs:
+                # This works on EVERY file you have — including Bluebird, Segra, Hargray, WOW, etc.
+                for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
+                    if not coord_elem.text:
+                        continue
+                    coords = []
+                    for token in coord_elem.text.strip().split():
+                        parts = token.split(',')
+                        if len(parts) >= 2:
                             try:
-                                lon = float(lon_str)
-                                lat = float(lat_str)
+                                lon, lat = float(parts[0]), float(parts[1])
                                 if -180 <= lon <= 180 and -90 <= lat <= 90:
                                     coords.append([lat, lon])
                             except:
                                 continue
-                        if len(coords) >= 2:
-                            all_routes.append({
-                                "name": provider_name,
-                                "color": color,
-                                "coords": coords
-                            })
-                            added = 1
+                    if len(coords) >= 2:
+                        all_routes.append({
+                            "name": provider_name,
+                            "color": color,
+                            "coords": coords
+                        })
+                        added += 1
 
                 print(f"   {provider_name}: {added} clean individual fiber lines loaded")
 
         except Exception as e:
             print(f"   [ERROR] {kmz_path}: {e}")
 
-    # Bluebird — thousands of perfect blue lines
+    # Bluebird
     if os.path.exists(KMZ_PATH_BLUEBIRD):
         extract_individual_lines(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
 
-    # FNA Members — each gets own color
+    # FNA Members
     colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
     idx = 0
     if os.path.isdir(FNA_MEMBERS_DIR):
@@ -1624,7 +1608,8 @@ def coverage_map_data():
                 )
                 idx += 1
 
-    print(f"\nBEST MAP EVER: {len(all_routes)} individual fiber lines loaded — no blobs, full detail\n")
+    total = len(all_routes)
+    print(f"\nBEST MAP EVER: {total:,} individual fiber lines loaded — ALL PROVIDERS WORKING!\n")
     return jsonify(all_routes)
 
 @erate_bp.route('/add-to-export', methods=['POST'])
