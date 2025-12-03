@@ -1554,9 +1554,8 @@ def coverage_map_data():
 
                 added = 0
 
-                # Find all <coordinates>...</coordinates> blocks (SEGRA, Bluebird, most files)
+                # Primary method: <coordinates>...</coordinates>
                 coord_blocks = re.findall(r'<coordinates[^>]*>(.*?)</coordinates>', raw, re.DOTALL | re.IGNORECASE)
-
                 if coord_blocks:
                     for block in coord_blocks:
                         coords = []
@@ -1576,13 +1575,14 @@ def coverage_map_data():
                                 "color": color,
                                 "coords": coords
                             })
-                            added +=  # count each line
+                            added += 1
+
+                # Fallback: raw lon,lat pairs anywhere in the file (for broken FNA files)
                 else:
-                    # Fallback for old FNA files that just dump raw numbers inside LineString
-                    number_pairs = re.findall(r'(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)', raw)
-                    if number_pairs and len(number_pairs) >= 2:
+                    pairs = re.findall(r'(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)', raw)
+                    if pairs and len(pairs) >= 2:
                         coords = []
-                        for lon_str, lat_str in number_pairs:
+                        for lon_str, lat_str in pairs:
                             try:
                                 lon = float(lon_str)
                                 lat = float(lat_str)
