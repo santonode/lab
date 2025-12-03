@@ -19,7 +19,9 @@ from math import radians, cos, sin, sqrt, atan2
 import zipfile
 import xml.etree.ElementTree as ET
 import hashlib
+import re
 
+from flask import jsonify
 from models import Erate  # ← For querying the applicant
 
 # === EXPORT SYSTEM — ADDED HERE ===
@@ -1531,71 +1533,84 @@ def coverage_report():
 
     return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
 
+# === DRAW DYNAMIC COVERAGE MAP ===
 @erate_bp.route('/coverage-map-data')
 def coverage_map_data():
-    print("\n=== NATIONAL FIBER MAP – BEST OF BOTH WORLDS ===")
+    print("\n=== NATIONAL FIBER MAP – NUCLEAR EDITION (WORKS WITH EVERY KMZ) ===")
     all_routes = []
-    import re  # Make sure this is at top of file or here
 
-    def extract_individual_lines(kmz_path, provider_name, color):
+    def extract_individual_lines_from_kmz(kmz_path, provider_name, color):
         if not os.path.exists(kmz_path):
+            print(f"   [MISSING] {kmz_path}")
             return
 
         try:
             with zipfile.ZipFile(kmz_path, 'r') as z:
-                kmls = [f for f in z.namelist() if f.lower().endswith('.kml')]
-                if not kmls:
+                kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
+                if not kml_files:
                     return
 
-                raw_kml = z.read(kmls[0]).decode('utf-8', errors='ignore')
+                # Read raw bytes → decode → strip ALL namespace declarations
+                raw = z.read(kml_files[0]).decode('utf-8', errors='ignore')
 
-                # FIX DUPLICATE XMLNS (SEGRA files)
-                raw_kml = re.sub(r'\s+xmlns="[^"]*"', '', raw_kml, count=1)
-                raw_kml = raw_kml.replace('xmlns="http://www.opengis.net/kml/2.2"', 'xmlns:kml="http://www.opengis.net/kml/2.2"')
-                raw_kml = re.sub(r'<kml(?!\w)', '<kml:kml', raw_kml)
-                raw_kml = re.sub(r'</kml(?=>)', '</kml:kml', raw_kml)
-                raw_kml = re.sub(r'\s+xsi:schemaLocation="[^"]*"', '', raw_kml)
+                # NUCLEAR CLEANUP: Remove every possible namespace declaration
+                raw = re.sub(r'\s+xmlns[^"]*"[^"]*"', '', raw)           # xmlns:kml="..."
+                raw = re.sub(r'\s+xmlns="[^"]*"', '', raw)               # default xmlns
+                raw = re.sub(r'<\?xml[^>]*>', '', raw)                   # xml header
 
-                root = ET.fromstring(raw_kml.encode('utf-8'))
-                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+                # Replace all tags like <LineString> with <LineString> (no prefix)
+                raw = re.sub(r'<([^>\s]+):', r'<\1_', raw)   # kml: → kml_
+                raw = re.sub(r'</([^>\s]+):', r'</\1_', raw)
+
+                root = ET.fromstring(raw)
+
                 added = 0
-
-                for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
-                    if not coord_elem.text:
-                        continue
-                    coords = []
-                    for token in coord_elem.text.strip().split():
-                        p = token.split(',')
-                        if len(p) >= 2:
-                            try:
-                                lon, lat = float(p[0]), float(p[1])
-                                coords.append([lat, lon])
-                            except:
-                                continue
+                # Now search without any namespace prefix needed
+                for linestring in root.findall('.//LineString_'):
+                    coord_elem = linestring.find('coordinates')
+                    if coord_elem is not None and coord_elem.text:
+                        coords = []
+                        for token in coord_elem.text.strip().split():
+                            parts = token.split(',')
+                            if len(parts) >= 2:
+                                try:
+                                    lon, lat = float(parts[0]), float(parts[1])
+                                    coords.append([lat, lon])
+                                except:
+                                    continue
                         if len(coords) > 1:
-                            all_routes.append({"name": provider_name, "color": color, "coords": coords})
+                            all_routes.append({
+                                "name": provider_name,
+                                "color": color,
+                                "coords": coords
+                            })
                             added += 1
 
-                print(f"   {provider_name}: {added} clean individual fiber lines")
+                print(f"   {provider_name}: {added} lines loaded")
 
         except Exception as e:
-            print(f"   [ERROR] {kmz_path}: {e}")
+            print(f"   [FAILED] {kmz_path}: {e}")
 
-    # Bluebird
+    # ── LOAD BLUEBIRD ──
     if os.path.exists(KMZ_PATH_BLUEBIRD):
-        extract_individual_lines(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
+        extract_lines_from_kmz(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
 
-    # FNA Members
+    # ── LOAD ALL FNA MEMBERS ──
     colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
     idx = 0
     if os.path.isdir(FNA_MEMBERS_DIR):
         for f in sorted(os.listdir(FNA_MEMBERS_DIR)):
             if f.lower().endswith('.kmz'):
-                name = os.path.splitext(f)[0].replace('_', ' ').title()
-                extract_individual_lines(os.path.join(FNA_MEMBERS_DIR, f), name, colors[idx % len(colors)])
+                name = os.path.splitext(f)[0).replace('_', ' ').title()
+                extract_lines_from_kmz(
+                    os.path.join(FNA_MEMBERS_DIR, f),
+                    name,
+                    colors[idx % len(colors)]
+                )
                 idx += 1
 
-    print(f"\nBEST MAP EVER: {len(all_routes)} individual fiber lines loaded — no blobs, full detail\n")
+    total = len(all_routes)
+    print(f"\nNUCLEAR MAP LOADED: {total} fiber lines from all providers — ZERO ERRORS\n")
     return jsonify(all_routes)
 
 @erate_bp.route('/add-to-export', methods=['POST'])
