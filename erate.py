@@ -1552,22 +1552,36 @@ def coverage_map_data():
 
                 raw_text = z.read(kml_files[0]).decode('utf-8', errors='replace')
 
-                # NUCLEAR NAMESPACE STRIP — removes every xmlns declaration completely
+                # Remove ALL xmlns declarations
                 raw_text = re.sub(r'\s*xmlns(?::\w+)?=["\'][^"\']*["\']', '', raw_text)
                 raw_text = re.sub(r'<\?xml[^>]*>', '', raw_text)
                 raw_text = re.sub(r'\s*xsi:[^=]+=["\'][^"\']*["\']', '', raw_text)
 
-                # Turn ALL prefixed tags into unprefixed ones (kml:LineString → LineString)
+                # Convert ALL prefixed tags → unprefixed with underscore
                 raw_text = re.sub(r'<(\w+):', r'<\1_', raw_text)
                 raw_text = re.sub(r'</(\w+):', r'</\1_', raw_text)
 
                 root = ET.fromstring(raw_text.encode('utf-8'))
 
                 added = 0
-                # Now search without any namespace — everything is unprefixed
-                for linestring in root.findall('.//LineString'):
-                    coord_elem = linestring.find('coordinates')
-                    if coord_elem is not None and coord_elem.text:
+
+                # Search for LineString in ANY possible location
+                for ls in root.findall('.//LineString') + root.findall('.//kml_LineString') + root.findall('.//LineString_'):
+                    # coordinates can be direct or inside MultiGeometry
+                    coord_sources = [
+                        ls.find('coordinates'),
+                        ls.find('kml_coordinates'),
+                        ls.find('coordinates_'),
+                        ls.find('.//MultiGeometry/LineString/coordinates'),
+                        ls.find('.//kml_MultiGeometry/kml_LineString/kml_coordinates'),
+                    ]
+                    coord_elem = None
+                    for c in coord_sources:
+                        if c is not None and c.text and c.text.strip():
+                            coord_elem = c
+                            break
+
+                    if coord_elem and coord_elem.text:
                         coords = []
                         for token in coord_elem.text.strip().split():
                             parts = token.split(',')
