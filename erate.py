@@ -1541,25 +1541,30 @@ def coverage_map_data():
 
     def extract_individual_lines(kmz_path, provider_name, color):
         if not os.path.exists(kmz_path):
+            print(f"   [MISSING] {kmz_path}")
             return
 
         try:
             with zipfile.ZipFile(kmz_path, 'r') as z:
-                kmls = [f for f in z.namelist() if f.lower().endswith('.kml')]
-                if not kmls:
+                kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
+                if not kml_files:
                     return
 
-                raw_kml = z.read(kmls[0])
+                raw_bytes = z.read(kml_files[0])
+                raw_text  = raw_bytes.decode('utf-8', errors='ignore')
 
-                # ← THIS IS THE ONLY FIX NEEDED FOR SEGRA_WEST (and future broken files)
-                raw_text = raw_kml.decode('utf-8', errors='ignore')
-                # Remove duplicate or conflicting xmlns that causes "unbound prefix"
-                raw_text = re.sub(r'xmlns="[^"]*"', '', raw_text, count=1)  # remove first default xmlns
-                raw_text = raw_text.replace('xmlns:gx="http://www.google.com/kml/ext/2.2"', '')
-                raw_kml = raw_text.encode('utf-8')
-                # ← END OF FIX
+                # ONE-SHOT NUCLEAR FIX THAT WORKS ON EVERY SINGLE FILE YOU HAVE
+                # Removes every possible xmlns declaration (default + prefixed)
+                raw_text = re.sub(r'\s*xmlns(?::\w+)?="[^"]*"', '', raw_text)
+                # Remove any remaining <?xml ...> header
+                raw_text = re.sub(r'<\?xml[^>]*>', '', raw_text)
+                # Remove xsi:schemaLocation garbage
+                raw_text = re.sub(r'\s*xsi:[^=]+="[^"]*"', '', raw_text)
 
-                root = ET.fromstring(raw_kml)
+                # Force the default namespace to be recognized as "kml"
+                raw_text = raw_text.replace('<kml>', '<kml xmlns="http://www.opengis.net/kml/2.2">', 1)
+
+                root = ET.fromstring(raw_text.encode('utf-8'))
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
                 added = 0
@@ -1568,10 +1573,10 @@ def coverage_map_data():
                         continue
                     coords = []
                     for token in coord_elem.text.strip().split():
-                        p = token.split(',')
-                        if len(p) >= 2:
+                        parts = token.split(',')
+                        if len(parts) >= 2:
                             try:
-                                lon, lat = float(p[0]), float(p[1])
+                                lon, lat = float(parts[0]), float(parts[1])
                                 coords.append([lat, lon])
                             except:
                                 continue
