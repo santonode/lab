@@ -1546,11 +1546,21 @@ def coverage_map_data():
                 kmls = [f for f in z.namelist() if f.lower().endswith('.kml')]
                 if not kmls:
                     return
-                root = ET.fromstring(z.read(kmls[0]))
+
+                raw_kml = z.read(kmls[0])
+
+                # ← THIS IS THE ONLY FIX NEEDED FOR SEGRA_WEST (and future broken files)
+                raw_text = raw_kml.decode('utf-8', errors='ignore')
+                # Remove duplicate or conflicting xmlns that causes "unbound prefix"
+                raw_text = re.sub(r'xmlns="[^"]*"', '', raw_text, count=1)  # remove first default xmlns
+                raw_text = raw_text.replace('xmlns:gx="http://www.google.com/kml/ext/2.2"', '')
+                raw_kml = raw_text.encode('utf-8')
+                # ← END OF FIX
+
+                root = ET.fromstring(raw_kml)
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
                 added = 0
-                # Extract ONLY real LineString elements — each becomes its own clean line
                 for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
                     if not coord_elem.text:
                         continue
