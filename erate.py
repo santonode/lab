@@ -1550,43 +1550,40 @@ def coverage_map_data():
                 if not kml_files:
                     return
 
-                raw_bytes = z.read(kml_files[0])
-                raw_text = raw_bytes.decode('utf-8', errors='ignore')
+                raw_text = z.read(kml_files[0]).decode('utf-8', errors='replace')
 
-                # THE ONLY FIX THAT WORKS ON EVERY FILE IN YOUR COLLECTION
-                # Remove ALL xmlns declarations — both default and prefixed
-                raw_text = re.sub(r'\s*xmlns(?::\w+)?="[^"]*"', '', raw_text)
-                # Remove <?xml header and xsi:schemaLocation junk
-                raw_text = re.sub(r'<\?xml[^>]*>\s*', '', raw_text)
-                raw_text = re.sub(r'\s*xsi:[^=]+="[^"]*"', '', raw_text)
+                # NUCLEAR NAMESPACE STRIP — removes every xmlns declaration completely
+                raw_text = re.sub(r'\s*xmlns(?::\w+)?=["\'][^"\']*["\']', '', raw_text)
+                raw_text = re.sub(r'<\?xml[^>]*>', '', raw_text)
+                raw_text = re.sub(r'\s*xsi:[^=]+=["\'][^"\']*["\']', '', raw_text)
 
-                # Re-add the ONE correct default namespace so ElementTree is happy
-                if '<kml' in raw_text and 'xmlns' not in raw_text.split('<kml')[1].split('>')[0]:
-                    raw_text = raw_text.replace('<kml', '<kml xmlns="http://www.opengis.net/kml/2.2"', 1)
+                # Turn ALL prefixed tags into unprefixed ones (kml:LineString → LineString)
+                raw_text = re.sub(r'<(\w+):', r'<\1_', raw_text)
+                raw_text = re.sub(r'</(\w+):', r'</\1_', raw_text)
 
                 root = ET.fromstring(raw_text.encode('utf-8'))
-                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
                 added = 0
-                for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
-                    if not coord_elem.text:
-                        continue
-                    coords = []
-                    for token in coord_elem.text.strip().split():
-                        parts = token.split(',')
-                        if len(parts) >= 2:
-                            try:
-                                lon, lat = float(parts[0]), float(parts[1])
-                                coords.append([lat, lon])
-                            except:
-                                continue
-                    if len(coords) > 1:
-                        all_routes.append({
-                            "name": provider_name,
-                            "color": color,
-                            "coords": coords
-                        })
-                        added += 1
+                # Now search without any namespace — everything is unprefixed
+                for linestring in root.findall('.//LineString'):
+                    coord_elem = linestring.find('coordinates')
+                    if coord_elem is not None and coord_elem.text:
+                        coords = []
+                        for token in coord_elem.text.strip().split():
+                            parts = token.split(',')
+                            if len(parts) >= 2:
+                                try:
+                                    lon, lat = float(parts[0]), float(parts[1])
+                                    coords.append([lat, lon])
+                                except:
+                                    continue
+                        if len(coords) >= 2:
+                            all_routes.append({
+                                "name": provider_name,
+                                "color": color,
+                                "coords": coords
+                            })
+                            added += 1
 
                 print(f"   {provider_name}: {added} clean individual fiber lines")
 
