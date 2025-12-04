@@ -1535,9 +1535,9 @@ def coverage_report():
 
     return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
 
-// ======================================================= //
-// === FULL NATIONAL MAP ================================= //
-// ======================================================= //
+# =======================================================
+# === FULL NATIONAL MAP =================================
+# =======================================================
 @erate_bp.route('/coverage-map-data')
 def coverage_map_data():
     print("\n=== NATIONAL FIBER MAP – NDJSON STREAMING v4 – INSTANT RENDER ===")
@@ -1615,7 +1615,7 @@ def coverage_map_data():
 
     return Response(generate(), mimetype='application/x-ndjson')
 
-// === ADD TO EXPORT FILE ON CLICK ======================= //
+# === ADD TO EXPORT FILE ON CLICK =======================
 @erate_bp.route('/add-to-export', methods=['POST'])
 def add_to_export():
     if 'username' not in session:
@@ -1705,7 +1705,7 @@ def add_to_export():
         current_app.logger.error(f"Export failed: {e}")
         return jsonify({"error": "Server error"}), 500
 
-// ======= DOWNLOAD EXPORT CSV ============ //
+# ======= DOWNLOAD EXPORT CSV ============ 
 @erate_bp.route('/download-export')
 def download_export():
     if 'username' not in session:
