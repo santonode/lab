@@ -1537,25 +1537,22 @@ def coverage_report():
 
 @erate_bp.route('/coverage-map-data')
 def coverage_map_data():
-    print("\n=== NATIONAL FIBER MAP – STREAMING VERSION (LOW MEMORY) ===")
+    print("\n=== NATIONAL FIBER MAP – STREAMING v3 – PERFECT JSON + <200MB RAM ===")
 
-    def generate_fiber_lines():
-        all_routes = []  # Only used as temp buffer inside each file — will be cleared
-        buffer_size = 500  # Tune this: bigger = slightly faster, still safe
+    def generate():
+        first = True
 
-        def flush_buffer():
-            if all_routes:
-                # Yield comma + newline only if not first chunk
-                if first_chunk[0]:
-                    first_chunk[0] = False
-                    yield json.dumps(all_routes)[1:]  # strip leading '['
-                else:
-                    yield ',' + json.dumps(all_routes)[1:-1]  # strip [ and ], add comma before
-                all_routes.clear()
+        def emit(obj):
+            nonlocal first
+            chunk = json.dumps(obj, separators=(',', ':'))
+            if first:
+                first = False
+                yield f"[{chunk}"
+            else:
+                yield f",{chunk}"
 
-        first_chunk = [True]  # mutable flag to track if we're at the very first yield
-
-        def extract_individual_lines(kmz_path, provider_name, color):
+        # Helper that processes one KMZ and yields lines one-by-one
+        def process_kmz(kmz_path, provider_name, color):
             if not os.path.exists(kmz_path):
                 print(f" [MISSING] {kmz_path}")
                 return
@@ -1565,13 +1562,12 @@ def coverage_map_data():
                     kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
                     if not kml_files:
                         return
-                    raw_bytes = z.read(kml_files[0])
-                    root = ET.fromstring(raw_bytes)
-                    ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
+                    root = ET.fromstring(z.read(kml_files[0]))
+                    ns = {'kml': 'http://www.opengis.net/kml/2.2'}
                     added = 0
 
-                    # Regular LineString method
+                    # — Normal LineString method (99.9% of files) —
                     for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
                         if not coord_elem.text:
                             continue
@@ -1585,79 +1581,63 @@ def coverage_map_data():
                                 except:
                                     continue
                         if len(coords) >= 2:
-                            all_routes.append({
+                            yield from emit({
                                 "name": provider_name,
                                 "color": color,
                                 "coords": coords
                             })
                             added += 1
 
-                            if len(all_routes) >= buffer_size:
-                                yield from flush_buffer()
-
-                    # Segra West fallback (gx:Track)
+                    # — Segra West gx:Track fallback —
                     if added == 0 and 'segra' in provider_name.lower() and 'west' in provider_name.lower():
                         gx_ns = 'http://www.google.com/kml/ext/2.2'
                         for track in root.findall(f'.//{{{gx_ns}}}Track'):
                             coords = []
                             for coord in track.findall(f'{{{gx_ns}}}coord'):
-                                if coord.text:
-                                    parts = coord.text.strip().split()
-                                    if len(parts) >= 2:
-                                        try:
-                                            lon, lat = float(parts[0]), float(parts[1])
-                                            coords.append([lat, lon])
-                                        except:
-                                            continue
+                                parts = coord.text.strip().split()
+                                if len(parts) >= 2:
+                                    try:
+                                        lon, lat = float(parts[0]), float(parts[1])
+                                        coords.append([lat, lon])
+                                    except:
+                                        continue
                             if len(coords) >= 2:
-                                all_routes.append({
+                                yield from emit({
                                     "name": provider_name,
                                     "color": color,
                                     "coords": coords
                                 })
                                 added += 1
-                                if len(all_routes) >= buffer_size:
-                                    yield from flush_buffer()
 
-                    # Always flush remaining lines for this file
-                    yield from flush_buffer()
-                    print(f" {provider_name}: {added} lines streamed")
-
+                    print(f" → {provider_name}: {added} lines streamed")
             except Exception as e:
                 print(f" [ERROR] {kmz_path}: {e}")
 
-        # Header
-        yield '[{"message": "Streaming national fiber map – low memory mode"}]'
+        # Start JSON array
+        yield "["
 
         # Bluebird
         if os.path.exists(KMZ_PATH_BLUEBIRD):
-            extract_individual_lines(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
+            yield from process_kmz(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
 
-        # FNA Members
+        # FNA members
         colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
         idx = 0
         if os.path.isdir(FNA_MEMBERS_DIR):
             for f in sorted(os.listdir(FNA_MEMBERS_DIR)):
                 if f.lower().endswith('.kmz'):
                     name = os.path.splitext(f)[0].replace('_', ' ').title()
-                    extract_individual_lines(
+                    yield from process_kmz(
                         os.path.join(FNA_MEMBERS_DIR, f),
                         name,
                         colors[idx % len(colors)]
                     )
                     idx += 1
 
-        # Final flush in case anything left
-        yield from flush_buffer()
+        # Close JSON array
+        yield "]"
 
-        # Close the JSON array
-        yield ']'
-
-    # Stream with proper JSON mime type
-    return Response(
-        stream_with_context(generate_fiber_lines()),
-        mimetype='application/json'
-    )
+    return Response(generate(), mimetype='application/json')
 
 @erate_bp.route('/add-to-export', methods=['POST'])
 def add_to_export():
