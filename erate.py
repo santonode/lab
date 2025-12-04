@@ -1535,110 +1535,87 @@ def coverage_report():
 
     return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
 
+// ======================================================= //
+// === FULL NATIONAL MAP ================================= //
+// ======================================================= //
 @erate_bp.route('/coverage-map-data')
 def coverage_map_data():
-    print("\n=== NATIONAL FIBER MAP – STREAMING v3 – PERFECT JSON + <200MB RAM ===")
+    print("\n=== NATIONAL FIBER MAP – NDJSON STREAMING v4 – INSTANT RENDER ===")
 
-    def generate():
-        first = True
+    def process_kmz(kmz_path, provider_name, color):
+        if not os.path.exists(kmz_path):
+            print(f" [MISSING] {kmz_path}")
+            return
 
-        def emit(obj):
-            nonlocal first
-            chunk = json.dumps(obj, separators=(',', ':'))
-            if first:
-                first = False
-                yield f"[{chunk}"
-            else:
-                yield f",{chunk}"
+        try:
+            with zipfile.ZipFile(kmz_path, 'r') as z:
+                kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
+                if not kml_files:
+                    return
 
-        # Helper that processes one KMZ and yields lines one-by-one
-        def process_kmz(kmz_path, provider_name, color):
-            if not os.path.exists(kmz_path):
-                print(f" [MISSING] {kmz_path}")
-                return
+                root = ET.fromstring(z.read(kml_files[0]))
+                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+                added = 0
 
-            try:
-                with zipfile.ZipFile(kmz_path, 'r') as z:
-                    kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
-                    if not kml_files:
-                        return
+                # Standard LineString parsing
+                for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
+                    if not coord_elem.text:
+                        continue
+                    coords = []
+                    for token in coord_elem.text.strip().split():
+                        parts = token.split(',')
+                        if len(parts) >= 2:
+                            try:
+                                lon = float(parts[0])
+                                lat = float(parts[1])
+                                coords.append([lat, lon])
+                            except:
+                                continue
+                    if len(coords) >= 2:
+                        line = {"name": provider_name, "color": color, "coords": coords}
+                        yield json.dumps(line, separators=(',', ':')) + '\n'
+                        added += 1
 
-                    root = ET.fromstring(z.read(kml_files[0]))
-                    ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-                    added = 0
-
-                    # — Normal LineString method (99.9% of files) —
-                    for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
-                        if not coord_elem.text:
-                            continue
+                # Segra West gx:Track fallback
+                if added == 0 and 'segra' in provider_name.lower() and 'west' in provider_name.lower():
+                    gx_ns = 'http://www.google.com/kml/ext/2.2'
+                    for track in root.findall(f'.//{{{gx_ns}}}Track'):
                         coords = []
-                        for token in coord_elem.text.strip().split():
-                            parts = token.split(',')
-                            if len(parts) >= 2:
-                                try:
-                                    lon, lat = float(parts[0]), float(parts[1])
-                                    coords.append([lat, lon])
-                                except:
-                                    continue
-                        if len(coords) >= 2:
-                            yield from emit({
-                                "name": provider_name,
-                                "color": color,
-                                "coords": coords
-                            })
-                            added += 1
-
-                    # — Segra West gx:Track fallback —
-                    if added == 0 and 'segra' in provider_name.lower() and 'west' in provider_name.lower():
-                        gx_ns = 'http://www.google.com/kml/ext/2.2'
-                        for track in root.findall(f'.//{{{gx_ns}}}Track'):
-                            coords = []
-                            for coord in track.findall(f'{{{gx_ns}}}coord'):
+                        for coord in track.findall(f'{{{gx_ns}}}coord'):
+                            if coord.text:
                                 parts = coord.text.strip().split()
                                 if len(parts) >= 2:
                                     try:
-                                        lon, lat = float(parts[0]), float(parts[1])
+                                        lon = float(parts[0])
+                                        lat = float(parts[1])
                                         coords.append([lat, lon])
                                     except:
                                         continue
                             if len(coords) >= 2:
-                                yield from emit({
-                                    "name": provider_name,
-                                    "color": color,
-                                    "coords": coords
-                                })
+                                line = {"name": provider_name, "color": color, "coords": coords}
+                                yield json.dumps(line, separators=(',', ':')) + '\n'
                                 added += 1
 
-                    print(f" → {provider_name}: {added} lines streamed")
-            except Exception as e:
-                print(f" [ERROR] {kmz_path}: {e}")
+                print(f" → {provider_name}: {added} lines streamed")
+        except Exception as e:
+            print(f" [ERROR] {kmz_path}: {e}")
 
-        # Start JSON array
-        yield "["
-
-        # Bluebird
+    def generate():
         if os.path.exists(KMZ_PATH_BLUEBIRD):
             yield from process_kmz(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
 
-        # FNA members
         colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
         idx = 0
         if os.path.isdir(FNA_MEMBERS_DIR):
             for f in sorted(os.listdir(FNA_MEMBERS_DIR)):
                 if f.lower().endswith('.kmz'):
                     name = os.path.splitext(f)[0].replace('_', ' ').title()
-                    yield from process_kmz(
-                        os.path.join(FNA_MEMBERS_DIR, f),
-                        name,
-                        colors[idx % len(colors)]
-                    )
+                    yield from process_kmz(os.path.join(FNA_MEMBERS_DIR, f), name, colors[idx % len(colors)])
                     idx += 1
 
-        # Close JSON array
-        yield "]"
+    return Response(generate(), mimetype='application/x-ndjson')
 
-    return Response(generate(), mimetype='application/json')
-
+// === ADD TO EXPORT FILE ON CLICK ======================= //
 @erate_bp.route('/add-to-export', methods=['POST'])
 def add_to_export():
     if 'username' not in session:
@@ -1728,6 +1705,7 @@ def add_to_export():
         current_app.logger.error(f"Export failed: {e}")
         return jsonify({"error": "Server error"}), 500
 
+// ======= DOWNLOAD EXPORT CSV ============ //
 @erate_bp.route('/download-export')
 def download_export():
     if 'username' not in session:
