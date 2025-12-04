@@ -706,11 +706,24 @@
                     });
         }
 
-        // === OPEN NATIONAL MAP FROM FOOTER ===
+        // === OPEN NATIONAL MAP FROM FOOTER + RE-ENABLE TABS ===
         document.getElementById('coverage-link').addEventListener('click', function(e) {
                 e.preventDefault();
                 document.getElementById('coverage-modal').classList.add('show');
-                switchCoverageView('map');
+
+                // RE-ATTACH TAB BUTTON LISTENERS (they don't exist until modal opens!)
+                document.querySelectorAll('.tab-btn').forEach(btn => {
+                        // Remove any old listener first
+                        btn.onclick = null;
+                        btn.addEventListener('click', () => {
+                                const view = btn.id === 'btn-provider' ? 'by_provider' :
+                                             btn.id === 'btn-state'     ? 'by_state'     : 'map';
+                                switchCoverageView(view);
+                        });
+                });
+
+                // Optional: start on Provider list instead of map
+                switchCoverageView('by_provider');  // ← change to 'map' if you prefer
         });
 
         // RE-ENABLE "BY PROVIDER" AND "BY STATE" TABS
