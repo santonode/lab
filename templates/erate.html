@@ -712,6 +712,15 @@
                 document.getElementById('coverage-modal').classList.add('show');
                 switchCoverageView('map');
         });
+
+        // RE-ENABLE "BY PROVIDER" AND "BY STATE" TABS
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                        const view = btn.id === 'btn-provider' ? 'by_provider' :
+                                     btn.id === 'btn-state'     ? 'by_state'     : 'map';
+                        switchCoverageView(view);
+                });
+        });
         
     </script>
     
