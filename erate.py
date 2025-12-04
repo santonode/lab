@@ -20,7 +20,9 @@ import zipfile
 import xml.etree.ElementTree as ET
 import hashlib
 import re
+import json
 
+from flask import Response, stream_with_context
 from flask import jsonify
 from models import Erate  # ← For querying the applicant
 
@@ -1533,54 +1535,68 @@ def coverage_report():
 
     return "<br>".join(lines), 200, {'Content-Type': 'text/html; charset=utf-8'}
 
-# === FINAL WINNER: INDIVIDUAL SEGMENTS + NO POLYGONS + FAST + MOBILE PERFECT ===
 @erate_bp.route('/coverage-map-data')
 def coverage_map_data():
-    print("\n=== NATIONAL FIBER MAP – FULLY WORKING – ALL 280K+ LINES LOADED ===")
-    all_routes = []
+    print("\n=== NATIONAL FIBER MAP – STREAMING VERSION (LOW MEMORY) ===")
 
-    def extract_individual_lines(kmz_path, provider_name, color):
-        if not os.path.exists(kmz_path):
-            print(f"   [MISSING] {kmz_path}")
-            return
+    def generate_fiber_lines():
+        all_routes = []  # Only used as temp buffer inside each file — will be cleared
+        buffer_size = 500  # Tune this: bigger = slightly faster, still safe
 
-        try:
-            with zipfile.ZipFile(kmz_path, 'r') as z:
-                kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
-                if not kml_files:
-                    return
+        def flush_buffer():
+            if all_routes:
+                # Yield comma + newline only if not first chunk
+                if first_chunk[0]:
+                    first_chunk[0] = False
+                    yield json.dumps(all_routes)[1:]  # strip leading '['
+                else:
+                    yield ',' + json.dumps(all_routes)[1:-1]  # strip [ and ], add comma before
+                all_routes.clear()
 
-                raw_bytes = z.read(kml_files[0])
-                root = ET.fromstring(raw_bytes)
-                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+        first_chunk = [True]  # mutable flag to track if we're at the very first yield
 
-                added = 0
+        def extract_individual_lines(kmz_path, provider_name, color):
+            if not os.path.exists(kmz_path):
+                print(f" [MISSING] {kmz_path}")
+                return
 
-                # MAIN METHOD — works for 99.9% of files (Bluebird, Segra East, Hargray, etc.)
-                for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
-                    if not coord_elem.text:
-                        continue
-                    coords = []
-                    for token in coord_elem.text.strip().split():
-                        parts = token.split(',')
-                        if len(parts) >= 2:
-                            try:
-                                lon, lat = float(parts[0]), float(parts[1])
-                                coords.append([lat, lon])
-                            except:
-                                continue
-                    if len(coords) >= 2:
-                        all_routes.append({
-                            "name": provider_name,
-                            "color": color,
-                            "coords": coords
-                        })
-                        added += 1
+            try:
+                with zipfile.ZipFile(kmz_path, 'r') as z:
+                    kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
+                    if not kml_files:
+                        return
+                    raw_bytes = z.read(kml_files[0])
+                    root = ET.fromstring(raw_bytes)
+                    ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
-                # SEGRA WEST SPECIAL CASE — ONLY runs if normal method found nothing
-                if added == 0 and 'segra' in provider_name.lower() and 'west' in provider_name.lower():
-                    try:
-                        print(f"   [SEGRA WEST MODE] Using gx:Track fallback...")
+                    added = 0
+
+                    # Regular LineString method
+                    for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
+                        if not coord_elem.text:
+                            continue
+                        coords = []
+                        for token in coord_elem.text.strip().split():
+                            parts = token.split(',')
+                            if len(parts) >= 2:
+                                try:
+                                    lon, lat = float(parts[0]), float(parts[1])
+                                    coords.append([lat, lon])
+                                except:
+                                    continue
+                        if len(coords) >= 2:
+                            all_routes.append({
+                                "name": provider_name,
+                                "color": color,
+                                "coords": coords
+                            })
+                            added += 1
+
+                            if len(all_routes) >= buffer_size:
+                                yield from flush_buffer()
+
+                    # Segra West fallback (gx:Track)
+                    if added == 0 and 'segra' in provider_name.lower() and 'west' in provider_name.lower():
                         gx_ns = 'http://www.google.com/kml/ext/2.2'
                         for track in root.findall(f'.//{{{gx_ns}}}Track'):
                             coords = []
@@ -1589,8 +1605,7 @@ def coverage_map_data():
                                     parts = coord.text.strip().split()
                                     if len(parts) >= 2:
                                         try:
-                                            lon = float(parts[0])
-                                            lat = float(parts[1])
+                                            lon, lat = float(parts[0]), float(parts[1])
                                             coords.append([lat, lon])
                                         except:
                                             continue
@@ -1601,37 +1616,48 @@ def coverage_map_data():
                                     "coords": coords
                                 })
                                 added += 1
-                        if added > 0:
-                            print(f"   {provider_name}: {len(coords)} points loaded via gx:Track (Segra West)")
-                    except Exception as e:
-                        print(f"   [SEGRA WEST FALLBACK FAILED] {e}")
+                                if len(all_routes) >= buffer_size:
+                                    yield from flush_buffer()
 
-                print(f"   {provider_name}: {added} clean individual fiber lines loaded")
+                    # Always flush remaining lines for this file
+                    yield from flush_buffer()
+                    print(f" {provider_name}: {added} lines streamed")
 
-        except Exception as e:
-            print(f"   [ERROR] {kmz_path}: {e}")
+            except Exception as e:
+                print(f" [ERROR] {kmz_path}: {e}")
 
-    # Bluebird
-    if os.path.exists(KMZ_PATH_BLUEBIRD):
-        extract_individual_lines(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
+        # Header
+        yield '[{"message": "Streaming national fiber map – low memory mode"}]'
 
-    # FNA Members
-    colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
-    idx = 0
-    if os.path.isdir(FNA_MEMBERS_DIR):
-        for f in sorted(os.listdir(FNA_MEMBERS_DIR)):
-            if f.lower().endswith('.kmz'):
-                name = os.path.splitext(f)[0].replace('_', ' ').title()
-                extract_individual_lines(
-                    os.path.join(FNA_MEMBERS_DIR, f),
-                    name,
-                    colors[idx % len(colors)]
-                )
-                idx += 1
+        # Bluebird
+        if os.path.exists(KMZ_PATH_BLUEBIRD):
+            extract_individual_lines(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
 
-    total = len(all_routes)
-    print(f"\nBEST MAP EVER: {total:,} individual fiber lines loaded — ALL PROVIDERS WORKING!\n")
-    return jsonify(all_routes)
+        # FNA Members
+        colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
+        idx = 0
+        if os.path.isdir(FNA_MEMBERS_DIR):
+            for f in sorted(os.listdir(FNA_MEMBERS_DIR)):
+                if f.lower().endswith('.kmz'):
+                    name = os.path.splitext(f)[0].replace('_', ' ').title()
+                    extract_individual_lines(
+                        os.path.join(FNA_MEMBERS_DIR, f),
+                        name,
+                        colors[idx % len(colors)]
+                    )
+                    idx += 1
+
+        # Final flush in case anything left
+        yield from flush_buffer()
+
+        # Close the JSON array
+        yield ']'
+
+    # Stream with proper JSON mime type
+    return Response(
+        stream_with_context(generate_fiber_lines()),
+        mimetype='application/json'
+    )
 
 @erate_bp.route('/add-to-export', methods=['POST'])
 def add_to_export():
