@@ -1545,13 +1545,12 @@ def coverage_map_data():
             return
 
         try:
-            with zipfile.ZipFile(kmz_path, 'r) as z:
+            with zipfile.ZipFile(kmz_path, 'r') as z:        # ← Fixed: was 'r)  → now 'r'
                 kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
                 if not kml_files:
                     return
 
-                # The KMZ files are now CLEAN (thanks to your .bat fix)
-                # No more duplicate xmlns, no more kml: prefixes
+                # After your .bat fix, the KMZ files are clean → no more xmlns or kml: prefixes
                 root = ET.fromstring(z.read(kml_files[0]))
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
