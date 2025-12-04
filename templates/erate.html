@@ -649,98 +649,60 @@
         // === LOAD FULL NATIONAL MAP ==========
         function loadFullFiberMap() {
                 const container = document.getElementById('coverage-map-container');
-                const mapEl = document.getElementById('coverage-map');
-
                 container.style.display = 'block';
                 document.getElementById('coverage-body').style.display = 'block';
-                document.getElementById('coverage-loading').innerHTML = `
-                    <div style="text-align:center; padding:40px; color:#1a5d57;">
-                        <div class="spinner" style="width:60px; height:60px; margin:0 auto 20px;"></div>
-                        <div style="font-size:1.2rem; font-weight:600;">Loading national fiber map...<br>
-                        <small style="color:#666;">Streaming 380k+ miles progressively...</small></div>
-                    </div>`;
                 document.getElementById('coverage-loading').style.display = 'block';
                 document.body.style.cursor = 'progress';
 
                 if (coverageMap) coverageMap.remove();
-                mapEl.innerHTML = "";
-
                 coverageMap = L.map('coverage-map').setView([39.8, -98.5], 5);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     attribution: '© OpenStreetMap'
                 }).addTo(coverageMap);
 
-                let totalLines = 0;
-                let decoder = new TextDecoder();
-                let buffer = '';
+                let total = 0;
+                const decoder = new TextDecoder();
 
                 fetch('/erate/coverage-map-data')
-                    .then(response => {
-                        if (!response.ok) throw new Error('Network error');
-                        const reader = response.body.getReader();
-
-                        function read() {
-                            reader.read().then(({ done, value }) => {
+                    .then(r => r.body.getReader())
+                    .then(reader => {
+                        function pump() {
+                            reader.read().then(({done, value}) => {
                                 if (done) {
                                     document.getElementById('coverage-loading').style.display = 'none';
                                     document.body.style.cursor = 'default';
-                                    console.log(`Map fully loaded: ${totalLines.toLocaleString()} fiber lines`);
+                                    console.log(`Map complete – ${total.toLocaleString()} fiber lines rendered`);
                                     return;
                                 }
-
-                                buffer += decoder.decode(value, { stream: true });
-
-                                let boundary = buffer.indexOf('},{');
-                                while (boundary !== -1) {
-                                    if (buffer.startsWith('[{')) {
-                                        const objStr = buffer.slice(1, boundary + 1);
-                                        buffer = buffer.slice(boundary + 2);
-                                        processObject(objStr + '}');
-                                    } else {
-                                        const objStr = buffer.slice(0, boundary + 1);
-                                        buffer = buffer.slice(boundary + 2);
-                                        processObject(objStr + '}');
-                                    }
-                                    boundary = buffer.indexOf('},{');
+                                const chunk = decoder.decode(value, {stream: true});
+                                const lines = chunk.split('\n');
+                                for (const line of lines) {
+                                    if (!line.trim()) continue;
+                                    try {
+                                        const obj = JSON.parse(line);
+                                        if (obj.coords && obj.coords.length > 1) {
+                                            L.polyline(obj.coords, {
+                                                color: obj.color || '#dc3545',
+                                                weight: 2.5,
+                                                opacity: 0.8
+                                            }).addTo(coverageMap);
+                                            total++;
+                                            if (total % 5000 === 0) {
+                                                document.querySelector('#coverage-loading small').textContent =
+                                                    `Rendered ${total.toLocaleString()}+ lines…`;
+                                            }
+                                        }
+                                    } catch(e) {}
                                 }
-
-                                if (buffer.endsWith(']}')) {
-                                    processObject(buffer.slice(0, -2));
-                                    buffer = '';
-                                }
-
-                                read();
+                                pump();
                             });
                         }
-
-                        function processObject(jsonStr) {
-                            try {
-                                const route = JSON.parse(jsonStr);
-                                if (route.coords && route.coords.length > 1) {
-                                    L.polyline(route.coords, {
-                                        color: route.color || '#dc3545',
-                                        weight: 2.5,
-                                        opacity: 0.8
-                                    }).addTo(coverageMap);
-                                    totalLines++;
-
-                                    if (totalLines % 5000 === 0) {
-                                        document.querySelector('#coverage-loading small').textContent =
-                                            `Rendered ${totalLines.toLocaleString()}+ fiber lines...`;
-                                    }
-                                }
-                            } catch (e) {
-                                // skip malformed chunk (should never happen)
-                            }
-                        }
-
-                        read();
+                        pump();
                     })
                     .catch(err => {
-                        console.error('Stream failed:', err);
+                        console.error(err);
                         document.getElementById('coverage-loading').innerHTML =
-                            '<div style="color:#dc3545; padding:30px;">Map failed to load – please refresh</div>';
-                        document.body.style.cursor = 'default';
+                            '<div style="color:#dc3545;padding:30px;">Failed to load map</div>';
                     });
         }
 
