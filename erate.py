@@ -1545,16 +1545,18 @@ def coverage_map_data():
             return
 
         try:
-            with zipfile.ZipFile(kmz_path, 'r') as z:        # ← Fixed: was 'r)  → now 'r'
+            with zipfile.ZipFile(kmz_path, 'r') as z:
                 kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
                 if not kml_files:
                     return
 
-                # After your .bat fix, the KMZ files are clean → no more xmlns or kml: prefixes
-                root = ET.fromstring(z.read(kml_files[0]))
+                raw_bytes = z.read(kml_files[0])
+                root = ET.fromstring(raw_bytes)
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
                 added = 0
+
+                # MAIN METHOD — works for 99.9% of files (Bluebird, Segra East, Hargray, etc.)
                 for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
                     if not coord_elem.text:
                         continue
@@ -1574,6 +1576,35 @@ def coverage_map_data():
                             "coords": coords
                         })
                         added += 1
+
+                # SEGRA WEST SPECIAL CASE — ONLY runs if normal method found nothing
+                if added == 0 and 'segra' in provider_name.lower() and 'west' in provider_name.lower():
+                    try:
+                        print(f"   [SEGRA WEST MODE] Using gx:Track fallback...")
+                        gx_ns = 'http://www.google.com/kml/ext/2.2'
+                        for track in root.findall(f'.//{{{gx_ns}}}Track'):
+                            coords = []
+                            for coord in track.findall(f'{{{gx_ns}}}coord'):
+                                if coord.text:
+                                    parts = coord.text.strip().split()
+                                    if len(parts) >= 2:
+                                        try:
+                                            lon = float(parts[0])
+                                            lat = float(parts[1])
+                                            coords.append([lat, lon])
+                                        except:
+                                            continue
+                            if len(coords) >= 2:
+                                all_routes.append({
+                                    "name": provider_name,
+                                    "color": color,
+                                    "coords": coords
+                                })
+                                added += 1
+                        if added > 0:
+                            print(f"   {provider_name}: {len(coords)} points loaded via gx:Track (Segra West)")
+                    except Exception as e:
+                        print(f"   [SEGRA WEST FALLBACK FAILED] {e}")
 
                 print(f"   {provider_name}: {added} clean individual fiber lines loaded")
 
