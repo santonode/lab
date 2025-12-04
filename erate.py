@@ -1545,25 +1545,14 @@ def coverage_map_data():
             return
 
         try:
-            with zipfile.ZipFile(kmz_path, 'r') as z:
+            with zipfile.ZipFile(kmz_path, 'r) as z:
                 kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
                 if not kml_files:
                     return
 
-                raw_text = z.read(kml_files[0]).decode('utf-8', errors='ignore')
-
-                # FINAL NUCLEAR FIX — REMOVE ALL XMLNS DECLARATIONS COMPLETELY
-                raw_text = re.sub(r'xmlns(?::\w+)?="[^"]*"', '', raw_text)
-
-                # Remove XML header and xsi garbage
-                raw_text = re.sub(r'<\?xml[^>]*>\??', '', raw_text)
-                raw_text = re.sub(r'\s*xsi:[^=]+="[^"]*"', '', raw_text)
-
-                # CRITICAL: Add back the ONE correct default namespace
-                if '<kml' in raw_text:
-                    raw_text = raw_text.replace('<kml', '<kml xmlns="http://www.opengis.net/kml/2.2"', 1)
-
-                root = ET.fromstring(raw_text.encode('utf-8'))
+                # The KMZ files are now CLEAN (thanks to your .bat fix)
+                # No more duplicate xmlns, no more kml: prefixes
+                root = ET.fromstring(z.read(kml_files[0]))
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
                 added = 0
