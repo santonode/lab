@@ -706,6 +706,13 @@
                     });
         }
 
+        // === OPEN NATIONAL MAP FROM FOOTER ===
+        document.getElementById('coverage-link').addEventListener('click', function(e) {
+                e.preventDefault();
+                document.getElementById('coverage-modal').classList.add('show');
+                switchCoverageView('map');
+        });
+        
     </script>
     
     <!-- DETAILS MODAL -->
