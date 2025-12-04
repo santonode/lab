@@ -1538,26 +1538,51 @@ def coverage_report():
 # =======================================================
 # === FULL NATIONAL MAP =================================
 # =======================================================
+# NEW: Static overview endpoint for polygons
+@erate_bp.route('/coverage-overview')
+def coverage_overview():
+    # Looks for pre-computed polygons in static/polygons/
+    polygons = []
+    folder = os.path.join(app.static_folder, 'polygons')
+    if not os.path.exists(folder):
+        return jsonify([])
+    
+    for file in sorted(os.listdir(folder)):
+        if file.endswith('.geojson'):
+            provider_name = os.path.splitext(file)[0].replace('_', ' ').title()
+            with open(os.path.join(folder, file), 'r') as f:
+                geojson = json.load(f)
+                # Use same colors as your lines
+                color = "#0066cc" if "bluebird" in provider_name.lower() else \
+                        ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"][hash(provider_name) % 10]
+                polygons.append({
+                    "name": provider_name,
+                    "color": color,
+                    "geojson": geojson
+                })
+    return jsonify(polygons)
+
+# === NATIONAL MAP RENDER ===
+# UPDATED: Detailed lines only when zoomed in
+# ===========================
 @erate_bp.route('/coverage-map-data')
 def coverage_map_data():
-    print("\n=== NATIONAL FIBER MAP – NDJSON STREAMING v4 – INSTANT RENDER ===")
-
+    print("\n=== NATIONAL FIBER MAP – DETAILED LINES (ZOOMED IN ONLY) ===")
+    
     def process_kmz(kmz_path, provider_name, color):
         if not os.path.exists(kmz_path):
             print(f" [MISSING] {kmz_path}")
             return
-
         try:
             with zipfile.ZipFile(kmz_path, 'r') as z:
                 kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
                 if not kml_files:
                     return
-
                 root = ET.fromstring(z.read(kml_files[0]))
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
                 added = 0
 
-                # Standard LineString parsing
+                # Standard lines
                 for coord_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
                     if not coord_elem.text:
                         continue
@@ -1566,8 +1591,7 @@ def coverage_map_data():
                         parts = token.split(',')
                         if len(parts) >= 2:
                             try:
-                                lon = float(parts[0])
-                                lat = float(parts[1])
+                                lon, lat = float(parts[0]), float(parts[1])
                                 coords.append([lat, lon])
                             except:
                                 continue
@@ -1576,7 +1600,7 @@ def coverage_map_data():
                         yield json.dumps(line, separators=(',', ':')) + '\n'
                         added += 1
 
-                # Segra West gx:Track fallback
+                # Segra West fallback
                 if added == 0 and 'segra' in provider_name.lower() and 'west' in provider_name.lower():
                     gx_ns = 'http://www.google.com/kml/ext/2.2'
                     for track in root.findall(f'.//{{{gx_ns}}}Track'):
@@ -1586,8 +1610,7 @@ def coverage_map_data():
                                 parts = coord.text.strip().split()
                                 if len(parts) >= 2:
                                     try:
-                                        lon = float(parts[0])
-                                        lat = float(parts[1])
+                                        lon, lat = float(parts[0]), float(parts[1])
                                         coords.append([lat, lon])
                                     except:
                                         continue
@@ -1595,7 +1618,6 @@ def coverage_map_data():
                                 line = {"name": provider_name, "color": color, "coords": coords}
                                 yield json.dumps(line, separators=(',', ':')) + '\n'
                                 added += 1
-
                 print(f" → {provider_name}: {added} lines streamed")
         except Exception as e:
             print(f" [ERROR] {kmz_path}: {e}")
@@ -1603,7 +1625,6 @@ def coverage_map_data():
     def generate():
         if os.path.exists(KMZ_PATH_BLUEBIRD):
             yield from process_kmz(KMZ_PATH_BLUEBIRD, "Bluebird Network", "#0066cc")
-
         colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
         idx = 0
         if os.path.isdir(FNA_MEMBERS_DIR):
