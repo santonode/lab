@@ -1550,18 +1550,18 @@ def coverage_map_data():
                 if not kml_files:
                     return
 
-                raw_bytes = z.read(kml_files[0])
-                raw_text = raw_bytes.decode('utf-8', errors='ignore')
+                raw_text = z.read(kml_files[0]).decode('utf-8', errors='ignore')
 
-                # FINAL BULLETPROOF FIX — removes ALL xmlns declarations, no matter how many or where
+                # FINAL NUCLEAR FIX — REMOVE ALL XMLNS DECLARATIONS COMPLETELY
                 raw_text = re.sub(r'xmlns(?::\w+)?="[^"]*"', '', raw_text)
 
-                # Remove <?xml header and xsi:schemaLocation junk
-                raw_text = re.sub(r'<\?xml[^>]*>', '', raw_text)
+                # Remove XML header and xsi garbage
+                raw_text = re.sub(r'<\?xml[^>]*>\??', '', raw_text)
                 raw_text = re.sub(r'\s*xsi:[^=]+="[^"]*"', '', raw_text)
 
-                # Re-add the ONE correct default namespace so ElementTree knows what kml: means
-                raw_text = raw_text.replace('<kml', '<kml xmlns="http://www.opengis.net/kml/2.2"', 1)
+                # CRITICAL: Add back the ONE correct default namespace
+                if '<kml' in raw_text:
+                    raw_text = raw_text.replace('<kml', '<kml xmlns="http://www.opengis.net/kml/2.2"', 1)
 
                 root = ET.fromstring(raw_text.encode('utf-8'))
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
