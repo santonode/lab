@@ -434,20 +434,22 @@
         <div class="spinner"></div>
     </div>
     <div class="container">
-<        div class="header">
-            {% if session.username %}
-                <span class="user-info" id="user-settings-btn" style="cursor:pointer; text-decoration:underline;">
-                    <span id="header-username-clean">{{ session.username }}</span>
-                    <span class="points" id="points-display">Loading...</span>
-                </span>
-            {% else %}
-                <span class="user-info">Guest <span class="points" id="points-display">Pts: 25</span></span>
-            {% endif %}
-            <h1>E-Rate</h1>
-            {% if session.username %}
-                <a href="{{ url_for('erate.logout') }}" class="logout">Logout</a>
-            {% endif %}
-        </div>
+            <div class="header">
+                {% if session.username %}
+                    <span class="user-info" id="user-settings-btn" style="cursor:pointer; text-decoration:underline;">
+                        <span id="header-username-clean">{{ session.username }}</span>
+                        <span class="points" id="points-display">Loading...</span>
+                    </span>
+                {% else %}
+                    <span class="user-info">
+                        Guest <span class="points" id="points-display">Pts: 25</span>
+                    </span>
+                {% endif %}
+                <h1>E-Rate</h1>
+                {% if session.username %}
+                    <a href="{{ url_for('erate.logout') }}" class="logout">Logout</a>
+                {% endif %}
+            </div>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -749,20 +751,14 @@
             }
 
             let clean = raw.trim();
-
-            // Strip everything from @ onward (email usernames)
-            if (clean.includes('@')) {
-                clean = clean.split('@')[0];
-            }
-
-            // Keep only first word if spaces exist
+            if (clean.includes('@')) clean = clean.split('@')[0];
             clean = clean.split(/\s+/)[0];
-
-            // Capitalize first letter
             clean = clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
 
             displayEl.textContent = clean;
         }
+
+        document.addEventListener('DOMContentLoaded', cleanHeaderUsername);
 
         document.addEventListener('DOMContentLoaded', cleanHeaderUsername);
         
