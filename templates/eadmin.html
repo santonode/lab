@@ -158,6 +158,13 @@
         .footer-links a:hover {
             color: #0056b3;
         }
+        /* ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←← */
+        /* FIX HORIZONTAL OVERFLOW IN ADMIN TABLE */
+        .card { overflow-x: auto; }                     /* scroll only when needed */
+        table { min-width: 1000px; }                    /* keep all columns visible */
+        @media (max-width: 1200px) { table { font-size: 0.85rem; } }
+        @media (max-width: 900px)  { table { font-size: 0.8rem; } .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; } }
+        /* ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←← */
     </style>
 </head>
 <body>
