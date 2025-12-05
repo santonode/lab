@@ -434,12 +434,14 @@
         <div class="spinner"></div>
     </div>
     <div class="container">
-        <div class="header">
+<        div class="header">
             {% if session.username %}
                 <span class="user-info" id="user-settings-btn" style="cursor:pointer; text-decoration:underline;">
-                    {{ session.username }} 
+                    <span id="header-username-clean">{{ session.username }}</span>
                     <span class="points" id="points-display">Loading...</span>
                 </span>
+            {% else %}
+                <span class="user-info">Guest <span class="points" id="points-display">Pts: 25</span></span>
             {% endif %}
             <h1>E-Rate</h1>
             {% if session.username %}
@@ -734,6 +736,35 @@
                         switchCoverageView(view);
                 });
         });
+
+        // ——— CLEAN USERNAME DISPLAY IN HEADER (visual only) ———
+        function cleanHeaderUsername() {
+            const raw = "{{ session.username|default('')|e }}";
+            const displayEl = document.getElementById('header-username-clean');
+            if (!displayEl) return;
+
+            if (!raw || raw.includes('guest_')) {
+                displayEl.textContent = 'Guest';
+                return;
+            }
+
+            let clean = raw.trim();
+
+            // Strip everything from @ onward (email usernames)
+            if (clean.includes('@')) {
+                clean = clean.split('@')[0];
+            }
+
+            // Keep only first word if spaces exist
+            clean = clean.split(/\s+/)[0];
+
+            // Capitalize first letter
+            clean = clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+
+            displayEl.textContent = clean;
+        }
+
+        document.addEventListener('DOMContentLoaded', cleanHeaderUsername);
         
     </script>
     
