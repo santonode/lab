@@ -5,3 +5,6 @@ psycopg[binary]==3.2.12
 requests>=2.28.0
 fastkml==1.4.0
 SQLAlchemy==2.0.35
+
+# Geospatial deps removed — polygons generated locally only
+# geopandas, shapely, fiona, pyproj, rtree, pandas no longer needed on Render
