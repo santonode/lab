@@ -184,6 +184,19 @@
             padding: 0.25rem 0.5rem !important;
             font-size: 0.8rem !important;
         }
+
+        /* MAKE EDIT & DELETE BUTTONS SIDE-BY-SIDE + TIGHT ROWS */
+        #usersTable td:last-child {
+            white-space: nowrap;                    /* prevents wrapping */
+            padding: 0.35rem 0.5rem !important;     /* tighter cell */
+        }
+        #usersTable .btn-sm {
+            display: inline-block !important;
+            margin: 0 4px !important;               /* small gap between buttons */
+            padding: 0.25rem 0.55rem !important;
+            font-size: 0.78rem !important;
+            min-width: 48px;
+        }
         
     </style>
 </head>
