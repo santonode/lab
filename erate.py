@@ -1380,8 +1380,25 @@ def admin():
     if session.get('is_santo'):
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT id, username, COALESCE(password, ''), user_type, points FROM users ORDER BY id")
-                users = [dict(zip(['id', 'username', 'password', 'user_type', 'points'], row)) for row in cur.fetchall()]
+                cur.execute("""
+                    SELECT 
+                        id, 
+                        username, 
+                        COALESCE(password, ''), 
+                        user_type, 
+                        points,
+                        COALESCE(ft, 100), 
+                        COALESCE(dm, 5.0),
+                        COALESCE("Email", ''), 
+                        COALESCE("MyState", ''), 
+                        COALESCE("Provider", '')
+                    FROM users 
+                    ORDER BY id
+                """)
+                users = [dict(zip([
+                    'id', 'username', 'password', 'user_type', 'points',
+                    'ft', 'dm', 'Email', 'MyState', 'Provider'
+                ], row)) for row in cur.fetchall()]
     return render_template('eadmin.html', users=users, session=session)
 
 @erate_bp.route('/set_guest', methods=['POST'])
