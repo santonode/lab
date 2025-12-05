@@ -651,91 +651,59 @@
                 const container = document.getElementById('coverage-map-container');
                 container.style.display = 'block';
                 document.getElementById('coverage-body').style.display = 'block';
-                document.getElementById('coverage-loading').innerHTML = `
-                    <div style="text-align:center;padding:40px;color:#1a5d57;">
-                        <div class="spinner" style="width:60px;height:60px;margin:0 auto 20px;"></div>
-                        <div style="font-size:1.2rem;font-weight:600;">Loading coverage areas...<br>
-                        <small style="color:#666;">Zoom in for detailed fiber lines</small></div>
-                    </div>`;
                 document.getElementById('coverage-loading').style.display = 'block';
+                document.body.style.cursor = 'progress';
 
                 if (coverageMap) coverageMap.remove();
-                coverageMap = L.map('coverage-map', {preferCanvas: true}).setView([39.8, -98.5], 5);
+                coverageMap = L.map('coverage-map').setView([39.8, -98.5], 5);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     attribution: '© OpenStreetMap'
                 }).addTo(coverageMap);
 
-                let polygonLayers = L.layerGroup().addTo(coverageMap);
-                let detailLayers = L.layerGroup().addTo(coverageMap);
+                let total = 0;
+                const decoder = new TextDecoder();
 
-                // Load coverage polygons
-                fetch('/erate/coverage-overview')
-                    .then(r => r.json())
-                    .then(providers => {
-                        providers.forEach(p => {
-                            L.geoJSON(p.geojson, {
-                                style: {
-                                    color: p.color,
-                                    weight: 2,
-                                    opacity: 0.9,
-                                    fillOpacity: 0.25
+                fetch('/erate/coverage-map-data')
+                    .then(r => r.body.getReader())
+                    .then(reader => {
+                        function pump() {
+                            reader.read().then(({done, value}) => {
+                                if (done) {
+                                    document.getElementById('coverage-loading').style.display = 'none';
+                                    document.body.style.cursor = 'default';
+                                    console.log(`Map complete – ${total.toLocaleString()} fiber lines rendered`);
+                                    return;
                                 }
-                            }).bindTooltip(p.name, {sticky: true}).addTo(polygonLayers);
-                        });
-                        document.getElementById('coverage-loading').style.display = 'none';
-                    });
-
-                // Switch modes on zoom
-                coverageMap.on('zoomend moveend', function() {
-                    const zoom = coverageMap.getZoom();
-                    if (zoom > 7) {
-                        polygonLayers.clearLayers();
-                        detailLayers.clearLayers();
-                        document.getElementById('coverage-loading').style.display = 'block';
-                        document.getElementById('coverage-loading').innerHTML = `<div style="padding:20px;color:#1a5d57;">Loading detailed fiber lines...</div>`;
-
-                        fetch('/erate/coverage-map-data')
-                            .then(r => r.body.getReader())
-                            .then(reader => {
-                                const decoder = new TextDecoder();
-                                function pump() {
-                                    reader.read().then(({done, value}) => {
-                                        if (done) {
-                                            document.getElementById('coverage-loading').style.display = 'none';
-                                            return;
+                                const chunk = decoder.decode(value, {stream: true});
+                                const lines = chunk.split('\n');
+                                for (const line of lines) {
+                                    if (!line.trim()) continue;
+                                    try {
+                                        const obj = JSON.parse(line);
+                                        if (obj.coords && obj.coords.length > 1) {
+                                            L.polyline(obj.coords, {
+                                                color: obj.color || '#dc3545',
+                                                weight: 2.5,
+                                                opacity: 0.8
+                                            }).addTo(coverageMap);
+                                            total++;
+                                            if (total % 5000 === 0) {
+                                                document.querySelector('#coverage-loading small').textContent =
+                                                    `Rendered ${total.toLocaleString()}+ lines…`;
+                                            }
                                         }
-                                        const chunk = decoder.decode(value, {stream: true});
-                                        chunk.split('\n').forEach(line => {
-                                            if (!line.trim()) return;
-                                            try {
-                                                const obj = JSON.parse(line);
-                                                if (obj.coords?.length > 1) {
-                                                    L.polyline(obj.coords, {
-                                                        color: obj.color,
-                                                        weight: 2.5,
-                                                        opacity: 0.85
-                                                    }).addTo(detailLayers);
-                                                }
-                                            } catch(e) {}
-                                        });
-                                        pump();
-                                    });
+                                    } catch(e) {}
                                 }
                                 pump();
                             });
-                    } else {
-                        detailLayers.clearLayers();
-                        polygonLayers.clearLayers();
-                        // Reload polygons
-                        fetch('/erate/coverage-overview').then(r => r.json()).then(providers => {
-                            providers.forEach(p => {
-                                L.geoJSON(p.geojson, {
-                                    style: {color: p.color, weight: 2, opacity: 0.9, fillOpacity: 0.25}
-                                }).bindTooltip(p.name, {sticky: true}).addTo(polygonLayers);
-                            });
-                        });
-                    }
-                });
+                        }
+                        pump();
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        document.getElementById('coverage-loading').innerHTML =
+                            '<div style="color:#dc3545;padding:30px;">Failed to load map</div>';
+                    });
         }
 
         // === OPEN NATIONAL MAP FROM FOOTER + RE-ENABLE TABS ===
