@@ -1294,25 +1294,47 @@ def admin():
         action = request.form.get('action')
         if action == 'register':
             username = request.form['username'].strip()
+            email    = request.form['email'].strip().lower()
             password = request.form['password']
-            if len(username) < 3 or len(password) < 4:
-                flash("Username ≥3, Password ≥4", "error")
+
+            # Validation
+            if len(username) < 3:
+                flash("Username must be 3+ characters", "error")
                 return redirect(url_for('erate.admin'))
-            with psycopg.connect(DATABASE_URL) as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT id FROM users WHERE username = %s", (username,))
-                    if cur.fetchone():
-                        flash("Username taken", "error")
-                        return redirect(url_for('erate.admin'))
-                    cur.execute(
-                        "INSERT INTO users (username, password, user_type, points) VALUES (%s, %s, %s, %s)",
-                        (username, hash_password(password), 'Member', 100)
-                    )
-                    conn.commit()
-            session['username'] = username
-            session['is_santo'] = (username == 'santo')
-            flash(f"Welcome, {username}! You have 100 points.", "success")
-            return redirect(url_for('erate.dashboard'))
+            if len(password) < 6:
+                flash("Password must be 6+ characters", "error")
+                return redirect(url_for('erate.admin'))
+            if not email or '@' not in email or '.' not in email.split('@')[-1]:
+                flash("Please enter a valid email address", "error")
+                return redirect(url_for('erate.admin'))
+
+            try:
+                with psycopg.connect(DATABASE_URL) as conn:
+                    with conn.cursor() as cur:
+                        # Prevent duplicate username OR email
+                        cur.execute('SELECT id FROM users WHERE username = %s OR "Email" = %s', (username, email))
+                        if cur.fetchone():
+                            flash("Username or email already in use", "error")
+                            return redirect(url_for('erate.admin'))
+
+                        # Create new member with email
+                        cur.execute("""
+                            INSERT INTO users 
+                                (username, password, "Email", user_type, points, ft, dm, "MyState")
+                            VALUES 
+                                (%s, %s, %s, 'Member', 100, 100, 5.0, 'KS')
+                        """, (username, hash_password(password), email))
+                        conn.commit()
+
+                session['username'] = username
+                session['is_santo'] = (username == 'santo')
+                flash(f"Welcome {username}! Account created with 100 points.", "success")
+                return redirect(url_for('erate.dashboard'))
+
+            except Exception as e:
+                log(f"Registration error: {e}")
+                flash("Registration failed — please try again", "error")
+                return redirect(url_for('erate.admin'))
         elif action == 'login':
             username = request.form['username'].strip()
             password = request.form['password']
