@@ -1346,24 +1346,38 @@ def admin():
                 flash("User deleted", "success")
             elif 'edit_user_id' in request.form:
                 user_id = request.form['edit_user_id']
-                username = request.form['new_username']
-                password = request.form['new_password']
-                points = request.form['new_points']
-                user_type = request.form['new_user_type']
+                username     = request.form['new_username'].strip()
+                password     = request.form.get('new_password', '').strip()
+                points       = int(request.form['new_points'])
+                user_type    = request.form['new_user_type']
+                email        = request.form.get('new_email', '').strip()
+                mystate      = request.form.get('new_mystate', 'KS')[:2].upper() or 'KS'
+                provider     = request.form.get('new_provider', '').strip()
+                ft           = max(10, min(1000, int(request.form.get('new_ft', 100))))
+                dm           = max(0.1, min(100.0, float(request.form.get('new_dm', 5.0))))
+
                 with psycopg.connect(DATABASE_URL) as conn:
                     with conn.cursor() as cur:
+                        sets = [
+                            "username = %s",
+                            "points = %s",
+                            "user_type = %s",
+                            "ft = %s",
+                            "dm = %s",
+                            '"Email" = %s',
+                            '"MyState" = %s',
+                            '"Provider" = %s'
+                        ]
+                        vals = [username, points, user_type, ft, dm, email, mystate, provider]
+
                         if password:
-                            cur.execute(
-                                "UPDATE users SET username=%s, password=%s, points=%s, user_type=%s WHERE id=%s",
-                                (username, hash_password(password), points, user_type, user_id)
-                            )
-                        else:
-                            cur.execute(
-                                "UPDATE users SET username=%s, points=%s, user_type=%s WHERE id=%s",
-                                (username, points, user_type, user_id)
-                            )
+                            sets.append("password = %s")
+                            vals.append(hash_password(password))
+
+                        vals.append(user_id)
+                        cur.execute(f"UPDATE users SET {', '.join(sets)} WHERE id = %s", vals)
                         conn.commit()
-                flash("User updated", "success")
+                flash("User updated successfully!", "success")
             elif 'add_user' in request.form:
                 username = request.form['username']
                 password = request.form['password']
