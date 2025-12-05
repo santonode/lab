@@ -245,7 +245,15 @@
                 </p>
                 {% if session.is_santo %}
                     <h2>User Management</h2>
-                    <table>
+                    <!-- USER FILTER TOGGLE -->
+                    <div style="margin-bottom: 1rem; text-align: right;">
+                        <label style="font-weight: 600; margin-right: 10px;">Filter:</label>
+                        <select id="userFilter" onchange="filterUsers()" style="padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); font-size: 0.95rem;">
+                            <option value="all">Show All Users</option>
+                            <option value="members">Show Only Members</option>
+                        </select>
+                    </div>
+                    <table id="usersTable">
                         <thead>
                             <tr>
                                 <th>ID</th>
@@ -374,6 +382,28 @@
                 document.getElementById('authModal').style.display = 'flex';
             {% endif %}
         });
+
+    function filterUsers() {
+        const filter = document.getElementById('userFilter').value;
+        const rows = document.querySelectorAll('#usersTable tbody tr');
+
+        rows.forEach(row => {
+            // Member rows have user_type = Member, guest rows have Guest
+            const typeCell = row.cells[6]; // Type column (0-based index)
+            if (!typeCell) return;
+
+            const isMember = typeCell.textContent.trim() === 'Member';
+            if (filter === 'all') {
+                row.style.display = '';
+            } else if (filter === 'members') {
+                row.style.display = isMember ? '' : 'none';
+            }
+        });
+    }
+
+    // Run on page load in case default is "members only"
+    document.addEventListener('DOMContentLoaded', filterUsers);
+        
     </script>
 </body>
 </html>
