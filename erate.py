@@ -117,63 +117,91 @@ try:
 except Exception as e:
     log("DB connection test: FAILED to %s", e)
 
-# === POINT SYSTEM ===
+# === POINT SYSTEM – FIXED FOR REAL + GUEST USERS ===
 def deduct_point():
-    if not session.get('username'):
-        return
-    username = session['username']
-    if username == 'guest':
-        ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-        if ip:
-            ip = ip.split(',')[0].strip()
-        else:
-            ip = request.remote_addr or 'unknown'
-        username = f"guest_{ip.replace('.', '')}"
- 
-    with psycopg.connect(DATABASE_URL) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT points FROM users WHERE username = %s", (username,))
-            row = cur.fetchone()
-            if not row or row[0] <= 0:
-                session.clear()
-                return
-            new_points = row[0] - 1
-            cur.execute("UPDATE users SET points = %s WHERE username = %s", (new_points, username))
-            conn.commit()
+    if 'username' not in session:
+        return False
 
-# === /points ENDPOINT ===
-@erate_bp.route('/points')
-def points():
-    if not session.get('username'):
-        return jsonify({"points": 0})
     username = session['username']
+
+    # Detect if this is a real registered user or a guest_xxx row
+    is_guest = username.startswith('guest_') or username == 'guest'
+
+    # For legacy 'guest' sessions, convert to real guest_xxx username
     if username == 'guest':
         ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-        if ip:
-            ip = ip.split(',')[0].strip()
-        else:
-            ip = request.remote_addr or 'unknown'
+        ip = ip.split(',')[0].strip() if ip else (request.remote_addr or 'unknown')
         username = f"guest_{ip.replace('.', '')}"
+
     try:
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT points FROM users WHERE username = %s", (username,))
                 row = cur.fetchone()
-                return jsonify({"points": row[0] if row and row[0] is not None else 0})
+
+                if not row or row[0] <= 0:
+                    # ONLY log out guests when out of points
+                    if is_guest:
+                        session.clear()
+                    return False
+
+                # Deduct 1 point
+                cur.execute(
+                    "UPDATE users SET points = points - 1 WHERE username = %s",
+                    (username,)
+                )
+                conn.commit()
+                return True
     except Exception as e:
-        log("Points API error: %s", e)
+        log(f"deduct_point error: {e}")
+        return False
+
+
+# === /points ENDPOINT – FIXED ===
+@erate_bp.route('/points')
+def points():
+    if 'username' not in session:
         return jsonify({"points": 0})
 
-# === /out-of-points ENDPOINT ===
+    username = session['username']
+    is_guest = username.startswith('guest_') or username == 'guest'
+
+    if username == 'guest':
+        ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        ip = ip.split(',')[0].strip() if ip else (request.remote_addr or 'unknown')
+        username = f"guest_{ip.replace('.', '')}"
+
+    try:
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT points FROM users WHERE username = %s", (username,))
+                row = cur.fetchone()
+                pts = row[0] if row and row[0] is not None else 0
+                return jsonify({"points": pts, "is_guest": is_guest})
+    except Exception as e:
+        log(f"Points API error: {e}")
+        return jsonify({"points": 0, "is_guest": True})
+
+
+# === /out-of-points ENDPOINT – FIXED ===
 @erate_bp.route('/out-of-points')
 def out_of_points():
-    if not session.get('username'):
+    if 'username' not in session:
         return jsonify({"message": "Session expired."})
+
     username = session['username']
-    if username == 'guest':
-        return jsonify({"message": "You have run out of click points and your guest account has been removed."})
+    is_guest = username.startswith('guest_') or username == 'guest'
+
+    if is_guest:
+        return jsonify({
+            "message": "Guest session ended – out of points.",
+            "is_guest": True
+        })
     else:
-        return jsonify({"message": "You have run out of click points. Email sales@santoelectronics.com to top up your account."})
+        return jsonify({
+            "message": "You are out of points. Contact sales@santoelectronics.com to add more.",
+            "is_guest": False
+        })
 
 # === SQL INSERT (70 columns) ===
 INSERT_SQL = '''
