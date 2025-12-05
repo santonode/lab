@@ -233,7 +233,17 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>ID</th><th>Username</th><th>Password (SHA256)</th><th>Type</th><th>Points</th><th>Actions</th>
+                                <th>ID</th>
+                                <th>Username</th>
+                                <th>Email</th>
+                                <th>State</th>
+                                <th>Provider</th>
+                                <th>Password (SHA256)</th>
+                                <th>Type</th>
+                                <th>Points</th>
+                                <th>FT</th>
+                                <th>DM</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -241,15 +251,20 @@
                             <tr>
                                 <td>{{ user.id }}</td>
                                 <td>{{ user.username }}</td>
-                                <td style="font-family:monospace;font-size:0.8rem;">
+                                <td style="font-size:0.9rem;">{{ user.Email or '' }}</td>
+                                <td style="text-align:center;">{{ user.MyState or '' }}</td>
+                                <td style="font-size:0.85rem;">{{ user.Provider or '' }}</td>
+                                <td style="font-family:monospace;font-size:0.75rem;">
                                     {% if user.password %}
-                                        {{ user.password[:16] }}...
+                                        {{ user.password[:12] }}...
                                     {% else %}
                                         <em>[none]</em>
                                     {% endif %}
                                 </td>
                                 <td>{{ user.user_type }}</td>
-                                <td>{{ user.points }}</td>
+                                <td style="text-align:center;font-weight:600;">{{ user.points }}</td>
+                                <td style="text-align:center;">{{ user.ft }}</td>
+                                <td style="text-align:center;">{{ user.dm }}</td>
                                 <td>
                                     <button class="btn btn-sm btn-primary" onclick="toggleEdit({{ loop.index }})">Edit</button>
                                     <form method="POST" style="display:inline;" onsubmit="return confirm('Delete {{ user.username }}?')">
@@ -259,17 +274,37 @@
                                 </td>
                             </tr>
                             <tr id="edit-{{ loop.index }}" style="display:none;">
-                                <td colspan="6">
+                                <td colspan="11">
                                     <form method="POST">
                                         <input type="hidden" name="edit_user_id" value="{{ user.id }}">
-                                        <input type="text" name="new_username" value="{{ user.username }}" required>
-                                        <input type="password" name="new_password" placeholder="New Password (leave blank to keep)">
-                                        <input type="number" name="new_points" value="{{ user.points }}" min="0">
-                                        <select name="new_user_type">
-                                            <option value="Guest" {% if user.user_type == 'Guest' %}selected{% endif %}>Guest</option>
-                                            <option value="Member" {% if user.user_type == 'Member' %}selected{% endif %}>Member</option>
-                                        </select>
-                                        <button type="submit" class="btn btn-success">Save</button>
+                                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">
+                                            <input type="text" name="new_username" value="{{ user.username }}" placeholder="Username" required>
+                                            <input type="email" name="new_email" value="{{ user.Email or '' }}" placeholder="Email">
+                                            <select name="new_mystate">
+                                                <option value="">-- State --</option>
+                                                {% set states = ['KS','MO','IL','IA','OK','AL','FL','GA','MI','OH','TX','CA'] %}
+                                                {% for s in states %}
+                                                    <option value="{{ s }}" {% if user.MyState == s %}selected{% endif %}>{{ s }}</option>
+                                                {% endfor %}
+                                            </select>
+                                            <select name="new_provider">
+                                                <option value="">None</option>
+                                                <option value="Bluebird Network" {% if user.Provider == 'Bluebird Network' %}selected{% endif %}>Bluebird Network</option>
+                                                <option value="FNA Network" {% if user.Provider == 'FNA Network' %}selected{% endif %}>FNA Network</option>
+                                                <option value="Segra EAST" {% if user.Provider == 'Segra EAST' %}selected{% endif %}>Segra EAST</option>
+                                                <option value="Segra WEST" {% if user.Provider == 'Segra WEST' %}selected{% endif %}>Segra WEST</option>
+                                            </select>
+                                            <input type="password" name="new_password" placeholder="New Password (blank = keep)">
+                                            <input type="number" name="new_points" value="{{ user.points }}" min="0">
+                                            <input type="number" name="new_ft" value="{{ user.ft }}" min="10" max="1000">
+                                            <input type="number" name="new_dm" value="{{ user.dm }}" step="0.1" min="0" max="100">
+                                            <select name="new_user_type">
+                                                <option value="Guest" {% if user.user_type == 'Guest' %}selected{% endif %}>Guest</option>
+                                                <option value="Member" {% if user.user_type == 'Member' %}selected{% endif %}>Member</option>
+                                            </select>
+                                            <div></div>
+                                            <button type="submit" class="btn btn-success">Save Changes</button>
+                                        </div>
                                     </form>
                                 </td>
                             </tr>
