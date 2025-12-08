@@ -1568,71 +1568,88 @@
             }
         });
 
-        // === USER SETTINGS MODAL – FINAL: READS ALL FIELDS + DISABLES SAVE FOR GUESTS ===
-        document.getElementById('user-settings-btn')?.addEventListener('click', () => {
-            fetch('/erate/user_settings')
-                .then(r => r.json())
-                .then(data => {
-                    // Populate all fields
-                    document.getElementById('settings-ft').value        = data.ft || 100;
-                    document.getElementById('settings-dm').value        = data.dm || 5.0;
-                    document.getElementById('settings-email').value     = data.Email || '';
-                    document.getElementById('settings-mystate').value   = data.MyState || 'KS';
-                    document.getElementById('settings-provider').value  = data.Provider || '';
+        // === USER SETTINGS MODAL – FINAL: READS ALL FIELDS + DISABLES SAVE FOR GUESTS (NO OPTIONAL CHAINING) ===
+        var settingsBtn = document.getElementById('user-settings-btn');
+        if (settingsBtn) {
+            settingsBtn.addEventListener('click', function () {
+                fetch('/erate/user_settings')
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        // Populate all fields
+                        document.getElementById('settings-ft').value        = data.ft || 100;
+                        document.getElementById('settings-dm').value        = data.dm || 5.0;
+                        document.getElementById('settings-email').value     = data.Email || '';
+                        document.getElementById('settings-mystate').value   = data.MyState || 'KS';
+                        document.getElementById('settings-provider').value  = data.Provider || '';
 
-                    const saveBtn  = document.getElementById('settings-save-btn');
-                    const guestMsg = document.getElementById('guest-settings-message');
+                        var saveBtn  = document.getElementById('settings-save-btn');
+                        var guestMsg = document.getElementById('guest-settings-message');
 
-                    if (data.error || !data.ft) {
-                        // GUEST → disable Save button + show message
-                        saveBtn.disabled = true;
-                        saveBtn.style.opacity = '0.5';
-                        saveBtn.style.cursor = 'not-allowed';
+                        if (data.error || !data.ft) {
+                            // GUEST → disable Save + show message
+                            if (saveBtn) {
+                                saveBtn.disabled = true;
+                                saveBtn.style.opacity = '0.5';
+                                saveBtn.style.cursor = 'not-allowed';
+                            }
+                            if (guestMsg) guestMsg.style.display = 'block';
+                        } else {
+                            // MEMBER → enable Save
+                            if (saveBtn) {
+                                saveBtn.disabled = false;
+                                saveBtn.style.opacity = '1';
+                                saveBtn.style.cursor = 'pointer';
+                            }
+                            if (guestMsg) guestMsg.style.display = 'none';
+                        }
+
+                        document.getElementById('settings-modal').classList.add('show');
+                    })
+                    .catch(function () {
+                        // Fallback: treat as guest
+                        document.getElementById('settings-ft').value = 100;
+                        document.getElementById('settings-dm').value = 5.0;
+                        document.getElementById('settings-email').value = '';
+                        document.getElementById('settings-mystate').value = 'KS';
+                        document.getElementById('settings-provider').value = '';
+
+                        var saveBtn = document.getElementById('settings-save-btn');
+                        if (saveBtn) {
+                            saveBtn.disabled = true;
+                            saveBtn.style.opacity = '0.5';
+                        }
+                        var guestMsg = document.getElementById('guest-settings-message');
                         if (guestMsg) guestMsg.style.display = 'block';
-                    } else {
-                        // MEMBER → enable Save
-                        saveBtn.disabled = false;
-                        saveBtn.style.opacity = '1';
-                        saveBtn.style.cursor = 'pointer';
-                        if (guestMsg) guestMsg.style.display = 'none';
-                    }
 
-                    document.getElementById('settings-modal').classList.add('show');
-                })
-                .catch(() => {
-                    // Fallback: treat as guest
-                    document.getElementById('settings-ft').value = 100;
-                    document.getElementById('settings-dm').value = 5.0;
-                    document.getElementById('settings-email').value = '';
-                    document.getElementById('settings-mystate').value = 'KS';
-                    document.getElementById('settings-provider').value = '';
-
-                    const saveBtn = document.getElementById('settings-save-btn');
-                    saveBtn.disabled = true;
-                    saveBtn.style.opacity = '0.5';
-                    document.getElementById('guest-settings-message')?.style.display = 'block';
-
-                    document.getElementById('settings-modal').classList.add('show');
-                });
-        });
-
-        document.getElementById('settings-form')?.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            fetch('/erate/user_settings', {
-                method: 'POST',
-                body: formData
-            }).then(() => {
-                location.reload();
+                        document.getElementById('settings-modal').classList.add('show');
+                    });
             });
-        });
+        }
 
-        // Close modal when clicking outside or X
-        document.getElementById('settings-modal')?.addEventListener('click', (e) => {
-            if (e.target === document.getElementById('settings-modal') || e.target.classList.contains('modal-close')) {
-                document.getElementById('settings-modal').classList.remove('show');
-            }
-        });
+        // Save handler
+        var settingsForm = document.getElementById('settings-form');
+        if (settingsForm) {
+            settingsForm.addEventListener('submit', function (e) {
+                e.preventDefault();
+                var formData = new FormData(e.target);
+                fetch('/erate/user_settings', {
+                    method: 'POST',
+                    body: formData
+                }).then(function () {
+                    location.reload();
+                });
+            });
+        }
+
+        // Close modal
+        var settingsModal = document.getElementById('settings-modal');
+        if (settingsModal) {
+            settingsModal.addEventListener('click', function (e) {
+                if (e.target === settingsModal || e.target.classList.contains('modal-close')) {
+                    settingsModal.classList.remove('show');
+                }
+            });
+        }
 
         // === SYNC NETWORK DISPLAY WITH MAP SWITCHER ===
         document.getElementById('network-select')?.addEventListener('change', function() {
