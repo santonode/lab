@@ -1539,18 +1539,25 @@
             }
         });
 
-        // === USER SETTINGS MODAL ===
+        // === USER SETTINGS MODAL – NOW READS ALL FIELDS ===
         document.getElementById('user-settings-btn')?.addEventListener('click', () => {
             fetch('/erate/user_settings')
                 .then(r => r.json())
                 .then(data => {
-                    document.getElementById('settings-ft').value = data.ft || 100;
-                    document.getElementById('settings-dm').value = data.dm || 5.0;
+                    document.getElementById('settings-ft').value        = data.ft || 100;
+                    document.getElementById('settings-dm').value        = data.dm || 5.0;
+                    document.getElementById('settings-email').value     = data.Email || '';
+                    document.getElementById('settings-mystate').value   = data.MyState || 'KS';
+                    document.getElementById('settings-provider').value  = data.Provider || '';
+
                     document.getElementById('settings-modal').classList.add('show');
                 })
                 .catch(() => {
                     document.getElementById('settings-ft').value = 100;
                     document.getElementById('settings-dm').value = 5.0;
+                    document.getElementById('settings-email').value = '';
+                    document.getElementById('settings-mystate').value = 'KS';
+                    document.getElementById('settings-provider').value = '';
                     document.getElementById('settings-modal').classList.add('show');
                 });
         });
