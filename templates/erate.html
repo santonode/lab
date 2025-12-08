@@ -804,6 +804,7 @@
             </div>
         </div>
     </div>
+    
     <!-- OUT OF POINTS MODAL -->
     <div class="modal" id="outOfPointsModal">
         <div class="modal-content">
@@ -819,28 +820,80 @@
         </div>
     </div>
 
-    <!-- USER SETTINGS MODAL -->
+    <!-- USER SETTINGS MODAL - UPDATED WITH ALL FIELDS -->
     <div class="modal" id="settings-modal">
-        <div class="modal-content" style="max-width:420px;">
+        <div class="modal-content" style="max-width:460px;">
             <div class="modal-header">
                 <div class="modal-title">User Settings</div>
-                <button class="modal-close" onclick="closeModal('settings')">x</button>
+                <button class="modal-close" onclick="closeModal('settings')">×</button>
             </div>
             <div class="modal-body">
                 <form id="settings-form">
-                    <label style="display:block;margin:15px 0 5px;">
-                        <strong>Password</strong> (leave blank to keep current)<br>
-                        <input type="password" name="password" placeholder="New password" style="width:100%;padding:10px;margin-top:5px;border:1px solid #ccc;border-radius:6px;">
-                    </label>
-                    <label style="display:block;margin:15px 0 5px;">
-                        <strong>Filter Threshold</strong> (max records to calculate distance)<br>
-                        <input type="number" name="ft" id="settings-ft" min="10" max="1000" value="100" style="width:100%;padding:10px;margin-top:5px;border:1px solid #ccc;border-radius:6px;">
-                    </label>
-                    <label style="display:block;margin:15px 0 5px;">
-                        <strong>Distance Minimum</strong> (miles) — hide farther results<br>
-                        <input type="number" name="dm" id="settings-dm" step="0.1" min="0" max="100" value="5.0" style="width:100%;padding:10px;margin-top:5px;border:1px solid #ccc;border-radius:6px;">
-                    </label>
-                    <button type="submit" class="btn btn-primary" style="margin-top:20px;width:100%;">Save Settings</button>
+                    <!-- Password -->
+                    <div style="margin:15px 0 5px;">
+                        <strong>Password</strong> (leave blank to keep current)
+                        <input type="password" name="password" placeholder="New password"
+                               style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
+                    </div>
+
+                    <!-- Email -->
+                    <div style="margin:15px 0 5px;">
+                        <strong>Email</strong>
+                        <input type="email" name="Email" id="settings-email" placeholder="your@email.com"
+                               style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
+                    </div>
+
+                    <!-- FT & DM side by side -->
+                    <div style="display:flex;gap:12px;margin:18px 0 5px;flex-wrap:wrap;">
+                        <div style="flex:1;min-width:140px;">
+                            <strong>FT</strong> <small style="color:#666;">(max records)</small>
+                            <input type="number" name="ft" id="settings-ft" min="10" max="1000"
+                                   style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
+                        </div>
+                        <div style="flex:1;min-width:140px;">
+                            <strong>DM</strong> <small style="color:#666;">(miles min)</small>
+                            <input type="number" name="dm" id="settings-dm" step="0.1" min="0" max="100"
+                                   style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
+                        </div>
+                    </div>
+
+                    <!-- State & Provider side by side -->
+                    <div style="display:flex;gap:12px;margin:18px 0 5px;flex-wrap:wrap;">
+                        <div style="flex:1;">
+                            <strong>My State</strong>
+                            <select name="MyState" id="settings-mystate"
+                                    style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
+                                <option value="KS">KS - Kansas</option>
+                                <option value="MO">MO - Missouri</option>
+                                <option value="IL">IL - Illinois</option>
+                                <option value="IA">IA - Iowa</option>
+                                <option value="OK">OK - Oklahoma</option>
+                                <option value="AL">AL - Alabama</option>
+                                <option value="FL">FL - Florida</option>
+                                <option value="GA">GA - Georgia</option>
+                                <option value="MI">MI - Michigan</option>
+                                <option value="OH">OH - Ohio</option>
+                                <option value="TX">TX - Texas</option>
+                                <option value="CA">CA - California</option>
+                            </select>
+                        </div>
+                        <div style="flex:1;">
+                            <strong>Provider</strong>
+                            <select name="Provider" id="settings-provider"
+                                    style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
+                                <option value="">None / Not Listed</option>
+                                <option value="Bluebird Network">Bluebird Network</option>
+                                <option value="FNA Network">FNA Network</option>
+                                <option value="Segra EAST">Segra EAST</option>
+                                <option value="Segra WEST">Segra WEST</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary"
+                            style="margin-top:25px;width:100%;padding:12px;font-size:1rem;">
+                        Save Settings
+                    </button>
                 </form>
             </div>
         </div>
