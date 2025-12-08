@@ -854,7 +854,7 @@
         </div>
     </div>
 
-    <!-- USER SETTINGS MODAL - UPDATED -->
+    <!-- USER SETTINGS MODAL - FINAL GUEST-SAFE VERSION -->
     <div class="modal" id="settings-modal">
         <div class="modal-content" style="max-width:460px;">
             <div class="modal-header">
@@ -863,40 +863,36 @@
             </div>
             <div class="modal-body">
                 <form id="settings-form">
-
                     <!-- Password -->
                     <div style="margin:15px 0 5px;">
                         <strong>Password</strong> (leave blank to keep current)
-                        <input type="password" name="password" placeholder="New password" 
+                        <input type="password" name="password" placeholder="New password"
                                style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
                     </div>
-
                     <!-- Email -->
                     <div style="margin:15px 0 5px;">
                         <strong>Email</strong>
-                        <input type="email" name="Email" id="settings-email" placeholder="your@email.com" 
+                        <input type="email" name="Email" id="settings-email" placeholder="your@email.com"
                                style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
                     </div>
-
                     <!-- FT & DM side by side -->
                     <div style="display:flex;gap:12px;margin:18px 0 5px;flex-wrap:wrap;">
                         <div style="flex:1;min-width:140px;">
                             <strong>FT</strong> <small style="color:#666;">(max records)</small>
-                            <input type="number" name="ft" id="settings-ft" min="10" max="1000" value="100"
+                            <input type="number" name="ft" id="settings-ft" min="10" max="1000"
                                    style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
                         </div>
                         <div style="flex:1;min-width:140px;">
                             <strong>DM</strong> <small style="color:#666;">(miles min)</small>
-                            <input type="number" name="dm" id="settings-dm" step="0.1" min="0" max="100" value="5.0"
+                            <input type="number" name="dm" id="settings-dm" step="0.1" min="0" max="100"
                                    style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
                         </div>
                     </div>
-
                     <!-- State & Provider side by side -->
                     <div style="display:flex;gap:12px;margin:18px 0 5px;flex-wrap:wrap;">
                         <div style="flex:1;">
                             <strong>My State</strong>
-                            <select name="MyState" id="settings-mystate" 
+                            <select name="MyState" id="settings-mystate"
                                     style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
                                 <option value="KS">KS - Kansas</option>
                                 <option value="MO">MO - Missouri</option>
@@ -910,7 +906,6 @@
                                 <option value="OH">OH - Ohio</option>
                                 <option value="TX">TX - Texas</option>
                                 <option value="CA">CA - California</option>
-                                <!-- add more states here if needed -->
                             </select>
                         </div>
                         <div style="flex:1;">
@@ -926,7 +921,15 @@
                         </div>
                     </div>
 
-                    <button type="submit" class="btn btn-primary" style="margin-top:25px;width:100%;padding:12px;font-size:1rem;">
+                    <!-- GUEST MESSAGE -->
+                    <div id="guest-settings-message" style="display:none; color:#e74c3c; text-align:center; margin:20px 0; font-weight:500;">
+                        Guest mode — please <a href="/erate/login" style="color:#3498db; text-decoration:underline;">log in</a> to save your settings.
+                    </div>
+
+                    <!-- SAVE BUTTON (disabled + grayed for guests) -->
+                    <button type="submit" id="settings-save-btn" class="btn btn-primary"
+                            style="margin-top:25px;width:100%;padding:12px;font-size:1rem; opacity:0.5; cursor:not-allowed;"
+                            disabled>
                         Save Settings
                     </button>
                 </form>
@@ -1573,46 +1576,70 @@
             }
         });
 
-        // === USER SETTINGS MODAL ===
+        // === USER SETTINGS MODAL – GUEST-SAFE VERSION ===
         document.getElementById('user-settings-btn')?.addEventListener('click', () => {
-            fetch('/erate/user_settings')
-                .then(r => r.json())
-                .then(data => {
-                    document.getElementById('settings-ft').value       = data.ft       || 100;
-                    document.getElementById('settings-dm').value       = data.dm       || 5.0;
-                    document.getElementById('settings-email').value    = data.Email     || '';
-                    document.getElementById('settings-mystate').value  = data.MyState   || 'KS';
-                    document.getElementById('settings-provider').value = data.Provider  || '';
-                    document.getElementById('settings-modal').classList.add('show');
-                })
-                .catch(err => {
-                    console.error('Failed to load user settings:', err);
-                    document.getElementById('settings-ft').value       = 100;
-                    document.getElementById('settings-dm').value       = 5.0;
-                    document.getElementById('settings-email').value    = '';
-                    document.getElementById('settings-mystate').value  = 'KS';
-                    document.getElementById('settings-provider').value = '';
-                    document.getElementById('settings-modal').classList.add('show');
-                });
+                fetch('/erate/user_settings')
+                        .then(r => r.json())
+                        .then(data => {
+                                // Populate fields with real data or defaults
+                                document.getElementById('settings-ft').value       = data.ft || 100;
+                                document.getElementById('settings-dm').value       = data.dm || 5.0;
+                                document.getElementById('settings-email').value   = data.Email || '';
+                                document.getElementById('settings-mystate').value = data.MyState || 'KS';
+                                document.getElementById('settings-provider').value = data.Provider || '';
+
+                                const saveBtn = document.getElementById('settings-save-btn');
+                                const guestMsg = document.getElementById('guest-settings-message');
+
+                                if (data.error || !data.ft) {
+                                        // Guest detected
+                                        saveBtn.disabled = true;
+                                        saveBtn.style.opacity = '0.5';
+                                        saveBtn.style.cursor = 'not-allowed';
+                                        if (guestMsg) guestMsg.style.display = 'block';
+                                } else {
+                                        // Real member
+                                        saveBtn.disabled = false;
+                                        saveBtn.style.opacity = '1';
+                                        saveBtn.style.cursor = 'pointer';
+                                        if (guestMsg) guestMsg.style.display = 'none';
+                                }
+
+                                document.getElementById('settings-modal').classList.add('show');
+                        })
+                        .catch(err => {
+                                console.error('Failed to load settings:', err);
+                                // Fallback: show modal with defaults + disabled save
+                                document.getElementById('settings-ft').value = 100;
+                                document.getElementById('settings-dm').value = 5.0;
+                                document.getElementById('settings-email').value = '';
+                                document.getElementById('settings-mystate').value = 'KS';
+                                document.getElementById('settings-provider').value = '';
+
+                                const saveBtn = document.getElementById('settings-save-btn');
+                                saveBtn.disabled = true;
+                                saveBtn.style.opacity = '0.5';
+                                document.getElementById('guest-settings-message')?.style.display = 'block';
+
+                                document.getElementById('settings-modal').classList.add('show');
+                        });
         });
 
+        // Save handler – only runs if button is enabled
         document.getElementById('settings-form')?.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            fetch('/erate/user_settings', {
-                method: 'POST',
-                body: formData
-            }).then(() => {
-                location.reload();
-            });
-        });
+                e.preventDefault();
+                const saveBtn = document.getElementById('settings-save-btn');
+                if (saveBtn.disabled) {
+                        alert("Please log in to save settings.");
+                        return;
+                }
 
-        // Close modal when clicking outside or X
-        document.getElementById('settings-modal')?.addEventListener('click', (e) => {
-            if (e.target === document.getElementById('settings-modal') || e.target.classList.contains('modal-close')) {
-                document.getElementById('settings-modal').classList.remove('show');
-            }
-        });
+                saveBtn.disabled = true;
+                saveBtn.textContent = "Saving...";
+
+                const formData = new FormData(e.target);
+                fetch('/erate/user_settings', {
+                        method
 
         // === SYNC NETWORK DISPLAY WITH MAP SWITCHER ===
         document.getElementById('network-select')?.addEventListener('change', function() {
