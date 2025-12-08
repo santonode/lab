@@ -1328,7 +1328,7 @@ def admin():
                         conn.commit()
                 flash("User deleted", "success")
 
-            # EDIT USER — FULLY SAFE & COMPLETE
+            # EDIT USER — FULLY SAFE WITH DUPLICATE EMAIL HANDLING
             elif 'edit_user_id' in request.form:
                 user_id     = request.form['edit_user_id']
                 username    = request.form['new_username'].strip()
@@ -1357,23 +1357,30 @@ def admin():
                         ft     = int(ft_raw)     if ft_raw     else cur_ft
                         dm     = float(dm_raw)   if dm_raw     else float(cur_dm)
 
-                        if password:
-                            cur.execute("""
-                                UPDATE users SET
-                                    username=%s, password=%s, "Email"=%s, "MyState"=%s, "Provider"=%s,
-                                    points=%s, ft=%s, dm=%s, user_type=%s
-                                WHERE id=%s
-                            """, (username, hash_password(password), email, mystate, provider,
-                                  points, ft, dm, user_type, user_id))
-                        else:
-                            cur.execute("""
-                                UPDATE users SET
-                                    username=%s, "Email"=%s, "MyState"=%s, "Provider"=%s,
-                                    points=%s, ft=%s, dm=%s, user_type=%s
-                                WHERE id=%s
-                            """, (username, email, mystate, provider, points, ft, dm, user_type, user_id))
-                        conn.commit()
-                flash("User updated successfully", "success")
+                        try:
+                            if password:
+                                cur.execute("""
+                                    UPDATE users SET
+                                        username=%s, password=%s, "Email"=%s, "MyState"=%s, "Provider"=%s,
+                                        points=%s, ft=%s, dm=%s, user_type=%s
+                                    WHERE id=%s
+                                """, (username, hash_password(password), email, mystate, provider,
+                                      points, ft, dm, user_type, user_id))
+                            else:
+                                cur.execute("""
+                                    UPDATE users SET
+                                        username=%s, "Email"=%s, "MyState"=%s, "Provider"=%s,
+                                        points=%s, ft=%s, dm=%s, user_type=%s
+                                    WHERE id=%s
+                                """, (username, email, mystate, provider, points, ft, dm, user_type, user_id))
+                            conn.commit()
+                            flash("User updated successfully", "success")
+                        except psycopg.errors.UniqueViolation as e:
+                            if 'users_email_unique_idx' in str(e):
+                                flash("This email is already used by another user.", "error")
+                            else:
+                                flash("Database error – could not save changes.", "error")
+                            return redirect(url_for('erate.admin'))
 
             # ADD USER
             elif 'add_user' in request.form:
