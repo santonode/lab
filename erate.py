@@ -1464,49 +1464,48 @@ def set_guest():
 # === USER SETTINGS API – FINAL & COMPLETE ===
 @erate_bp.route('/user_settings', methods=['GET', 'POST'])
 def user_settings():
-    if 'username' not in session:
-        return jsonify({"ft": 100, "dm": 5.0, "Email": "", "MyState": "KS", "Provider": ""})
+    username = session.get('username')  # Safe: None if no session
+    is_guest = username is None or username.startswith('guest_') or username == 'guest'
+    
+    if request.method == 'POST':
+        if is_guest:
+            return jsonify({"error": "Guests cannot save settings"}), 403  # Block saves
+        # Member-only save logic
+        data = request.form
+        password = data.get('password', '').strip()
+        email = data.get('Email', '').strip()
+        mystate = data.get('MyState', 'KS')[:2].upper() or 'KS'
+        provider = data.get('Provider', '').strip()
+        ft = max(10, min(1000, int(data.get('ft', 100))))
+        dm = max(0.1, min(100.0, float(data.get('dm', 5.0))))
+        sets = ["ft = %s", "dm = %s"]
+        vals = [ft, dm]
+        if password:
+            sets.append("password = %s")
+            vals.append(hash_password(password))
+        sets.extend(['"Email" = %s', '"MyState" = %s', '"Provider" = %s'])
+        vals.extend([email, mystate, provider, username])
+        try:
+            with psycopg.connect(DATABASE_URL) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(f"UPDATE users SET {', '.join(sets)} WHERE username = %s", vals)
+                    conn.commit()
+        except Exception as e:
+            log(f"Save error: {e}")
+            return jsonify({"error": "Save failed"}), 500
+        return jsonify({"success": True})  # Or reload settings
 
-    username = session['username']
-
-    # Legacy guest handling
-    if username == 'guest':
-        ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-        ip = ip.split(',')[0].strip() if ip else (request.remote_addr or 'unknown')
-        username = f"guest_{ip.replace('.', '')}"
-
-    is_guest = username.startswith('guest_')
-
+    # GET: Always return defaults for guests, real values for members
+    defaults = {"ft": 100, "dm": 5.0, "Email": "", "MyState": "KS", "Provider": ""}
+    if is_guest:
+        return jsonify(defaults)
+    
+    # Member: Fetch from DB
     try:
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
-                if request.method == 'POST' and not is_guest:
-                    data = request.form
-                    password = data.get('password', '').strip()
-                    email    = data.get('Email', '').strip()
-                    mystate  = data.get('MyState', 'KS')[:2].upper() or 'KS'
-                    provider = data.get('Provider', '').strip()
-                    ft = max(10, min(1000, int(data.get('ft', 100))))
-                    dm = max(0.1, min(100.0, float(data.get('dm', 5.0))))
-
-                    sets = ["ft = %s", "dm = %s"]
-                    vals = [ft, dm]
-
-                    if password:
-                        sets.append("password = %s")
-                        vals.append(hash_password(password))
-                    sets.append('"Email" = %s')
-                    sets.append('"MyState" = %s')
-                    sets.append('"Provider" = %s')
-                    vals.extend([email, mystate, provider])
-
-                    vals.append(username)
-                    cur.execute(f"UPDATE users SET {', '.join(sets)} WHERE username = %s", vals)
-                    conn.commit()
-
-                # GET — return current values
                 cur.execute('''
-                    SELECT COALESCE(ft,100), COALESCE(dm,5.0), 
+                    SELECT COALESCE(ft,100), COALESCE(dm,5.0),
                            COALESCE("Email",''), COALESCE("MyState",'KS'), COALESCE("Provider",'')
                     FROM users WHERE username = %s
                 ''', (username,))
@@ -1519,11 +1518,9 @@ def user_settings():
                         "MyState": row[3],
                         "Provider": row[4]
                     })
-                else:
-                    return jsonify({"ft": 100, "dm": 5.0, "Email": "", "MyState": "KS", "Provider": ""})
     except Exception as e:
-        log(f"user_settings error: {e}")
-        return jsonify({"error": "Server error"}), 500
+        log(f"Fetch error: {e}")
+    return jsonify(defaults)  # Fallback
 
 # === DYNAMIC COVERAGE REPORT — PURE DATA ONLY (FOR MODAL) ===
 @erate_bp.route('/coverage-report')
