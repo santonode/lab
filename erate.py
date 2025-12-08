@@ -1317,25 +1317,49 @@ def admin():
                         conn.commit()
                 flash("User deleted", "success")
             elif 'edit_user_id' in request.form:
-                user_id = request.form['edit_user_id']
-                username = request.form['new_username']
-                password = request.form['new_password']
-                points = request.form['new_points']
-                user_type = request.form['new_user_type']
+                user_id      = request.form['edit_user_id']
+                username     = request.form['new_username'].strip()
+                password     = request.form.get('new_password', '').strip()
+                email        = request.form.get('new_email', '').strip()
+                mystate      = request.form.get('new_mystate', '')[:2].upper()
+                provider     = request.form.get('new_provider', '').strip()
+                points       = int(request.form['new_points'])
+                ft           = int(request.form['new_ft'])
+                dm           = float(request.form['new_dm'])
+                user_type    = request.form['new_user_type']
+
                 with psycopg.connect(DATABASE_URL) as conn:
                     with conn.cursor() as cur:
                         if password:
-                            cur.execute(
-                                "UPDATE users SET username=%s, password=%s, points=%s, user_type=%s WHERE id=%s",
-                                (username, hash_password(password), points, user_type, user_id)
-                            )
+                            cur.execute("""
+                                UPDATE users SET 
+                                    username = %s,
+                                    password = %s,
+                                    "Email" = %s,
+                                    "MyState" = %s,
+                                    "Provider" = %s,
+                                    points = %s,
+                                    ft = %s,
+                                    dm = %s,
+                                    user_type = %s
+                                WHERE id = %s
+                            """, (username, hash_password(password), email, mystate, provider,
+                                  points, ft, dm, user_type, user_id))
                         else:
-                            cur.execute(
-                                "UPDATE users SET username=%s, points=%s, user_type=%s WHERE id=%s",
-                                (username, points, user_type, user_id)
-                            )
+                            cur.execute("""
+                                UPDATE users SET 
+                                    username = %s,
+                                    "Email" = %s,
+                                    "MyState" = %s,
+                                    "Provider" = %s,
+                                    points = %s,
+                                    ft = %s,
+                                    dm = %s,
+                                    user_type = %s
+                                WHERE id = %s
+                            """, (username, email, mystate, provider, points, ft, dm, user_type, user_id))
                         conn.commit()
-                flash("User updated", "success")
+                flash("User updated successfully", "success")
             elif 'add_user' in request.form:
                 username = request.form['username']
                 password = request.form['password']
