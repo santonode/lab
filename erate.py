@@ -1256,14 +1256,18 @@ def load_user():
         session['username'] = None
         session['is_santo'] = False
 
+# === ADMIN CONSOLE ==============================
 @erate_bp.route('/admin', methods=['GET', 'POST'])
 def admin():
     if request.args.get('logout'):
         session.clear()
         flash("Logged out", "success")
         return redirect(url_for('erate.dashboard'))
+
     if request.method == 'POST':
         action = request.form.get('action')
+
+        # === REGISTER ===
         if action == 'register':
             username = request.form['username'].strip()
             password = request.form['password']
@@ -1285,6 +1289,8 @@ def admin():
             session['is_santo'] = (username == 'santo')
             flash(f"Welcome, {username}! You have 100 points.", "success")
             return redirect(url_for('erate.dashboard'))
+
+        # === LOGIN ===
         elif action == 'login':
             username = request.form['username'].strip()
             password = request.form['password']
@@ -1300,6 +1306,8 @@ def admin():
                     else:
                         flash("Invalid login", "error")
             return redirect(url_for('erate.admin'))
+
+        # === SANTO ADMIN PASSWORD ===
         elif 'admin_pass' in request.form:
             if request.form['admin_pass'] == os.getenv('ADMIN_PASS', 'santo123'):
                 session['username'] = 'santo'
@@ -1308,7 +1316,10 @@ def admin():
             else:
                 flash("Invalid admin password", "error")
             return redirect(url_for('erate.admin'))
+
+        # === ADMIN ACTIONS (only if is_santo) ===
         if session.get('is_santo'):
+            # DELETE USER
             if 'delete_user' in request.form:
                 user_id = request.form['delete_user']
                 with psycopg.connect(DATABASE_URL) as conn:
@@ -1316,50 +1327,55 @@ def admin():
                         cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
                         conn.commit()
                 flash("User deleted", "success")
+
+            # EDIT USER — FULLY SAFE & COMPLETE
             elif 'edit_user_id' in request.form:
-                user_id      = request.form['edit_user_id']
-                username     = request.form['new_username'].strip()
-                password     = request.form.get('new_password', '').strip()
-                email        = request.form.get('new_email', '').strip()
-                mystate      = request.form.get('new_mystate', '')[:2].upper()
-                provider     = request.form.get('new_provider', '').strip()
-                points       = int(request.form['new_points'])
-                ft           = int(request.form['new_ft'])
-                dm           = float(request.form['new_dm'])
-                user_type    = request.form['new_user_type']
+                user_id     = request.form['edit_user_id']
+                username    = request.form['new_username'].strip()
+                password    = request.form.get('new_password', '').strip()
+                email       = request.form.get('new_email', '').strip() or None
+                mystate     = request.form.get('new_mystate', '')[:2].upper() or None
+                provider    = request.form.get('new_provider', '').strip() or None
+                user_type   = request.form['new_user_type']
+
+                # Safely handle numeric fields — use current values if blank
+                points_raw  = request.form.get('new_points', '').strip()
+                ft_raw      = request.form.get('new_ft', '').strip()
+                dm_raw      = request.form.get('new_dm', '').strip()
 
                 with psycopg.connect(DATABASE_URL) as conn:
                     with conn.cursor() as cur:
+                        # Get current values as fallback
+                        cur.execute("SELECT points, ft, dm FROM users WHERE id = %s", (user_id,))
+                        current = cur.fetchone()
+                        if not current:
+                            flash("User not found", "error")
+                            return redirect(url_for('erate.admin'))
+                        cur_points, cur_ft, cur_dm = current
+
+                        points = int(points_raw) if points_raw else cur_points
+                        ft     = int(ft_raw)     if ft_raw     else cur_ft
+                        dm     = float(dm_raw)   if dm_raw     else float(cur_dm)
+
                         if password:
                             cur.execute("""
-                                UPDATE users SET 
-                                    username = %s,
-                                    password = %s,
-                                    "Email" = %s,
-                                    "MyState" = %s,
-                                    "Provider" = %s,
-                                    points = %s,
-                                    ft = %s,
-                                    dm = %s,
-                                    user_type = %s
-                                WHERE id = %s
+                                UPDATE users SET
+                                    username=%s, password=%s, "Email"=%s, "MyState"=%s, "Provider"=%s,
+                                    points=%s, ft=%s, dm=%s, user_type=%s
+                                WHERE id=%s
                             """, (username, hash_password(password), email, mystate, provider,
                                   points, ft, dm, user_type, user_id))
                         else:
                             cur.execute("""
-                                UPDATE users SET 
-                                    username = %s,
-                                    "Email" = %s,
-                                    "MyState" = %s,
-                                    "Provider" = %s,
-                                    points = %s,
-                                    ft = %s,
-                                    dm = %s,
-                                    user_type = %s
-                                WHERE id = %s
+                                UPDATE users SET
+                                    username=%s, "Email"=%s, "MyState"=%s, "Provider"=%s,
+                                    points=%s, ft=%s, dm=%s, user_type=%s
+                                WHERE id=%s
                             """, (username, email, mystate, provider, points, ft, dm, user_type, user_id))
                         conn.commit()
                 flash("User updated successfully", "success")
+
+            # ADD USER
             elif 'add_user' in request.form:
                 username = request.form['username']
                 password = request.form['password']
@@ -1372,12 +1388,34 @@ def admin():
                         )
                         conn.commit()
                 flash("User added", "success")
+
+    # === LOAD ALL USER DATA FOR ADMIN TABLE ===
     users = []
     if session.get('is_santo'):
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT id, username, COALESCE(password, ''), user_type, points FROM users ORDER BY id")
-                users = [dict(zip(['id', 'username', 'password', 'user_type', 'points'], row)) for row in cur.fetchall()]
+                cur.execute("""
+                    SELECT 
+                        id, username,
+                        COALESCE("Email", '') as "Email",
+                        COALESCE("MyState", '') as "MyState",
+                        COALESCE("Provider", '') as "Provider",
+                        COALESCE(password, '') as password,
+                        user_type,
+                        points,
+                        COALESCE(ft, 100) as ft,
+                        COALESCE(dm, 5.0) as dm
+                    FROM users 
+                    ORDER BY id
+                """)
+                users = [
+                    dict(zip([
+                        'id', 'username', 'Email', 'MyState', 'Provider',
+                        'password', 'user_type', 'points', 'ft', 'dm'
+                    ], row))
+                    for row in cur.fetchall()
+                ]
+
     return render_template('eadmin.html', users=users, session=session)
 
 @erate_bp.route('/set_guest', methods=['POST'])
