@@ -1267,27 +1267,36 @@ def admin():
     if request.method == 'POST':
         action = request.form.get('action')
 
-        # === REGISTER ===
+        # === REGISTER – NOW SAVES EMAIL ===
         if action == 'register':
             username = request.form['username'].strip()
             password = request.form['password']
+            email = request.form.get('Email', '').strip() or None
+
             if len(username) < 3 or len(password) < 4:
                 flash("Username ≥3, Password ≥4", "error")
                 return redirect(url_for('erate.admin'))
+
             with psycopg.connect(DATABASE_URL) as conn:
                 with conn.cursor() as cur:
                     cur.execute("SELECT id FROM users WHERE username = %s", (username,))
                     if cur.fetchone():
                         flash("Username taken", "error")
                         return redirect(url_for('erate.admin'))
-                    cur.execute(
-                        "INSERT INTO users (username, password, user_type, points) VALUES (%s, %s, %s, %s)",
-                        (username, hash_password(password), 'Member', 100)
-                    )
-                    conn.commit()
+
+                    try:
+                        cur.execute("""
+                            INSERT INTO users (username, password, "Email", user_type, points)
+                            VALUES (%s, %s, %s, 'Member', 100)
+                        """, (username, hash_password(password), email))
+                        conn.commit()
+                        flash(f"Welcome, {username}! Account created.", "success")
+                    except psycopg.errors.UniqueViolation:
+                        flash("This email is already registered.", "error")
+                        return redirect(url_for('erate.admin'))
+
             session['username'] = username
             session['is_santo'] = (username == 'santo')
-            flash(f"Welcome, {username}! You have 100 points.", "success")
             return redirect(url_for('erate.dashboard'))
 
         # === LOGIN ===
