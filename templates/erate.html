@@ -395,7 +395,7 @@
             </div>
         </div>
     </div>
-    <!-- REGISTER MODAL – NOW WITH EMAIL -->
+    <!-- REGISTER MODAL -->
     <div class="modal" id="registerModal" style="display:none;">
         <div class="modal-content">
             <div class="modal-header">
@@ -405,17 +405,9 @@
             <div class="modal-body">
                 <form method="POST" action="{{ url_for('erate.admin') }}">
                     <input type="hidden" name="action" value="register">
-
-                    <input type="text" name="username" placeholder="Username" required minlength="3"
-                           style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
-
-                    <input type="email" name="email" placeholder="Email (required)" required
-                           style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
-
-                    <input type="password" name="password" placeholder="Password" required minlength="6"
-                           style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
-
-                    <button type="submit" class="btn btn-primary">Create Account</button>
+                    <input type="text" name="username" placeholder="Username" required minlength="3" style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
+                    <input type="password" name="password" placeholder="Password" required minlength="4" style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
+                    <button type="submit" class="btn btn-primary">Register</button>
                 </form>
             </div>
         </div>
@@ -442,22 +434,18 @@
         <div class="spinner"></div>
     </div>
     <div class="container">
-            <div class="header">
-                {% if session.username %}
-                    <span class="user-info" id="user-settings-btn" style="cursor:pointer; text-decoration:underline;">
-                        <span id="header-username-clean">{{ session.username }}</span>
-                        <span class="points" id="points-display">Loading...</span>
-                    </span>
-                {% else %}
-                    <span class="user-info">
-                        Guest <span class="points" id="points-display">Pts: 25</span>
-                    </span>
-                {% endif %}
-                <h1>E-Rate</h1>
-                {% if session.username %}
-                    <a href="{{ url_for('erate.logout') }}" class="logout">Logout</a>
-                {% endif %}
-            </div>
+        <div class="header">
+            {% if session.username %}
+                <span class="user-info" id="user-settings-btn" style="cursor:pointer; text-decoration:underline;">
+                    {{ session.username }} 
+                    <span class="points" id="points-display">Loading...</span>
+                </span>
+            {% endif %}
+            <h1>E-Rate</h1>
+            {% if session.username %}
+                <a href="{{ url_for('erate.logout') }}" class="logout">Logout</a>
+            {% endif %}
+        </div>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -746,29 +734,6 @@
                         switchCoverageView(view);
                 });
         });
-
-        // ——— CLEAN USERNAME DISPLAY IN HEADER (visual only) ———
-        function cleanHeaderUsername() {
-            const raw = "{{ session.username|default('')|e }}";
-            const displayEl = document.getElementById('header-username-clean');
-            if (!displayEl) return;
-
-            if (!raw || raw.includes('guest_')) {
-                displayEl.textContent = 'Guest';
-                return;
-            }
-
-            let clean = raw.trim();
-            if (clean.includes('@')) clean = clean.split('@')[0];
-            clean = clean.split(/\s+/)[0];
-            clean = clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
-
-            displayEl.textContent = clean;
-        }
-
-        document.addEventListener('DOMContentLoaded', cleanHeaderUsername);
-
-        document.addEventListener('DOMContentLoaded', cleanHeaderUsername);
         
     </script>
     
@@ -853,81 +818,28 @@
         </div>
     </div>
 
-    <!-- USER SETTINGS MODAL - UPDATED -->
+    <!-- USER SETTINGS MODAL -->
     <div class="modal" id="settings-modal">
-        <div class="modal-content" style="max-width:460px;">
+        <div class="modal-content" style="max-width:420px;">
             <div class="modal-header">
                 <div class="modal-title">User Settings</div>
-                <button class="modal-close" onclick="closeModal('settings')">×</button>
+                <button class="modal-close" onclick="closeModal('settings')">x</button>
             </div>
             <div class="modal-body">
                 <form id="settings-form">
-
-                    <!-- Password -->
-                    <div style="margin:15px 0 5px;">
-                        <strong>Password</strong> (leave blank to keep current)
-                        <input type="password" name="password" placeholder="New password" 
-                               style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
-                    </div>
-
-                    <!-- Email -->
-                    <div style="margin:15px 0 5px;">
-                        <strong>Email</strong>
-                        <input type="email" name="Email" id="settings-email" placeholder="your@email.com" 
-                               style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
-                    </div>
-
-                    <!-- FT & DM side by side -->
-                    <div style="display:flex;gap:12px;margin:18px 0 5px;flex-wrap:wrap;">
-                        <div style="flex:1;min-width:140px;">
-                            <strong>FT</strong> <small style="color:#666;">(max records)</small>
-                            <input type="number" name="ft" id="settings-ft" min="10" max="1000" value="100"
-                                   style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
-                        </div>
-                        <div style="flex:1;min-width:140px;">
-                            <strong>DM</strong> <small style="color:#666;">(miles min)</small>
-                            <input type="number" name="dm" id="settings-dm" step="0.1" min="0" max="100" value="5.0"
-                                   style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
-                        </div>
-                    </div>
-
-                    <!-- State & Provider side by side -->
-                    <div style="display:flex;gap:12px;margin:18px 0 5px;flex-wrap:wrap;">
-                        <div style="flex:1;">
-                            <strong>My State</strong>
-                            <select name="MyState" id="settings-mystate" 
-                                    style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
-                                <option value="KS">KS - Kansas</option>
-                                <option value="MO">MO - Missouri</option>
-                                <option value="IL">IL - Illinois</option>
-                                <option value="IA">IA - Iowa</option>
-                                <option value="OK">OK - Oklahoma</option>
-                                <option value="AL">AL - Alabama</option>
-                                <option value="FL">FL - Florida</option>
-                                <option value="GA">GA - Georgia</option>
-                                <option value="MI">MI - Michigan</option>
-                                <option value="OH">OH - Ohio</option>
-                                <option value="TX">TX - Texas</option>
-                                <option value="CA">CA - California</option>
-                                <!-- add more states here if needed -->
-                            </select>
-                        </div>
-                        <div style="flex:1;">
-                            <strong>Provider</strong>
-                            <select name="Provider" id="settings-provider"
-                                    style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
-                                <option value="">None / Not Listed</option>
-                                <option value="Bluebird Network">Bluebird Network</option>
-                                <option value="FNA Network">FNA Network</option>
-                                <option value="Segra EAST">Segra EAST</option>
-                                <option value="Segra WEST">Segra WEST</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <button type="submit" class="btn btn-primary" style="margin-top:25px;width:100%;padding:12px;font-size:1rem;">
-                        Save Settings
-                    </button>
+                    <label style="display:block;margin:15px 0 5px;">
+                        <strong>Password</strong> (leave blank to keep current)<br>
+                        <input type="password" name="password" placeholder="New password" style="width:100%;padding:10px;margin-top:5px;border:1px solid #ccc;border-radius:6px;">
+                    </label>
+                    <label style="display:block;margin:15px 0 5px;">
+                        <strong>Filter Threshold</strong> (max records to calculate distance)<br>
+                        <input type="number" name="ft" id="settings-ft" min="10" max="1000" value="100" style="width:100%;padding:10px;margin-top:5px;border:1px solid #ccc;border-radius:6px;">
+                    </label>
+                    <label style="display:block;margin:15px 0 5px;">
+                        <strong>Distance Minimum</strong> (miles) — hide farther results<br>
+                        <input type="number" name="dm" id="settings-dm" step="0.1" min="0" max="100" value="5.0" style="width:100%;padding:10px;margin-top:5px;border:1px solid #ccc;border-radius:6px;">
+                    </label>
+                    <button type="submit" class="btn btn-primary" style="margin-top:20px;width:100%;">Save Settings</button>
                 </form>
             </div>
         </div>
@@ -1468,7 +1380,7 @@
             const urlParams = new URLSearchParams(window.location.search);
             const state = urlParams.get('state')?.toUpperCase() || '';
             const bluebirdStates = ['IA','KS','IL','MO','OK'];
-            const fnaStates = ['MI','OH','PA','FL','GA','NC','SC','LA','TN','KY','VA','WV','MD','DE','NJ','AL','TX','CO'];
+            const fnaStates = ['MI','OH','PA','FL','GA','NC','SC','LA','TN','KY','VA','WV','MD','DE','NJ','AL'];
             let currentNetwork = localStorage.getItem('preferredNetwork') || 'bluebird';
             if (fnaStates.includes(state)) currentNetwork = 'fna';
             else if (bluebirdStates.includes(state)) currentNetwork = 'bluebird';
@@ -1577,20 +1489,13 @@
             fetch('/erate/user_settings')
                 .then(r => r.json())
                 .then(data => {
-                    document.getElementById('settings-ft').value       = data.ft       || 100;
-                    document.getElementById('settings-dm').value       = data.dm       || 5.0;
-                    document.getElementById('settings-email').value    = data.Email     || '';
-                    document.getElementById('settings-mystate').value  = data.MyState   || 'KS';
-                    document.getElementById('settings-provider').value = data.Provider  || '';
+                    document.getElementById('settings-ft').value = data.ft || 100;
+                    document.getElementById('settings-dm').value = data.dm || 5.0;
                     document.getElementById('settings-modal').classList.add('show');
                 })
-                .catch(err => {
-                    console.error('Failed to load user settings:', err);
-                    document.getElementById('settings-ft').value       = 100;
-                    document.getElementById('settings-dm').value       = 5.0;
-                    document.getElementById('settings-email').value    = '';
-                    document.getElementById('settings-mystate').value  = 'KS';
-                    document.getElementById('settings-provider').value = '';
+                .catch(() => {
+                    document.getElementById('settings-ft').value = 100;
+                    document.getElementById('settings-dm').value = 5.0;
                     document.getElementById('settings-modal').classList.add('show');
                 });
         });
