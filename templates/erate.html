@@ -395,19 +395,39 @@
             </div>
         </div>
     </div>
-    <!-- REGISTER MODAL -->
+    <!-- REGISTER MODAL – NOW INCLUDES EMAIL -->
     <div class="modal" id="registerModal" style="display:none;">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width:460px;">
             <div class="modal-header">
                 <div class="modal-title">Register</div>
-                <button class="modal-close" onclick="closeModal('register')">x</button>
+                <button class="modal-close" onclick="closeModal('register')">×</button>
             </div>
             <div class="modal-body">
                 <form method="POST" action="{{ url_for('erate.admin') }}">
                     <input type="hidden" name="action" value="register">
-                    <input type="text" name="username" placeholder="Username" required minlength="3" style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
-                    <input type="password" name="password" placeholder="Password" required minlength="4" style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
-                    <button type="submit" class="btn btn-primary">Register</button>
+                    
+                    <div style="margin:15px 0 5px;">
+                        <strong>Username</strong>
+                        <input type="text" name="username" placeholder="Choose a username" required minlength="3"
+                               style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
+                    </div>
+
+                    <div style="margin:15px 0 5px;">
+                        <strong>Email</strong> (optional)
+                        <input type="email" name="Email" placeholder="your@email.com"
+                               style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
+                    </div>
+
+                    <div style="margin:15px 0 5px;">
+                        <strong>Password</strong>
+                        <input type="password" name="password" placeholder="Choose a password" required minlength="4"
+                               style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary"
+                            style="margin-top:25px;width:100%;padding:14px;font-size:1rem;">
+                        Create Account
+                    </button>
                 </form>
             </div>
         </div>
