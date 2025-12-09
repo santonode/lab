@@ -1256,50 +1256,35 @@ def load_user():
         session['username'] = None
         session['is_santo'] = False
 
-# === ADMIN CONSOLE ==============================
 @erate_bp.route('/admin', methods=['GET', 'POST'])
 def admin():
     if request.args.get('logout'):
         session.clear()
         flash("Logged out", "success")
         return redirect(url_for('erate.dashboard'))
-
     if request.method == 'POST':
         action = request.form.get('action')
-
-        # === REGISTER – NOW SAVES EMAIL ===
         if action == 'register':
             username = request.form['username'].strip()
             password = request.form['password']
-            email = request.form.get('Email', '').strip() or None
-
             if len(username) < 3 or len(password) < 4:
                 flash("Username ≥3, Password ≥4", "error")
                 return redirect(url_for('erate.admin'))
-
             with psycopg.connect(DATABASE_URL) as conn:
                 with conn.cursor() as cur:
                     cur.execute("SELECT id FROM users WHERE username = %s", (username,))
                     if cur.fetchone():
                         flash("Username taken", "error")
                         return redirect(url_for('erate.admin'))
-
-                    try:
-                        cur.execute("""
-                            INSERT INTO users (username, password, "Email", user_type, points)
-                            VALUES (%s, %s, %s, 'Member', 100)
-                        """, (username, hash_password(password), email))
-                        conn.commit()
-                        flash(f"Welcome, {username}! Account created.", "success")
-                    except psycopg.errors.UniqueViolation:
-                        flash("This email is already registered.", "error")
-                        return redirect(url_for('erate.admin'))
-
+                    cur.execute(
+                        "INSERT INTO users (username, password, user_type, points) VALUES (%s, %s, %s, %s)",
+                        (username, hash_password(password), 'Member', 100)
+                    )
+                    conn.commit()
             session['username'] = username
             session['is_santo'] = (username == 'santo')
+            flash(f"Welcome, {username}! You have 100 points.", "success")
             return redirect(url_for('erate.dashboard'))
-
-        # === LOGIN ===
         elif action == 'login':
             username = request.form['username'].strip()
             password = request.form['password']
@@ -1315,8 +1300,6 @@ def admin():
                     else:
                         flash("Invalid login", "error")
             return redirect(url_for('erate.admin'))
-
-        # === SANTO ADMIN PASSWORD ===
         elif 'admin_pass' in request.form:
             if request.form['admin_pass'] == os.getenv('ADMIN_PASS', 'santo123'):
                 session['username'] = 'santo'
@@ -1325,10 +1308,7 @@ def admin():
             else:
                 flash("Invalid admin password", "error")
             return redirect(url_for('erate.admin'))
-
-        # === ADMIN ACTIONS (only if is_santo) ===
         if session.get('is_santo'):
-            # DELETE USER
             if 'delete_user' in request.form:
                 user_id = request.form['delete_user']
                 with psycopg.connect(DATABASE_URL) as conn:
@@ -1336,62 +1316,26 @@ def admin():
                         cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
                         conn.commit()
                 flash("User deleted", "success")
-
-            # EDIT USER — FULLY SAFE WITH DUPLICATE EMAIL HANDLING
             elif 'edit_user_id' in request.form:
-                user_id     = request.form['edit_user_id']
-                username    = request.form['new_username'].strip()
-                password    = request.form.get('new_password', '').strip()
-                email       = request.form.get('new_email', '').strip() or None
-                mystate     = request.form.get('new_mystate', '')[:2].upper() or None
-                provider    = request.form.get('new_provider', '').strip() or None
-                user_type   = request.form['new_user_type']
-
-                # Safely handle numeric fields — use current values if blank
-                points_raw  = request.form.get('new_points', '').strip()
-                ft_raw      = request.form.get('new_ft', '').strip()
-                dm_raw      = request.form.get('new_dm', '').strip()
-
+                user_id = request.form['edit_user_id']
+                username = request.form['new_username']
+                password = request.form['new_password']
+                points = request.form['new_points']
+                user_type = request.form['new_user_type']
                 with psycopg.connect(DATABASE_URL) as conn:
                     with conn.cursor() as cur:
-                        # Get current values as fallback
-                        cur.execute("SELECT points, ft, dm FROM users WHERE id = %s", (user_id,))
-                        current = cur.fetchone()
-                        if not current:
-                            flash("User not found", "error")
-                            return redirect(url_for('erate.admin'))
-                        cur_points, cur_ft, cur_dm = current
-
-                        points = int(points_raw) if points_raw else cur_points
-                        ft     = int(ft_raw)     if ft_raw     else cur_ft
-                        dm     = float(dm_raw)   if dm_raw     else float(cur_dm)
-
-                        try:
-                            if password:
-                                cur.execute("""
-                                    UPDATE users SET
-                                        username=%s, password=%s, "Email"=%s, "MyState"=%s, "Provider"=%s,
-                                        points=%s, ft=%s, dm=%s, user_type=%s
-                                    WHERE id=%s
-                                """, (username, hash_password(password), email, mystate, provider,
-                                      points, ft, dm, user_type, user_id))
-                            else:
-                                cur.execute("""
-                                    UPDATE users SET
-                                        username=%s, "Email"=%s, "MyState"=%s, "Provider"=%s,
-                                        points=%s, ft=%s, dm=%s, user_type=%s
-                                    WHERE id=%s
-                                """, (username, email, mystate, provider, points, ft, dm, user_type, user_id))
-                            conn.commit()
-                            flash("User updated successfully", "success")
-                        except psycopg.errors.UniqueViolation as e:
-                            if 'users_email_unique_idx' in str(e):
-                                flash("This email is already used by another user.", "error")
-                            else:
-                                flash("Database error – could not save changes.", "error")
-                            return redirect(url_for('erate.admin'))
-
-            # ADD USER
+                        if password:
+                            cur.execute(
+                                "UPDATE users SET username=%s, password=%s, points=%s, user_type=%s WHERE id=%s",
+                                (username, hash_password(password), points, user_type, user_id)
+                            )
+                        else:
+                            cur.execute(
+                                "UPDATE users SET username=%s, points=%s, user_type=%s WHERE id=%s",
+                                (username, points, user_type, user_id)
+                            )
+                        conn.commit()
+                flash("User updated", "success")
             elif 'add_user' in request.form:
                 username = request.form['username']
                 password = request.form['password']
@@ -1404,34 +1348,12 @@ def admin():
                         )
                         conn.commit()
                 flash("User added", "success")
-
-    # === LOAD ALL USER DATA FOR ADMIN TABLE ===
     users = []
     if session.get('is_santo'):
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT 
-                        id, username,
-                        COALESCE("Email", '') as "Email",
-                        COALESCE("MyState", '') as "MyState",
-                        COALESCE("Provider", '') as "Provider",
-                        COALESCE(password, '') as password,
-                        user_type,
-                        points,
-                        COALESCE(ft, 100) as ft,
-                        COALESCE(dm, 5.0) as dm
-                    FROM users 
-                    ORDER BY id
-                """)
-                users = [
-                    dict(zip([
-                        'id', 'username', 'Email', 'MyState', 'Provider',
-                        'password', 'user_type', 'points', 'ft', 'dm'
-                    ], row))
-                    for row in cur.fetchall()
-                ]
-
+                cur.execute("SELECT id, username, COALESCE(password, ''), user_type, points FROM users ORDER BY id")
+                users = [dict(zip(['id', 'username', 'password', 'user_type', 'points'], row)) for row in cur.fetchall()]
     return render_template('eadmin.html', users=users, session=session)
 
 @erate_bp.route('/set_guest', methods=['POST'])
@@ -1458,61 +1380,46 @@ def set_guest():
             conn.commit()
     return redirect(url_for('erate.dashboard'))
 
-# === USER SETTINGS API – FULLY UPDATED FOR ALL FIELDS ===
+# === USER SETTINGS API (FT = Filter Threshold, DM = Distance Minimum) ===
 @erate_bp.route('/user_settings', methods=['GET', 'POST'])
 def user_settings():
     if not session.get('username'):
-        return jsonify({"ft": 100, "dm": 5.0, "Email": "", "MyState": "KS", "Provider": ""})
-    
+        return jsonify({"ft": 100, "dm": 5.0})
+
     username = session['username']
-    
-    # Guest users get defaults only
+
+    # Guest users get defaults
     if username.startswith('guest_'):
-        return jsonify({"ft": 100, "dm": 5.0, "Email": "", "MyState": "KS", "Provider": ""})
-    
+        return jsonify({"ft": 100, "dm": 5.0})
+
     with psycopg.connect(DATABASE_URL) as conn:
         with conn.cursor() as cur:
             if request.method == 'POST':
                 data = request.form
-                password = data.get('password', '').strip()
-                email = data.get('Email', '').strip()
-                mystate = data.get('MyState', 'KS')[:2].upper()
-                provider = data.get('Provider', '').strip()
-                ft = max(10, min(1000, int(data.get('ft', 100))))
-                dm = max(0.1, min(100.0, float(data.get('dm', 5.0))))
-                
-                # Build dynamic update
-                sets = ["ft = %s", "dm = %s", '"Email" = %s', '"MyState" = %s', '"Provider" = %s']
-                vals = [ft, dm, email, mystate, provider]
-                
+                password = data.get('password')
+                ft = int(data.get('ft', 100))
+                dm = float(data.get('dm', 5.0))
+
                 if password:
-                    sets.append("password = %s")
-                    vals.append(hash_password(password))
-                
-                vals.append(username)
-                
-                cur.execute(f"UPDATE users SET {', '.join(sets)} WHERE username = %s", vals)
+                    cur.execute(
+                        "UPDATE users SET ft=%s, dm=%s, password=%s WHERE username=%s",
+                        (ft, dm, hash_password(password), username)
+                    )
+                else:
+                    cur.execute(
+                        "UPDATE users SET ft=%s, dm=%s WHERE username=%s",
+                        (ft, dm, username)
+                    )
                 conn.commit()
                 flash("Settings saved!", "success")
-            
-            # GET: return all current values
-            cur.execute('''
-                SELECT ft, dm, "Email", "MyState", "Provider"
-                FROM users WHERE username = %s
-            ''', (username,))
+
+            # GET: return current values
+            cur.execute("SELECT ft, dm FROM users WHERE username=%s", (username,))
             row = cur.fetchone()
-            
-            if row:
-                return jsonify({
-                    "ft": row[0] if row[0] is not None else 100,
-                    "dm": float(row[1]) if row[1] is not None else 5.0,
-                    "Email": row[2] or "",
-                    "MyState": row[3] or "KS",
-                    "Provider": row[4] or ""
-                })
-            else:
-                # Fallback defaults if row missing (shouldn't happen)
-                return jsonify({"ft": 100, "dm": 5.0, "Email": "", "MyState": "KS", "Provider": ""})
+            return jsonify({
+                "ft": row[0] if row and row[0] is not None else 100,
+                "dm": float(row[1]) if row and row[1] is not None else 5.0
+            })
 
 # === DYNAMIC COVERAGE REPORT — PURE DATA ONLY (FOR MODAL) ===
 @erate_bp.route('/coverage-report')
