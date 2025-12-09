@@ -436,10 +436,22 @@
     <div class="container">
         <div class="header">
             {% if session.username %}
-                <span class="user-info" id="user-settings-btn" style="cursor:pointer; text-decoration:underline;">
-                    {{ session.username }} 
-                    <span class="points" id="points-display">Loading...</span>
-                </span>
+                {% if session.username.startswith('guest_') %}
+                    <!-- Guest user – settings disabled -->
+                    <span class="user-info" style="color:#aaa; cursor:not-allowed;" title="Settings disabled for guest accounts">
+                        <span id="header-username-clean">{{ session.username }}</span>
+                        <span class="points" id="points-display">Pts: Loading...</span>
+                    </span>
+                {% else %}
+                    <!-- Real member – settings enabled -->
+                    <span class="user-info" id="user-settings-btn" style="cursor:pointer; text-decoration:underline;">
+                        <span id="header-username-clean">{{ session.username }}</span>
+                        <span class="points" id="points-display">Pts: Loading...</span>
+                    </span>
+                {% endif %}
+            {% else %}
+                <!-- Not logged in (shouldn't happen, but safe) -->
+                <span class="user-info">Guest <span class="points" id="points-display">Pts: 25</span></span>
             {% endif %}
             <h1>E-Rate</h1>
             {% if session.username %}
@@ -1485,8 +1497,17 @@
             }
         });
 
-        // === USER SETTINGS MODAL ===
+        // === USER SETTINGS MODAL – BLOCKED FOR GUESTS ===
         document.getElementById('user-settings-btn')?.addEventListener('click', () => {
+            const username = "{{ session.username|default('')|e }}";
+
+            // Block guest users
+            if (username.startsWith('guest_')) {
+                alert("User settings are disabled for guest accounts.");
+                return;
+            }
+
+            // Real members only – open settings modal
             fetch('/erate/user_settings')
                 .then(r => r.json())
                 .then(data => {
