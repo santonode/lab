@@ -1409,29 +1409,35 @@ def set_guest():
 # === USER SETTINGS API – FINAL, BULLETPROOF, 100% WORKING ===
 @erate_bp.route('/user_settings', methods=['GET', 'POST'])
 def user_settings():
-    # SAFEST POSSIBLE: get username with default
-    username = session.get('username', '')
+    # SAFEST POSSIBLE: get username with fallback
+    username = session.get('username')
+    if not username:
+        username = ''
+    
+    # Convert to string and check for guest
+    username_str = str(username)
 
-    # BLOCK GUESTS + missing session
-    if not username or username.startswith('guest_'):
+    # GUESTS + missing session → return defaults + error (200 OK)
+    if username_str == '' or username_str.startswith('guest_'):
         return jsonify({
-            "error": "Settings disabled for guest accounts"
-        }), 200  # ← 200 so fetch doesn't go to .catch()
+            "error": "Settings disabled for guest accounts",
+            "ft": 100,
+            "dm": 5.0,
+            "Email": "",
+            "MyState": "KS",
+            "Provider": ""
+        }), 200
 
     try:
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
                 if request.method == 'GET':
                     cur.execute("""
-                        SELECT 
-                            COALESCE(ft, 100),
-                            COALESCE(dm, 5.0),
-                            COALESCE("Email", ''),
-                            COALESCE("MyState", 'KS'),
-                            COALESCE("Provider", '')
+                        SELECT COALESCE(ft,100), COALESCE(dm,5.0),
+                               COALESCE("Email",''), COALESCE("MyState",'KS'), COALESCE("Provider",'')
                         FROM users 
                         WHERE username = %s
-                    """, (username,))
+                    """, (username_str,))
                     row = cur.fetchone()
 
                     if row:
@@ -1443,13 +1449,9 @@ def user_settings():
                             "Provider": str(row[4])
                         })
 
-                    # User not found in DB? Return defaults
+                    # User not in DB? Return defaults
                     return jsonify({
-                        "ft": 100,
-                        "dm": 5.0,
-                        "Email": "",
-                        "MyState": "KS",
-                        "Provider": ""
+                        "ft": 100, "dm": 5.0, "Email": "", "MyState": "KS", "Provider": ""
                     })
 
                 else:  # POST
@@ -1468,21 +1470,17 @@ def user_settings():
                         sets.append('password = %s')
                         vals.append(hash_password(password))
 
-                    vals.append(username)
+                    vals.append(username_str)
                     cur.execute(f"UPDATE users SET {', '.join(sets)} WHERE username = %s", vals)
                     conn.commit()
 
                     return jsonify({"success": True, "message": "Settings saved!"})
 
     except Exception as e:
-        log(f"user_settings CRITICAL error: {e}")
-        # ALWAYS return valid JSON — never let it crash
+        log(f"CRITICAL user_settings error: {e}")
         return jsonify({
-            "ft": 100,
-            "dm": 5.0,
-            "Email": "",
-            "MyState": "KS",
-            "Provider": ""
+            "error": "Server error — please refresh and try again",
+            "ft": 100, "dm": 5.0, "Email": "", "MyState": "KS", "Provider": ""
         }), 200
 
 # === DYNAMIC COVERAGE REPORT — PURE DATA ONLY (FOR MODAL) ===
