@@ -395,39 +395,19 @@
             </div>
         </div>
     </div>
-    <!-- REGISTER MODAL – NOW INCLUDES EMAIL -->
+    <!-- REGISTER MODAL -->
     <div class="modal" id="registerModal" style="display:none;">
-        <div class="modal-content" style="max-width:460px;">
+        <div class="modal-content">
             <div class="modal-header">
                 <div class="modal-title">Register</div>
-                <button class="modal-close" onclick="closeModal('register')">×</button>
+                <button class="modal-close" onclick="closeModal('register')">x</button>
             </div>
             <div class="modal-body">
                 <form method="POST" action="{{ url_for('erate.admin') }}">
                     <input type="hidden" name="action" value="register">
-                    
-                    <div style="margin:15px 0 5px;">
-                        <strong>Username</strong>
-                        <input type="text" name="username" placeholder="Choose a username" required minlength="3"
-                               style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
-                    </div>
-
-                    <div style="margin:15px 0 5px;">
-                        <strong>Email</strong> (optional)
-                        <input type="email" name="Email" placeholder="your@email.com"
-                               style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
-                    </div>
-
-                    <div style="margin:15px 0 5px;">
-                        <strong>Password</strong>
-                        <input type="password" name="password" placeholder="Choose a password" required minlength="4"
-                               style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
-                    </div>
-
-                    <button type="submit" class="btn btn-primary"
-                            style="margin-top:25px;width:100%;padding:14px;font-size:1rem;">
-                        Create Account
-                    </button>
+                    <input type="text" name="username" placeholder="Username" required minlength="3" style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
+                    <input type="password" name="password" placeholder="Password" required minlength="4" style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
+                    <button type="submit" class="btn btn-primary">Register</button>
                 </form>
             </div>
         </div>
@@ -824,7 +804,6 @@
             </div>
         </div>
     </div>
-    
     <!-- OUT OF POINTS MODAL -->
     <div class="modal" id="outOfPointsModal">
         <div class="modal-content">
@@ -840,90 +819,28 @@
         </div>
     </div>
 
-    <!-- USER SETTINGS MODAL - FINAL LOOK & FUNCTION -->
+    <!-- USER SETTINGS MODAL -->
     <div class="modal" id="settings-modal">
-        <div class="modal-content" style="max-width:460px;">
+        <div class="modal-content" style="max-width:420px;">
             <div class="modal-header">
                 <div class="modal-title">User Settings</div>
-                <button class="modal-close" onclick="document.getElementById('settings-modal').classList.remove('show')">×</button>
+                <button class="modal-close" onclick="closeModal('settings')">x</button>
             </div>
             <div class="modal-body">
                 <form id="settings-form">
-                    <!-- Password -->
-                    <div style="margin:15px 0 5px;">
-                        <strong>Password</strong> (leave blank to keep current)
-                        <input type="password" name="password" placeholder="New password"
-                               style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
-                    </div>
-
-                    <!-- Email -->
-                    <div style="margin:15px 0 5px;">
-                        <strong>Email</strong>
-                        <input type="email" name="Email" id="settings-email" placeholder="your@email.com"
-                               style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
-                    </div>
-
-                    <!-- FT & DM side-by-side -->
-                    <div style="display:flex;gap:12px;margin:18px 0 5px;flex-wrap:wrap;">
-                        <div style="flex:1;min-width:140px;">
-                            <strong>FT</strong> <small style="color:#666;">(max records)</small>
-                            <input type="number" name="ft" id="settings-ft" min="10" max="1000"
-                                   style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
-                        </div>
-                        <div style="flex:1;min-width:140px;">
-                            <strong>DM</strong> <small style="color:#666;">(miles min)</small>
-                            <input type="number" name="dm" id="settings-dm" step="0.1" min="0" max="100"
-                                   style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
-                        </div>
-                    </div>
-
-                    <!-- My State & Provider side-by-side -->
-                    <div style="display:flex;gap:12px;margin:18px 0 5px;flex-wrap:wrap;">
-                        <div style="flex:1;">
-                            <strong>My State</strong>
-                            <select name="MyState" id="settings-mystate"
-                                    style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
-                                <option value="AL">AL - Alabama</option>
-                                <option value="CA">CA - California</option>
-                                <option value="FL">FL - Florida</option>
-                                <option value="GA">GA - Georgia</option>
-                                <option value="IL">IL - Illinois</option>
-                                <option value="IA">IA - Iowa</option>
-                                <option value="KS">KS - Kansas</option>
-                                <option value="MO">MO - Missouri</option>
-                                <option value="MI">MI - Michigan</option>
-                                <option value="OH">OH - Ohio</option>
-                                <option value="OK">OK - Oklahoma</option>
-                                <option value="TX">TX - Texas</option>
-                            </select>
-                        </div>
-                        <div style="flex:1;">
-                            <strong>Provider</strong>
-                            <select name="Provider" id="settings-provider"
-                                    style="width:100%;padding:10px;margin-top:6px;border:1px solid #ccc;border-radius:6px;">
-                                <option value="">None / Not Listed</option>
-                                <option value="Bluebird Network">Bluebird Network</option>
-                                <option value="FNA Network">FNA Network</option>
-                                <option value="Segra EAST">Segra EAST</option>
-                                <option value="Segra WEST">Segra WEST</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div id="guest-settings-message" style="display:none; color:#e74c3c; text-align:center; margin:20px 0; padding:12px; background:#fdf2f2; border-radius:8px; font-weight:600;">
-                        Guest mode — please <a href="#" 
-                           onclick="document.getElementById('authModal').style.display='flex'; 
-                                    document.getElementById('settings-modal').classList.remove('show'); 
-                                    return false;" 
-                           style="color:#3498db; text-decoration:underline;">log in</a> to save settings.
-                    </div>
-                    
-                    <!-- Save Button -->
-                    <button type="submit" id="settings-save-btn" class="btn btn-primary"
-                            style="margin-top:25px;width:100%;padding:14px;font-size:1rem;">
-                        Save Settings
-                    </button>
-                    
+                    <label style="display:block;margin:15px 0 5px;">
+                        <strong>Password</strong> (leave blank to keep current)<br>
+                        <input type="password" name="password" placeholder="New password" style="width:100%;padding:10px;margin-top:5px;border:1px solid #ccc;border-radius:6px;">
+                    </label>
+                    <label style="display:block;margin:15px 0 5px;">
+                        <strong>Filter Threshold</strong> (max records to calculate distance)<br>
+                        <input type="number" name="ft" id="settings-ft" min="10" max="1000" value="100" style="width:100%;padding:10px;margin-top:5px;border:1px solid #ccc;border-radius:6px;">
+                    </label>
+                    <label style="display:block;margin:15px 0 5px;">
+                        <strong>Distance Minimum</strong> (miles) — hide farther results<br>
+                        <input type="number" name="dm" id="settings-dm" step="0.1" min="0" max="100" value="5.0" style="width:100%;padding:10px;margin-top:5px;border:1px solid #ccc;border-radius:6px;">
+                    </label>
+                    <button type="submit" class="btn btn-primary" style="margin-top:20px;width:100%;">Save Settings</button>
                 </form>
             </div>
         </div>
@@ -1049,7 +966,7 @@
                     const urlParams = new URLSearchParams(window.location.search);
                     const state = urlParams.get('state')?.toUpperCase() || '';
                     const bluebirdStates = ['IA','KS','IL','MO','OK'];
-                    const fnaStates = ['MI','OH','PA','FL','GA','NC','SC','LA','TN','KY','VA','WV','MD','DE','NJ','AL','CO','TX'];
+                    const fnaStates = ['MI','OH','PA','FL','GA','NC','SC','LA','TN','KY','VA','WV','MD','DE','NJ','AL'];
                     let network = localStorage.getItem('preferredNetwork') || 'bluebird';
                     if (fnaStates.includes(state)) {
                         network = 'fna';
@@ -1521,7 +1438,7 @@
                             headers: {'Content-Type': 'application/json'},
                             body: JSON.stringify({
                                 app_number: appNum,
-                                distance: originalText
+                                distance: originalText  // ← THIS IS THE MISSING PIECE
                             })
                         });
                         const data = await resp.json();
@@ -1568,50 +1485,18 @@
             }
         });
 
-        // === USER SETTINGS MODAL – FINAL: READS ALL FIELDS + DISABLES SAVE FOR GUESTS ===
+        // === USER SETTINGS MODAL ===
         document.getElementById('user-settings-btn')?.addEventListener('click', () => {
             fetch('/erate/user_settings')
                 .then(r => r.json())
                 .then(data => {
-                    // Populate all fields
-                    document.getElementById('settings-ft').value        = data.ft || 100;
-                    document.getElementById('settings-dm').value        = data.dm || 5.0;
-                    document.getElementById('settings-email').value     = data.Email || '';
-                    document.getElementById('settings-mystate').value   = data.MyState || 'KS';
-                    document.getElementById('settings-provider').value  = data.Provider || '';
-
-                    const saveBtn  = document.getElementById('settings-save-btn');
-                    const guestMsg = document.getElementById('guest-settings-message');
-
-                    if (data.error || !data.ft) {
-                        // GUEST → disable Save button + show message
-                        saveBtn.disabled = true;
-                        saveBtn.style.opacity = '0.5';
-                        saveBtn.style.cursor = 'not-allowed';
-                        if (guestMsg) guestMsg.style.display = 'block';
-                    } else {
-                        // MEMBER → enable Save
-                        saveBtn.disabled = false;
-                        saveBtn.style.opacity = '1';
-                        saveBtn.style.cursor = 'pointer';
-                        if (guestMsg) guestMsg.style.display = 'none';
-                    }
-
+                    document.getElementById('settings-ft').value = data.ft || 100;
+                    document.getElementById('settings-dm').value = data.dm || 5.0;
                     document.getElementById('settings-modal').classList.add('show');
                 })
                 .catch(() => {
-                    // Fallback: treat as guest
                     document.getElementById('settings-ft').value = 100;
                     document.getElementById('settings-dm').value = 5.0;
-                    document.getElementById('settings-email').value = '';
-                    document.getElementById('settings-mystate').value = 'KS';
-                    document.getElementById('settings-provider').value = '';
-
-                    const saveBtn = document.getElementById('settings-save-btn');
-                    saveBtn.disabled = true;
-                    saveBtn.style.opacity = '0.5';
-                    document.getElementById('guest-settings-message')?.style.display = 'block';
-
                     document.getElementById('settings-modal').classList.add('show');
                 });
         });
