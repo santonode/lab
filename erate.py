@@ -1409,6 +1409,11 @@ def set_guest():
 # === USER SETTINGS API (FT = Filter Threshold, DM = Distance Minimum) ===
 @erate_bp.route('/user_settings', methods=['GET', 'POST'])
 def user_settings():
+    
+    # BLOCK GUESTS — safest place, no frontend changes
+    if session.get('username', '').startswith('guest_'):
+        return jsonify({"error": "Settings disabled for guest accounts"}), 403
+    
     if not session.get('username'):
         return jsonify({"ft": 100, "dm": 5.0})
 
