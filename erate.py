@@ -1410,10 +1410,16 @@ def set_guest():
 @erate_bp.route('/user_settings', methods=['GET', 'POST'])
 def user_settings():
     username = session.get('username', '')
+
+    # GUESTS + missing session → return clean 200 JSON with error
     if not username or username.startswith('guest_'):
         return jsonify({
             "error": "Settings disabled for guest accounts",
-            "ft": 100, "dm": 5.0, "Email": "", "MyState": "KS", "Provider": ""
+            "ft": 100,
+            "dm": 5.0,
+            "Email": "",
+            "MyState": "KS",
+            "Provider": ""
         })
 
     try:
@@ -1427,11 +1433,11 @@ def user_settings():
                     row = cur.fetchone()
 
                     return jsonify({
-                        "ft": int(row[0]) if row[0] is not None else 100,
-                        "dm": float(row[1]) if row[1] is not None else 5.0,
-                        "Email": str(row[2]) if row[2] is not None else "",
-                        "MyState": str(row[3]) if row[3] is not None else "KS",
-                        "Provider": str(row[4]) if row[4] is not None else ""
+                        "ft": int(row[0]) if row and row[0] is not None else 100,
+                        "dm": float(row[1]) if row and row[1] is not None else 5.0,
+                        "Email": str(row[2]) if row and row[2] is not None else "",
+                        "MyState": str(row[3]) if row and row[3] is not None else "KS",
+                        "Provider": str(row[4]) if row and row[4] is not None else ""
                     })
 
                 else:  # POST
@@ -1441,23 +1447,21 @@ def user_settings():
                     mystate  = (data.get('MyState') or 'KS')[:2].upper()
                     provider = data.get('Provider', '').strip()
                     ft       = max(10, min(1000, int(data.get('ft', 100))))
-                    dm       = max(0.1, min(99.9, float(data.get('dm', 5.0))))  # ← CRITICAL FIX
+                    dm       = max(0.1, min(99.9, float(data.get('dm', 5.0))))  # safe for numeric(5,1)
 
                     sets = ['ft = %s', 'dm = %s', '"Email" = %s', '"MyState" = %s', '"Provider" = %s']
                     vals = [ft, dm, email, mystate, provider]
-
                     if password:
                         sets.append('password = %s')
                         vals.append(hash_password(password))
-
                     vals.append(username)
+
                     cur.execute(f"UPDATE users SET {', '.join(sets)} WHERE username = %s", vals)
                     conn.commit()
-
                     return jsonify({"success": True})
 
     except Exception as e:
-        current_app.logger.error(f"USER_SETTINGS ERROR: {e} | user: {username}")
+        current_app.logger.error(f"USER_SETTINGS CRASH: {e} | user: {username}")
         return jsonify({
             "ft": 100, "dm": 5.0, "Email": "", "MyState": "KS", "Provider": "",
             "error": "Server error"
