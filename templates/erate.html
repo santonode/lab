@@ -1485,20 +1485,41 @@
             }
         });
 
-        // === USER SETTINGS MODAL ===
         document.getElementById('user-settings-btn')?.addEventListener('click', () => {
             fetch('/erate/user_settings')
                 .then(r => r.json())
                 .then(data => {
+                    if (data.error) {
+                        alert(data.error);
+                        return;
+                    }
                     document.getElementById('settings-ft').value = data.ft || 100;
                     document.getElementById('settings-dm').value = data.dm || 5.0;
+                    document.getElementById('settings-email').value = data.Email || '';
+                    document.getElementById('settings-mystate').value = data.MyState || 'KS';
+                    document.getElementById('settings-provider').value = data.Provider || '';
                     document.getElementById('settings-modal').classList.add('show');
                 })
-                .catch(() => {
-                    document.getElementById('settings-ft').value = 100;
-                    document.getElementById('settings-dm').value = 5.0;
-                    document.getElementById('settings-modal').classList.add('show');
-                });
+                .catch(() => alert("Could not load settings"));
+        });
+
+        // Save settings
+        document.getElementById('settings-form')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            fetch('/erate/user_settings', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    alert("Settings saved!");
+                    document.getElementById('settings-modal').classList.remove('show');
+                } else {
+                    alert(data.error || "Save failed");
+                }
+            });
         });
 
         document.getElementById('settings-form')?.addEventListener('submit', (e) => {
