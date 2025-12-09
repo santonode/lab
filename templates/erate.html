@@ -1521,7 +1521,7 @@
                             headers: {'Content-Type': 'application/json'},
                             body: JSON.stringify({
                                 app_number: appNum,
-                                distance: originalText  // ← THIS IS THE MISSING PIECE
+                                distance: originalText
                             })
                         });
                         const data = await resp.json();
