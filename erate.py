@@ -1409,56 +1409,39 @@ def set_guest():
 # === USER SETTINGS API – FINAL, BULLETPROOF, 100% WORKING ===
 @erate_bp.route('/user_settings', methods=['GET', 'POST'])
 def user_settings():
+    username = session.get('username', '')
+    if not username or username.startswith('guest_'):
+        return jsonify({
+            "error": "Settings disabled for guest accounts",
+            "ft": 100, "dm": 5.0, "Email": "", "MyState": "KS", "Provider": ""
+        })
+
     try:
-        # Get username safely — this is the ONLY safe way
-        username = session.get('username')
-        if not username:
-            username = ''
-
-        # Block guests and missing session — return 200 + valid JSON
-        if username == '' or str(username).startswith('guest_'):
-            return jsonify({
-                "error": "Settings disabled for guest accounts",
-                "ft": 100,
-                "dm": 5.0,
-                "Email": "",
-                "MyState": "KS",
-                "Provider": ""
-            })
-
-        # Real member — proceed
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
                 if request.method == 'GET':
                     cur.execute("""
-                        SELECT COALESCE(ft,100), COALESCE(dm,5.0),
-                               COALESCE("Email",''), COALESCE("MyState",'KS'), COALESCE("Provider",'')
+                        SELECT ft, dm, "Email", "MyState", "Provider"
                         FROM users WHERE username = %s
                     """, (username,))
                     row = cur.fetchone()
 
-                    if row:
-                        return jsonify({
-                            "ft": int(row[0]),
-                            "dm": float(row[1]),
-                            "Email": str(row[2]),
-                            "MyState": str(row[3]),
-                            "Provider": str(row[4])
-                        })
-
-                    # Fallback
                     return jsonify({
-                        "ft": 100, "dm": 5.0, "Email": "", "MyState": "KS", "Provider": ""
+                        "ft": int(row[0]) if row[0] is not None else 100,
+                        "dm": float(row[1]) if row[1] is not None else 5.0,
+                        "Email": str(row[2]) if row[2] is not None else "",
+                        "MyState": str(row[3]) if row[3] is not None else "KS",
+                        "Provider": str(row[4]) if row[4] is not None else ""
                     })
 
                 else:  # POST
                     data = request.form
                     password = data.get('password', '').strip()
                     email    = data.get('Email', '').strip()
-                    mystate  = (data.get('MyState', 'KS') or 'KS')[:2].upper()
+                    mystate  = (data.get('MyState') or 'KS')[:2].upper()
                     provider = data.get('Provider', '').strip()
                     ft       = max(10, min(1000, int(data.get('ft', 100))))
-                    dm       = max(0.1, min(100.0, float(data.get('dm', 5.0))))
+                    dm       = max(0.1, min(99.9, float(data.get('dm', 5.0))))  # ← CRITICAL FIX
 
                     sets = ['ft = %s', 'dm = %s', '"Email" = %s', '"MyState" = %s', '"Provider" = %s']
                     vals = [ft, dm, email, mystate, provider]
@@ -1474,11 +1457,10 @@ def user_settings():
                     return jsonify({"success": True})
 
     except Exception as e:
-        # CRITICAL: ALWAYS return valid JSON, never let it crash
-        current_app.logger.error(f"USER_SETTINGS CRASH: {e}")
+        current_app.logger.error(f"USER_SETTINGS ERROR: {e} | user: {username}")
         return jsonify({
             "ft": 100, "dm": 5.0, "Email": "", "MyState": "KS", "Provider": "",
-            "error": "Server error — please refresh"
+            "error": "Server error"
         })
 
 @erate_bp.route('/debug_settings', methods=['GET'])
