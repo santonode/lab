@@ -1817,49 +1817,6 @@ def download_export():
         mimetype='text/csv'
     )
 
-# === STREAM KML FUNCTION (already exists — keep it exactly as-is) ===
-def stream_kml(path, name, color):
-    if not os.path.exists(path):
-        print(f"Missing KML: {path}")
-        return
-    try:
-        with open(path, 'r', encoding='utf-8') as f:
-            root = ET.fromstring(f.read())
-        ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-        count = 0
-        for coords_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
-            if not coords_elem.text:
-                continue
-            points = []
-            for token in coords_elem.text.strip().split():
-                parts = token.split(',')
-                if len(parts) >= 2:
-                    try:
-                        lon, lat = float(parts[0]), float(parts[1])
-                        points.append([lat, lon])  # [lat, lng] for Leaflet
-                    except ValueError:
-                        continue
-            if len(points) >= 2:
-                yield json.dumps({"name": name, "color": color, "coords": points}) + "\n"
-                count += 1
-        print(f" → {name}: {count} lines (KML)")
-    except Exception as e:
-        print(f"KML parse error ({name}): {e}")
-
-# === NEW ROUTE: CDT NETWORK ===
-@erate_bp.route('/erate/cdt_network')
-def cdt_network():
-    response = app.response_class(
-        stream_kml(
-            path=os.path.join(os.path.dirname(__file__), 'CDT.kml'),
-            name="CDT Statewide Network",
-            color="#ff0000"  # Bright red — matches your KML
-        ) or (),
-        mimetype='application/json-lines'
-    )
-    response.headers['Cache-Control'] = 'public, max-age=3600'
-    return response
-
 @erate_bp.route('/guest-reset', methods=['POST'])
 def guest_reset():
     if 'username' not in session:
