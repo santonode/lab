@@ -1026,7 +1026,7 @@
             }
         }
         
-        // === RUN ALL JS ON LOAD ===
+        // === RUN ALL JS ON LOAD – NOW WITH CDT AUTO-DETECT FOR CALIFORNIA ===
         window.addEventListener('load', () => {
             const isLoggedIn = {{ 'true' if session.username else 'false' }};
             if (!isLoggedIn) {
@@ -1035,9 +1035,11 @@
                 updatePoints();
                 setInterval(updatePoints, 5000);
             }
+
             document.querySelectorAll('.app-number').forEach(el => {
                 el.onclick = () => showDetails(el.textContent.trim());
             });
+
             // BLUE MAP BUTTON — AUTO-SELECTS NETWORK + DEDUCTS 1 POINT
             document.querySelectorAll('.btn-sm').forEach(btn => {
                 btn.onclick = function () {
@@ -1049,10 +1051,16 @@
                     // AUTO DETECT NETWORK FROM CURRENT STATE FILTER
                     const urlParams = new URLSearchParams(window.location.search);
                     const state = urlParams.get('state')?.toUpperCase() || '';
+
                     const bluebirdStates = ['IA','KS','IL','MO','OK'];
                     const fnaStates = ['MI','OH','PA','FL','GA','NC','SC','LA','TN','KY','VA','WV','MD','DE','NJ','AL','CO','TX'];
+                    const cdtStates = ['CA'];  // California = CDT
+
                     let network = localStorage.getItem('preferredNetwork') || 'bluebird';
-                    if (fnaStates.includes(state)) {
+
+                    if (cdtStates.includes(state)) {
+                        network = 'cdt';
+                    } else if (fnaStates.includes(state)) {
                         network = 'fna';
                     } else if (bluebirdStates.includes(state)) {
                         network = 'bluebird';
@@ -1066,13 +1074,15 @@
                     }
 
                     // DEDUCT 1 POINT FOR MAP CLICK
-                    fetch(`/erate/bbmap/${appNumber}?deduct=1`, { method: 'HEAD' })
-                        .catch(() => {}); // Silent — we don't care about response
+                    if (network !== 'cdt') {
+                        fetch(`/erate/bbmap/${appNumber}?deduct=1`, { method: 'HEAD' }).catch(() => {});
+                    }
 
                     openMapModal(appNumber, lat, lon);
                 };
             });
         });
+        
         document.addEventListener('click', updatePoints);
         document.addEventListener('submit', updatePoints);
 
@@ -1113,7 +1123,7 @@
             overlay.classList.remove('show');
         }
 
-        // === NETWORK SWITCHER – NOW SUPPORTS BLUEBIRD, FNA, AND CDT ===
+        // === NETWORK SWITCHER – FINAL: CDT WORKS 100% ===
         document.getElementById('network-select')?.addEventListener('change', async (e) => {
             const network = e.target.value;
             currentNetwork = network;
@@ -1123,8 +1133,9 @@
             const displayEl = document.getElementById('current-network-display');
             const memberSelect = document.getElementById('fna-member-select');
             const mapLoading = document.getElementById('map-loading');
+            const mapDiv = document.getElementById('map-container');
 
-            // Update title and network name
+            // Update title
             if (network === 'fna') {
                 titleEl.textContent = 'FNA Network + Applicant';
                 displayEl.textContent = 'FNA Network';
@@ -1140,29 +1151,26 @@
             document.body.style.cursor = 'wait';
 
             try {
-                let url;
-                if (network === 'bluebird') {
-                    url = `/erate/bbmap/${currentAppNumber}?network=bluebird`;
-                } else if (network === 'fna') {
-                    url = `/erate/bbmap/${currentAppNumber}?network=fna`;
-                } else if (network === 'cdt') {
-                    url = '/erate/cdt_network';
+                // === CLEAR AND RE-INITIALIZE MAP IF NEEDED ===
+                if (!mapDiv._leaflet_map) {
+                    mapDiv.innerHTML = '';
+                    const map = L.map('map-container').setView([37.8, -119.4], 6);  // Center on California
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '&copy; OpenStreetMap'
+                    }).addTo(map);
+                    mapDiv._leaflet_map = map;
                 }
 
-                // Clear previous layers
-                const mapDiv = document.getElementById('map-container');
-                if (mapDiv._leaflet_map) {
-                    mapDiv._leaflet_map.eachLayer(layer => {
-                        if (layer !== mapDiv._leaflet_map._tileLayer) {
-                            mapDiv._leaflet_map.removeLayer(layer);
-                        }
-                    });
-                }
+                // Remove all previous network layers
+                mapDiv._leaflet_map.eachLayer(layer => {
+                    if (layer !== mapDiv._leaflet_map._tileLayer) {
+                        mapDiv._leaflet_map.removeLayer(layer);
+                    }
+                });
 
-                // Load and draw new network
+                // === LOAD NETWORK DATA ===
                 if (network === 'cdt') {
-                    // CDT uses JSON Lines streaming
-                    const resp = await fetch(url);
+                    const resp = await fetch('/erate/cdt_network');
                     const reader = resp.body.getReader();
                     const decoder = new TextDecoder();
                     let buffer = '';
@@ -1172,47 +1180,47 @@
                         if (done) break;
                         buffer += decoder.decode(value, { stream: true });
                         const lines = buffer.split('\n');
-                        buffer = lines.pop(); // incomplete line
+                        buffer = lines.pop();
                         for (const line of lines) {
                             if (!line.trim()) continue;
                             const route = JSON.parse(line);
                             if (route.coords && route.coords.length > 1) {
                                 L.polyline(route.coords, {
-                                    color: route.color || '#ff0000',
+                                    color: '#ff0000',
                                     weight: 4,
                                     opacity: 0.9
                                 }).addTo(mapDiv._leaflet_map);
                             }
                         }
                     }
-                } else {
-                    // Bluebird & FNA use existing loadMap
-                    if (network === 'fna') {
-                        memberSelect.style.display = 'block';
-                        memberSelect.disabled = true;
-                        memberSelect.innerHTML = '<option>Loading members...</option>';
-
-                        const resp = await fetch(url);
-                        const data = await resp.json();
-
-                        if (data.fna_members?.length > 0) {
-                            memberSelect.innerHTML = '<option value="">— Select Member —</option>';
-                            data.fna_members.forEach(text => {
-                                const clean = text.replace(/^★\s*/, '').split(' (')[0].trim();
-                                memberSelect.appendChild(new Option(text, clean));
-                            });
-                            memberSelect.disabled = false;
-                            currentFnaMember = memberSelect.options[1]?.value || null;
-                            memberSelect.value = currentFnaMember;
-                        }
-                    } else {
-                        memberSelect.style.display = 'none';
-                        currentFnaMember = null;
+                    memberSelect.style.display = 'none';
+                    currentFnaMember = null;
+                } 
+                else if (network === 'fna') {
+                    memberSelect.style.display = 'block';
+                    memberSelect.disabled = true;
+                    memberSelect.innerHTML = '<option>Loading members...</option>';
+                    const resp = await fetch(`/erate/bbmap/${currentAppNumber}?network=fna`);
+                    const data = await resp.json();
+                    if (data.fna_members?.length > 0) {
+                        memberSelect.innerHTML = '<option value="">— Select Member —</option>';
+                        data.fna_members.forEach(text => {
+                            const clean = text.replace(/^★\s*/, '').split(' (')[0].trim();
+                            memberSelect.appendChild(new Option(text, clean));
+                        });
+                        memberSelect.disabled = false;
+                        currentFnaMember = memberSelect.options[1]?.value || null;
+                        memberSelect.value = currentFnaMember;
                     }
+                    await loadMap(currentAppNumber, network, currentFnaMember);
+                } 
+                else {
+                    memberSelect.style.display = 'none';
+                    currentFnaMember = null;
                     await loadMap(currentAppNumber, network, currentFnaMember);
                 }
 
-                // Re-add applicant marker if exists
+                // Re-add applicant marker
                 if (window.lastApplicantMarker) {
                     window.lastApplicantMarker.addTo(mapDiv._leaflet_map);
                 }
