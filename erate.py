@@ -1481,6 +1481,21 @@ def user_settings():
             "error": "Server error — please refresh"
         })
 
+@erate_bp.route('/debug_settings', methods=['GET'])
+def debug_settings():
+    # Log everything we see
+    current_app.logger.info(f"DEBUG: session = {session}")
+    current_app.logger.info(f"DEBUG: username = {session.get('username')}")
+    current_app.logger.info(f"DEBUG: request.headers = {dict(request.headers)}")
+    
+    # Always return simple JSON
+    return jsonify({
+        "debug": True,
+        "session_username": session.get('username', 'NO_SESSION'),
+        "status": "ok",
+        "ft": 100
+    }), 200
+
 # === DYNAMIC COVERAGE REPORT — PURE DATA ONLY (FOR MODAL) ===
 @erate_bp.route('/coverage-report')
 def coverage_report():
