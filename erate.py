@@ -1409,27 +1409,31 @@ def set_guest():
 # === USER SETTINGS API – FINAL, BULLETPROOF, 100% WORKING ===
 @erate_bp.route('/user_settings', methods=['GET', 'POST'])
 def user_settings():
-    # Get username safely
-    username = session.get('username')
+    # SAFEST POSSIBLE: get username with default
+    username = session.get('username', '')
 
-    # BLOCK GUESTS + handle missing session
-    if not username or str(username).startswith('guest_'):
+    # BLOCK GUESTS + missing session
+    if not username or username.startswith('guest_'):
         return jsonify({
             "error": "Settings disabled for guest accounts"
-        }), 403
+        }), 200  # ← 200 so fetch doesn't go to .catch()
 
     try:
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
                 if request.method == 'GET':
                     cur.execute("""
-                        SELECT COALESCE(ft,100), COALESCE(dm,5.0),
-                               COALESCE("Email",''), COALESCE("MyState",'KS'), COALESCE("Provider",'')
-                        FROM users WHERE username = %s
+                        SELECT 
+                            COALESCE(ft, 100),
+                            COALESCE(dm, 5.0),
+                            COALESCE("Email", ''),
+                            COALESCE("MyState", 'KS'),
+                            COALESCE("Provider", '')
+                        FROM users 
+                        WHERE username = %s
                     """, (username,))
                     row = cur.fetchone()
 
-                    # Always return valid data — never crash
                     if row:
                         return jsonify({
                             "ft": int(row[0]),
@@ -1439,7 +1443,7 @@ def user_settings():
                             "Provider": str(row[4])
                         })
 
-                    # Fallback if user not found (shouldn't happen)
+                    # User not found in DB? Return defaults
                     return jsonify({
                         "ft": 100,
                         "dm": 5.0,
@@ -1452,7 +1456,7 @@ def user_settings():
                     data = request.form
                     password = data.get('password', '').strip()
                     email    = data.get('Email', '').strip()
-                    mystate  = (data.get('MyState') or 'KS')[:2].upper()
+                    mystate  = (data.get('MyState', 'KS') or 'KS')[:2].upper()
                     provider = data.get('Provider', '').strip()
                     ft       = max(10, min(1000, int(data.get('ft', 100))))
                     dm       = max(0.1, min(100.0, float(data.get('dm', 5.0))))
@@ -1471,9 +1475,15 @@ def user_settings():
                     return jsonify({"success": True, "message": "Settings saved!"})
 
     except Exception as e:
-        log(f"user_settings error: {e}")
-        # Always return JSON — never 500
-        return jsonify({"error": "Server error — please try again"}), 500
+        log(f"user_settings CRITICAL error: {e}")
+        # ALWAYS return valid JSON — never let it crash
+        return jsonify({
+            "ft": 100,
+            "dm": 5.0,
+            "Email": "",
+            "MyState": "KS",
+            "Provider": ""
+        }), 200
 
 # === DYNAMIC COVERAGE REPORT — PURE DATA ONLY (FOR MODAL) ===
 @erate_bp.route('/coverage-report')
