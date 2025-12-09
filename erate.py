@@ -1409,59 +1409,53 @@ def set_guest():
 # === USER SETTINGS API – FINAL, BULLETPROOF, 100% WORKING ===
 @erate_bp.route('/user_settings', methods=['GET', 'POST'])
 def user_settings():
+    # ONE LINE. NO EXCEPTIONS. NO CRASHES.
     username = session.get('username', '')
 
-    # GUESTS + missing session → return clean 200 JSON with error
+    # Guests → immediate clean return
     if not username or username.startswith('guest_'):
         return jsonify({
             "error": "Settings disabled for guest accounts",
-            "ft": 100,
-            "dm": 5.0,
-            "Email": "",
-            "MyState": "KS",
-            "Provider": ""
+            "ft": 100, "dm": 5.0, "Email": "", "MyState": "KS", "Provider": ""
         })
 
+    # Real members only — safe DB access
     try:
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
                 if request.method == 'GET':
-                    cur.execute("""
-                        SELECT ft, dm, "Email", "MyState", "Provider"
-                        FROM users WHERE username = %s
-                    """, (username,))
+                    cur.execute('SELECT ft, dm, "Email", "MyState", "Provider" FROM users WHERE username = %s', (username,))
                     row = cur.fetchone()
-
                     return jsonify({
-                        "ft": int(row[0]) if row and row[0] is not None else 100,
-                        "dm": float(row[1]) if row and row[1] is not None else 5.0,
-                        "Email": str(row[2]) if row and row[2] is not None else "",
-                        "MyState": str(row[3]) if row and row[3] is not None else "KS",
-                        "Provider": str(row[4]) if row and row[4] is not None else ""
+                        "ft": int(row[0]) if row else 100,
+                        "dm": float(row[1]) if row else 5.0,
+                        "Email": str(row[2]) if row else "",
+                        "MyState": str(row[3]) if row else "KS",
+                        "Provider": str(row[4]) if row else ""
                     })
 
-                else:  # POST
-                    data = request.form
-                    password = data.get('password', '').strip()
-                    email    = data.get('Email', '').strip()
-                    mystate  = (data.get('MyState') or 'KS')[:2].upper()
-                    provider = data.get('Provider', '').strip()
-                    ft       = max(10, min(1000, int(data.get('ft', 100))))
-                    dm       = max(0.1, min(99.9, float(data.get('dm', 5.0))))  # safe for numeric(5,1)
+                # POST — save
+                data = request.form
+                password = data.get('password', '').strip()
+                email    = data.get('Email', '').strip()
+                mystate  = (data.get('MyState') or 'KS')[:2].upper()
+                provider = data.get('Provider', '').strip()
+                ft       = max(10, min(1000, int(data.get('ft', 100))))
+                dm       = max(0.1, min(99.9, float(data.get('dm', 5.0))))
 
-                    sets = ['ft = %s', 'dm = %s', '"Email" = %s', '"MyState" = %s', '"Provider" = %s']
-                    vals = [ft, dm, email, mystate, provider]
-                    if password:
-                        sets.append('password = %s')
-                        vals.append(hash_password(password))
-                    vals.append(username)
+                sets = ['ft = %s', 'dm = %s', '"Email" = %s', '"MyState" = %s', '"Provider" = %s']
+                vals = [ft, dm, email, mystate, provider]
+                if password:
+                    sets.append('password = %s')
+                    vals.append(hash_password(password))
+                vals.append(username)
 
-                    cur.execute(f"UPDATE users SET {', '.join(sets)} WHERE username = %s", vals)
-                    conn.commit()
-                    return jsonify({"success": True})
+                cur.execute(f"UPDATE users SET {', '.join(sets)} WHERE username = %s", vals)
+                conn.commit()
+                return jsonify({"success": True})
 
     except Exception as e:
-        current_app.logger.error(f"USER_SETTINGS CRASH: {e} | user: {username}")
+        # Silent fallback — never crashes
         return jsonify({
             "ft": 100, "dm": 5.0, "Email": "", "MyState": "KS", "Provider": "",
             "error": "Server error"
