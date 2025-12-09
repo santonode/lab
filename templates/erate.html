@@ -1486,29 +1486,21 @@
         });
 
         document.getElementById('user-settings-btn')?.addEventListener('click', () => {
-            console.log("DEBUG: Clicking settings button");
-            
-            fetch('/erate/debug_settings')  // TEMP: use debug route
-                .then(r => {
-                    console.log("DEBUG: Response status:", r.status);
-                    console.log("DEBUG: Response ok:", r.ok);
-                    console.log("DEBUG: Response headers:", r.headers);
-                    return r.json();
-                })
+            fetch('/erate/user_settings')
+                .then(r => r.json())
                 .then(data => {
-                    console.log("DEBUG: JSON data:", data);
                     if (data.error) {
                         alert(data.error);
                         return;
                     }
-                    // Don't open modal yet — just log
-                    console.log("DEBUG: Would open modal with:", data);
-                    alert("DEBUG: Success! Check console logs.");
+                    document.getElementById('settings-ft').value = data.ft || 100;
+                    document.getElementById('settings-dm').value = data.dm || 5.0;
+                    document.getElementById('settings-email').value = data.Email || '';
+                    document.getElementById('settings-mystate').value = data.MyState || 'KS';
+                    document.getElementById('settings-provider').value = data.Provider || '';
+                    document.getElementById('settings-modal').classList.add('show');
                 })
-                .catch(err => {
-                    console.error("DEBUG: Fetch error:", err);
-                    alert("DEBUG: Catch error: " + err.message);
-                });
+                .catch(() => alert("Could not load settings"));
         });
         
         // Save settings
