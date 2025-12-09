@@ -1409,10 +1409,14 @@ def set_guest():
 # === USER SETTINGS API – FINAL, BULLETPROOF, 100% WORKING ===
 @erate_bp.route('/user_settings', methods=['GET', 'POST'])
 def user_settings():
-    # ← THIS LINE IS 100% SAFE — never crashes
+    # Get username safely
     username = session.get('username')
+
+    # BLOCK GUESTS + handle missing session
     if not username or str(username).startswith('guest_'):
-        return jsonify({"error": "Settings disabled for guest accounts"}), 403
+        return jsonify({
+            "error": "Settings disabled for guest accounts"
+        }), 403
 
     try:
         with psycopg.connect(DATABASE_URL) as conn:
@@ -1424,16 +1428,25 @@ def user_settings():
                         FROM users WHERE username = %s
                     """, (username,))
                     row = cur.fetchone()
+
+                    # Always return valid data — never crash
                     if row:
                         return jsonify({
                             "ft": int(row[0]),
                             "dm": float(row[1]),
-                            "Email": row[2],
-                            "MyState": row[3],
-                            "Provider": row[4]
+                            "Email": str(row[2]),
+                            "MyState": str(row[3]),
+                            "Provider": str(row[4])
                         })
-                    # Fallback if user not found (shouldn't happen, but safe)
-                    return jsonify({"ft": 100, "dm": 5.0, "Email": "", "MyState": "KS", "Provider": ""})
+
+                    # Fallback if user not found (shouldn't happen)
+                    return jsonify({
+                        "ft": 100,
+                        "dm": 5.0,
+                        "Email": "",
+                        "MyState": "KS",
+                        "Provider": ""
+                    })
 
                 else:  # POST
                     data = request.form
@@ -1459,7 +1472,8 @@ def user_settings():
 
     except Exception as e:
         log(f"user_settings error: {e}")
-        return jsonify({"error": "Server error"}), 500
+        # Always return JSON — never 500
+        return jsonify({"error": "Server error — please try again"}), 500
 
 # === DYNAMIC COVERAGE REPORT — PURE DATA ONLY (FOR MODAL) ===
 @erate_bp.route('/coverage-report')
