@@ -376,6 +376,43 @@
             .points { font-size: 0.7rem; }
             .filters input[name="text"] { width: 100%; }
         }
+
+        #settingsModal .modal-dialog {
+          max-width: 520px;
+        }
+
+        #settingsModal input,
+        #settingsModal select {
+          width: 100%;
+          padding: 0.75rem;
+          border: 1px solid #ccc;
+          border-radius: 8px;
+          font-size: 1rem;
+          background: white;
+          transition: border 0.2s, box-shadow 0.2s;
+        }
+
+        #settingsModal input:focus,
+        #settingsModal select:focus {
+          outline: none;
+          border-color: var(--accent);
+          box-shadow: 0 0 0 3px rgba(0,123,255,0.15);
+        }
+
+        #settingsModal label {
+          display: block;
+          margin-bottom: 0.4rem;
+          font-weight: 600;
+          color: var(--primary);
+        }
+
+        #settingsModal label small {
+          display: block;
+          margin-top: 0.25rem;
+          font-weight: 400;
+          color: #666;
+          font-size: 0.85rem;
+        }
     </style>
 </head>
 <body>
@@ -819,31 +856,90 @@
         </div>
     </div>
 
-    <!-- USER SETTINGS MODAL -->
-    <div class="modal" id="settings-modal">
-        <div class="modal-content" style="max-width:420px;">
-            <div class="modal-header">
-                <div class="modal-title">User Settings</div>
-                <button class="modal-close" onclick="closeModal('settings')">x</button>
+    <!-- ==================== USER SETTINGS MODAL (2025 FINAL) ==================== -->
+    <div class="modal-backdrop" id="settingsBackdrop"></div>
+
+    <div class="modal-container" id="settingsModal" role="dialog" aria-labelledby="settingsTitle" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <button class="modal-close-btn" aria-label="Close">×</button>
+          <h2 class="modal-title" id="settingsTitle">User Settings</h2>
+
+          <form id="settingsForm">
+            <div class="modal-body" style="display: grid; gap: 1rem;">
+
+              <div>
+                <label style="display:block; margin-bottom:0.4rem; font-weight:600; color:var(--primary);">
+                  Password <small style="font-weight:400; color:#666;">(leave blank to keep current)</small>
+                </label>
+                <input type="password" name="password" placeholder="New password" autocomplete="new-password">
+              </div>
+
+              <div>
+                <label style="display:block; margin-bottom:0.4rem; font-weight:600; color:var(--primary);">Email</label>
+                <input type="email" name="email" id="settingsEmail" placeholder="your@email.com">
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div>
+                  <label style="display:block; margin-bottom:0.4rem; font-weight:600; color:var(--primary);">
+                    Filter Threshold <small style="font-weight:400; color:#666;">(max records to calculate distance)</small>
+                  </label>
+                  <input type="number" name="ft" id="settingsFT" min="10" max="1000" value="100">
+                </div>
+
+                <div>
+                  <label style="display:block; margin-bottom:0.4rem; font-weight:600; color:var(--primary);">
+                    Distance Minimum <small style="font-weight:400; color:#666;">(miles) — hide farther results</small>
+                  </label>
+                  <input type="number" name="dm" id="settingsDM" step="0.1" min="0" max="100" value="5.0">
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div>
+                  <label style="display:block; margin-bottom:0.4rem; font-weight:600; color:var(--primary);">My State</label>
+                  <select name="mystate" id="settingsState">
+                    <option value="">-- Select State --</option>
+                    <option value="AL">AL - Alabama</option>
+                    <option value="CA">CA - California</option>
+                    <option value="FL">FL - Florida</option>
+                    <option value="GA">GA - Georgia</option>
+                    <option value="IL">IL - Illinois</option>
+                    <option value="IA">IA - Iowa</option>
+                    <option value="KS">KS - Kansas</option>
+                    <option value="KY">KY - Kentucky</option>
+                    <option value="MI">MI - Michigan</option>
+                    <option value="MO">MO - Missouri</option>
+                    <option value="OH">OH - Ohio</option>
+                    <option value="OK">OK - Oklahoma</option>
+                    <option value="TX">TX - Texas</option>
+                    <!-- Add more states as needed -->
+                  </select>
+                </div>
+
+                <div>
+                  <label style="display:block; margin-bottom:0.4rem; font-weight:600; color:var(--primary);">Provider</label>
+                  <select name="provider" id="settingsProvider">
+                    <option value="">None</option>
+                    <option value="Bluebird Network">Bluebird Network</option>
+                    <option value="FNA Network">FNA Network</option>
+                    <option value="Segra EAST">Segra EAST</option>
+                    <option value="Segra WEST">Segra WEST</option>
+                  </select>
+                </div>
+              </div>
+
             </div>
-            <div class="modal-body">
-                <form id="settings-form">
-                    <label style="display:block;margin:15px 0 5px;">
-                        <strong>Password</strong> (leave blank to keep current)<br>
-                        <input type="password" name="password" placeholder="New password" style="width:100%;padding:10px;margin-top:5px;border:1px solid #ccc;border-radius:6px;">
-                    </label>
-                    <label style="display:block;margin:15px 0 5px;">
-                        <strong>Filter Threshold</strong> (max records to calculate distance)<br>
-                        <input type="number" name="ft" id="settings-ft" min="10" max="1000" value="100" style="width:100%;padding:10px;margin-top:5px;border:1px solid #ccc;border-radius:6px;">
-                    </label>
-                    <label style="display:block;margin:15px 0 5px;">
-                        <strong>Distance Minimum</strong> (miles) — hide farther results<br>
-                        <input type="number" name="dm" id="settings-dm" step="0.1" min="0" max="100" value="5.0" style="width:100%;padding:10px;margin-top:5px;border:1px solid #ccc;border-radius:6px;">
-                    </label>
-                    <button type="submit" class="btn btn-primary" style="margin-top:20px;width:100%;">Save Settings</button>
-                </form>
+
+            <div class="modal-footer" style="margin-top:1.5rem;">
+              <button type="submit" class="btn btn-primary" style="width:100%; padding:0.9rem; font-size:1.1rem;">
+                Save Settings
+              </button>
             </div>
+          </form>
         </div>
+      </div>
     </div>
     
     <script>
@@ -1485,38 +1581,87 @@
             }
         });
 
-        // === USER SETTINGS MODAL ===
-        document.getElementById('user-settings-btn')?.addEventListener('click', () => {
+        // === USER SETTINGS MODAL – FINAL 2025 VERSION ===
+        const settingsModal     = document.getElementById('settingsModal');
+        const settingsBackdrop  = document.getElementById('settingsBackdrop');
+
+        function openSettingsModal() {
             fetch('/erate/user_settings')
                 .then(r => r.json())
                 .then(data => {
-                    document.getElementById('settings-ft').value = data.ft || 100;
-                    document.getElementById('settings-dm').value = data.dm || 5.0;
-                    document.getElementById('settings-modal').classList.add('show');
+                    document.getElementById('settingsEmail').value     = data.Email     || '';
+                    document.getElementById('settingsFT').value        = data.ft        || 100;
+                    document.getElementById('settingsDM').value        = data.dm        || 5.0;
+                    document.getElementById('settingsState').value     = data.MyState   || '';
+                    document.getElementById('settingsProvider').value = data.Provider  || '';
+
+                    settingsModal.classList.add('show');
+                    settingsBackdrop.classList.add('show');
+                    settingsModal.setAttribute('aria-hidden', 'false');
                 })
-                .catch(() => {
-                    document.getElementById('settings-ft').value = 100;
-                    document.getElementById('settings-dm').value = 5.0;
-                    document.getElementById('settings-modal').classList.add('show');
+                .catch(err => {
+                    console.warn('Failed to load settings, using defaults', err);
+                    document.getElementById('settingsFT').value = 100;
+                    document.getElementById('settingsDM').value = 5.0;
+
+                    settingsModal.classList.add('show');
+                    settingsBackdrop.classList.add('show');
                 });
+        }
+
+        function closeSettingsModal() {
+            settingsModal.classList.remove('show');
+            settingsBackdrop.classList.remove('show');
+            settingsModal.setAttribute('aria-hidden', 'true');
+        }
+
+        // Open from header button
+        document.getElementById('user-settings-btn')?.addEventListener('click', openSettingsModal);
+
+        // Close on X button or backdrop click
+        document.querySelector('#settingsModal .modal-close-btn')?.addEventListener('click', closeSettingsModal);
+        settingsBackdrop.addEventListener('click', closeSettingsModal);
+
+        // Close on Escape key
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && settingsModal.classList.contains('show')) {
+                closeSettingsModal();
+            }
         });
 
-        document.getElementById('settings-form')?.addEventListener('submit', (e) => {
+        // Form submit with feedback
+        document.getElementById('settingsForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            const formData = new FormData(e.target);
+
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Saving...';
+
+            const formData = new FormData(this);
+
             fetch('/erate/user_settings', {
                 method: 'POST',
                 body: formData
-            }).then(() => {
-                location.reload();
+            })
+            .then(r => r.json())
+            .then(result => {
+                if (result.status === 'success') {
+                    alert('Settings saved successfully!');
+                    closeSettingsModal();
+                    location.reload();
+                } else {
+                    throw new Error(result.message || 'Unknown error');
+                }
+            })
+            .catch(err => {
+                console.error('Settings save error:', err);
+                alert('Failed to save settings. Please try again.');
+            })
+            .finally(() => {
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
             });
-        });
-
-        // Close modal when clicking outside or X
-        document.getElementById('settings-modal')?.addEventListener('click', (e) => {
-            if (e.target === document.getElementById('settings-modal') || e.target.classList.contains('modal-close')) {
-                document.getElementById('settings-modal').classList.remove('show');
-            }
         });
 
         // === SYNC NETWORK DISPLAY WITH MAP SWITCHER ===
