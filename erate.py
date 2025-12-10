@@ -1282,25 +1282,36 @@ def admin():
         session.clear()
         flash("Logged out", "success")
         return redirect(url_for('erate.dashboard'))
-    if request.method == 'POST':
-        action = request.form.get('action')
         if action == 'register':
             username = request.form['username'].strip()
             password = request.form['password']
+            email = request.form.get('email', '').strip().lower()  # ← NEW: get email safely
+
             if len(username) < 3 or len(password) < 4:
                 flash("Username ≥3, Password ≥4", "error")
                 return redirect(url_for('erate.admin'))
+
             with psycopg.connect(DATABASE_URL) as conn:
                 with conn.cursor() as cur:
                     cur.execute("SELECT id FROM users WHERE username = %s", (username,))
                     if cur.fetchone():
                         flash("Username taken", "error")
                         return redirect(url_for('erate.admin'))
+
+                    # ← NEW: also check if email is already used
+                    if email:
+                        cur.execute("SELECT id FROM users WHERE LOWER(email) = %s", (email,))
+                        if cur.fetchone():
+                            flash("Email already registered", "error")
+                            return redirect(url_for('erate.admin'))
+
+                    # ← UPDATED: now saves email too
                     cur.execute(
-                        "INSERT INTO users (username, password, user_type, points) VALUES (%s, %s, %s, %s)",
-                        (username, hash_password(password), 'Member', 100)
+                        "INSERT INTO users (username, password, email, user_type, points) VALUES (%s, %s, %s, %s, %s)",
+                        (username, hash_password(password), email or None, 'Member', 100)
                     )
                     conn.commit()
+
             session['username'] = username
             session['is_santo'] = (username == 'santo')
             flash(f"Welcome, {username}! You have 100 points.", "success")
