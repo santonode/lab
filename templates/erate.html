@@ -403,6 +403,27 @@
             z-index: 9999 !important;
         }
         #settingsBackdrop.show { display: block !important; }
+
+        #settingsBackdrop {
+            display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);z-index:9999;
+        }
+        #settingsBackdrop.show {display:block}
+        #settings-modal {
+            display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+            width:92%;max-width:420px;background:white;border-radius:16px;
+            box-shadow:0 20px 40px rgba(0,0,0,0.3);z-index:10000;overflow:hidden;
+        }
+        #settings-modal.show {display:block}
+        .modal-inner {padding:1.8rem 1.5rem 1.5rem;position:relative}
+        .modal-close-btn {
+            position:absolute;top:0.8rem;right:1rem;background:none;border:none;
+            font-size:2rem;color:#999;cursor:pointer;width:44px;height:44px;
+        }
+        #settings-modal h2 {margin:0 0 1.2rem;font-size:1.5rem;color:var(--primary)}
+        #settings-modal label {display:block;margin:1rem 0 0.4rem;font-weight:600;color:var(--primary);font-size:0.95rem}
+        #settings-modal input,#settings-modal select {
+            width:100%;padding:0.9rem;border:1px solid #ccc;border-radius:8px;font-size:1rem;
+        }
         
     </style>
 </head>
@@ -1486,9 +1507,9 @@
             }
         });
 
-        // === USER SETTINGS MODAL – FINAL BEAUTIFUL 2025 VERSION ===
+        // === USER SETTINGS MODAL – FINAL BEAUTIFUL 2025 VERSION (FIXED FOR MOBILE) ===
         document.addEventListener('DOMContentLoaded', () => {
-            const modal = document.getElementById('settings-modal');
+            const modal    = document.getElementById('settings-modal');
             const backdrop = document.getElementById('settingsBackdrop');
 
             function openModal() {
@@ -1499,28 +1520,49 @@
                         document.getElementById('settings-ft').value        = data.ft        || 100;
                         document.getElementById('settings-dm').value        = data.dm        || 5.0;
                         document.getElementById('settings-mystate').value   = data.MyState   || '';
-                        document.getElementById('settings-provider').value  = data.Provider  || '';
+                        document.getElementById('settings-provider').value = data.Provider  || '';
 
+                        modal.classList.add('show');
+                        backdrop.classList.add('show');
+                    })
+                    .catch(() => {
+                        // fallback defaults if fetch fails
+                        document.getElementById('settings-ft').value = 100;
+                        document.getElementById('settings-dm').value = 5.0;
                         modal.classList.add('show');
                         backdrop.classList.add('show');
                     });
             }
 
+            // Open
             document.getElementById('user-settings-btn')?.addEventListener('click', e => {
                 e.preventDefault();
                 openModal();
             });
 
-            document.querySelector('#settings-modal .modal-close-btn')?.addEventListener('click', () => {
-                modal.classList.remove('show');
-                backdrop.classList.remove('show');
+            // Close on X – now bullet-proof
+            document.addEventListener('click', e => {
+                if (e.target.closest('.modal-close-btn')) {
+                    modal.classList.remove('show');
+                    backdrop.classList.remove('show');
+                }
             });
 
+            // Close on backdrop
             backdrop.addEventListener('click', () => {
                 modal.classList.remove('show');
                 backdrop.classList.remove('show');
             });
 
+            // Close on Escape (works on iPhone too)
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Escape' && modal.classList.contains('show')) {
+                    modal.classList.remove('show');
+                    backdrop.classList.remove('show');
+                }
+            });
+
+            // Save
             document.getElementById('settings-form').addEventListener('submit', e => {
                 e.preventDefault();
                 const btn = e.target.querySelector('button');
@@ -1536,7 +1578,11 @@
                         backdrop.classList.remove('show');
                         location.reload();
                     })
-                    .finally(() => { btn.disabled = false; btn.textContent = txt; });
+                    .catch(() => alert('Save failed – try again'))
+                    .finally(() => {
+                        btn.disabled = false;
+                        btn.textContent = txt;
+                    });
             });
         });
 
@@ -1581,79 +1627,61 @@
         
     </script>
 
-    <!-- ==================== NEW BEAUTIFUL USER SETTINGS MODAL (2025) ==================== -->
-    <div class="modal-backdrop" id="settingsBackdrop"></div>
+    <!-- USER SETTINGS MODAL – MOBILE-FRIENDLY MINIMAL 2025 -->
+    <div id="settingsBackdrop"></div>
 
-    <div class="modal-container" id="settings-modal" role="dialog" aria-labelledby="settingsTitle" aria-hidden="true">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <button class="modal-close-btn" aria-label="Close">×</button>
-          <h2 class="modal-title" id="settingsTitle">User Settings</h2>
+    <div id="settings-modal">
+      <div class="modal-inner">
+        <button class="modal-close-btn">×</button>
+        <h2>User Settings</h2>
 
-          <form id="settings-form">
-            <div class="modal-body" style="display:grid;gap:1rem;">
+        <form id="settings-form">
+          <label>Password (leave blank to keep)</label>
+          <input type="password" name="password" placeholder="New password">
 
-              <div>
-                <label class="label">Password <small>(leave blank to keep current)</small></label>
-                <input type="password" name="password" placeholder="New password" autocomplete="new-password">
-              </div>
+          <label>Email</label>
+          <input type="email" name="email" id="settings-email" placeholder="your@email.com">
 
-              <div>
-                <label class="label">Email</label>
-                <input type="email" name="email" id="settings-email" placeholder="your@email.com">
-              </div>
-
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-                <div>
-                  <label class="label">Filter Threshold <small>(max records for distance calc)</small></label>
-                  <input type="number" name="ft" id="settings-ft" min="10" max="1000" value="100">
-                </div>
-                <div>
-                  <label class="label">Distance Minimum <small>(miles – hide farther)</small></label>
-                  <input type="number" name="dm" id="settings-dm" step="0.1" min="0" max="100" value="5.0">
-                </div>
-              </div>
-
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-                <div>
-                  <label class="label">My State</label>
-                  <select name="mystate" id="settings-mystate">
-                    <option value="">-- Select --</option>
-                    <option value="AL">AL – Alabama</option>
-                    <option value="CA">CA – California</option>
-                    <option value="FL">FL – Florida</option>
-                    <option value="GA">GA – Georgia</option>
-                    <option value="IL">IL – Illinois</option>
-                    <option value="IA">IA – Iowa</option>
-                    <option value="KS">KS – Kansas</option>
-                    <option value="MO">MO – Missouri</option>
-                    <option value="OH">OH – Ohio</option>
-                    <option value="OK">OK – Oklahoma</option>
-                    <option value="TX">TX – Texas</option>
-                    <!-- add more if needed -->
-                  </select>
-                </div>
-                <div>
-                  <label class="label">Provider</label>
-                  <select name="provider" id="settings-provider">
-                    <option value="">None</option>
-                    <option value="Bluebird Network">Bluebird Network</option>
-                    <option value="FNA Network">FNA Network</option>
-                    <option value="Segra EAST">Segra EAST</option>
-                    <option value="Segra WEST">Segra WEST</option>
-                  </select>
-                </div>
-              </div>
-
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem;">
+            <div>
+              <label>FT</label>
+              <input type="number" name="ft" id="settings-ft" min="10" max="1000" value="100">
             </div>
-
-            <div class="modal-footer" style="margin-top:1.5rem;">
-              <button type="submit" class="btn btn-primary" style="width:100%;padding:1rem;font-size:1.1rem;">
-                Save Settings
-              </button>
+            <div>
+              <label>DM</label>
+              <input type="number" name="dm" id="settings-dm" step="0.1" min="0" max="100" value="5.0">
             </div>
-          </form>
-        </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem;">
+            <div>
+              <label>My State</label>
+              <select name="mystate" id="settings-mystate">
+                <option value="">--</option>
+                <option value="AL">AL</option>
+                <option value="KS">KS</option>
+                <option value="MO">MO</option>
+                <option value="IL">IL</option>
+                <option value="TX">TX</option>
+                <!-- add more if needed -->
+              </select>
+            </div>
+            <div>
+              <label>Provider</label>
+              <select name="provider" id="settings-provider">
+                <option value="">None</option>
+                <option value="Bluebird Network">Bluebird</option>
+                <option value="FNA Network">FNA</option>
+                <option value="Segra EAST">Segra EAST</option>
+                <option value="Segra WEST">Segra WEST</option>
+              </select>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="margin-top:1.5rem;width:100%;padding:1rem;font-size:1.1rem;">
+            Save Settings
+          </button>
+        </form>
       </div>
     </div>
     
