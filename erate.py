@@ -1409,10 +1409,12 @@ def set_guest():
 # === USER SETTINGS API – FULL 2025 VERSION (supports Email, State, Provider) ===
 @erate_bp.route('/user_settings', methods=['GET', 'POST'])
 def user_settings():
-    # BLOCK GUESTS
-    if session.get('username', '').startswith('guest_'):
-        return jsonify({"error": "Settings disabled for guest accounts"}), 403
+    username = session.get('username') or ''
 
+    # BLOCK GUESTS
+    if username.startswith('guest_'):
+        return jsonify({"error": "Settings disabled for guest accounts"}), 403
+        
     if not session.get('username'):
         return jsonify({"ft": 100, "dm": 5.0})
 
