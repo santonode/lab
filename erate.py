@@ -855,7 +855,7 @@ def dashboard():
     finally:
         conn.close()
 
-# === APPLICANT DETAILS API – YOUR ORIGINAL + MISSING PROTOCOL FIX ===
+# === APPLICANT DETAILS API – FINAL FIXED (NO MORE "orgsl") ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     deduct_point()
@@ -868,24 +868,23 @@ def details(app_number):
                 return jsonify({"error": "Applicant not found"}), 404
             row = row[1:]
 
-            # FIX: Add missing http:// if not present, then replace /EPC/ → /SL/
+            # === THE ONLY CHANGE YOU NEED ===
             raw_url = row[2] or ''
-            if raw_url and not raw_url.startswith(('http://', 'https://')):
-                raw_url = 'http://' + raw_url
-            pdf_url = raw_url.replace('publicdata.usac.org/EPC/', 'publicdata.usac.org/SL/') if raw_url else None
+            pdf_url = None
+            if raw_url:
+                if raw_url.startswith('publicdata.usac.org'):
+                    raw_url = 'http://' + raw_url
+                pdf_url = raw_url.replace('/EPC/', '/SL/')
+            # === END OF CHANGE ===
 
             def fmt_date(dt):
-                if isinstance(dt, datetime):
-                    return dt.strftime('%m/%d/%Y')
-                return '—'
+                return dt.strftime('%m/%d/%Y') if isinstance(dt, datetime) else '—'
             def fmt_datetime(dt):
-                if isinstance(dt, datetime):
-                    return dt.strftime('%m/%d/%Y %I:%M %p')
-                return '—'
+                return dt.strftime('%m/%d/%Y %I:%M %p') if isinstance(dt, datetime) else '—'
 
             data = {
                 "form_nickname": row[1] or '—',
-                "form_pdf": Markup(f'<a href="{pdf_url}" target="_blank">View PDF</a>') if pdf_url else '—',
+                "form_pdf": Markup(f'<a href="{pdf_url}" target="_blank" rel="noopener">View PDF</a>') if pdf_url else '—',
                 "funding_year": row[3] or '—',
                 "fcc_status": row[4] or '—',
                 "allowable_contract_date": fmt_date(row[5]),
