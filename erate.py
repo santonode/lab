@@ -855,7 +855,7 @@ def dashboard():
     finally:
         conn.close()
 
-# === APPLICANT DETAILS API – WITH INDEXING DELAY HANDLING ===
+# === APPLICANT DETAILS API – BEN PREFIX FOR USAC PDF URLS ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     deduct_point()
@@ -869,28 +869,24 @@ def details(app_number):
 
             row = row[1:]  # skip first column (app_number)
 
-            # Extract FRN and raw PDF field
+            # Extract FRN, BEN, and raw PDF field
             frn = row[0] or ''                    # column 0 = frn
+            ben = row[11] or ''                   # column 11 = ben (Billed Entity Number)
             raw_pdf_url = row[2] or ''            # column 2 = form_pdf (old full URL)
-            certified_date = row[8]  # certified_datetime
 
-            # BUILD CORRECT 2025 USAC PDF URL
+            # BUILD CORRECT USAC URL WITH BEN PREFIX
             correct_pdf_url = None
-            if frn:
+            if frn and ben:
                 frn = str(frn).strip()
+                ben_prefix = str(ben).zfill(6)    # Pad BEN to 6 digits (e.g., 343136)
                 if raw_pdf_url and 'http' in raw_pdf_url:
                     filename = raw_pdf_url.split('/')[-1].strip()
                     if '-' in filename and filename.split('-')[0].isdigit():
-                        filename = '-'.join(filename.split('-')[1:])
+                        filename = '-'.join(filename.split('-')[1:])  # Strip batch prefix
                 else:
                     filename = f"USAC_FCC_FORM_470_APPLICATION_{frn}_CERTIFIED.pdf"
 
-                correct_pdf_url = f"http://publicdata.usac.org/SL/Prd/Form470/{frn[:3]}/{frn}/Original/{filename}"
-
-            # Check if form is too new for indexing (certified < 72 hours ago)
-            pdf_status = 'ready'
-            if certified_date and (datetime.now() - certified_date).total_seconds() < 259200:  # 3 days
-                pdf_status = 'pending'
+                correct_pdf_url = f"http://publicdata.usac.org/SL/Prd/Form470/{ben_prefix}/{frn}/Original/{filename}"
 
             def fmt_date(dt):
                 return dt.strftime('%m/%d/%Y') if isinstance(dt, datetime) else '—'
@@ -900,7 +896,7 @@ def details(app_number):
 
             data = {
                 "form_nickname": row[1] or '—',
-                "form_pdf": Markup(f'<a href="{correct_pdf_url}" target="_blank" rel="noopener">View PDF</a>') if correct_pdf_url and pdf_status == 'ready' else (Markup('PDF Pending Indexing (24-72 hours)') if pdf_status == 'pending' else '—'),
+                "form_pdf": Markup(f'<a href="{correct_pdf_url}" target="_blank" rel="noopener">View PDF</a>') if correct_pdf_url else '—',
                 "funding_year": row[3] or '—',
                 "fcc_status": row[4] or '—',
                 "allowable_contract_date": fmt_date(row[5]),
