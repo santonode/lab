@@ -855,7 +855,7 @@ def dashboard():
     finally:
         conn.close()
 
-# === APPLICANT DETAILS API – FINAL 2025 VERSION (HTTP NON-ENCRYPTED PDF LINKS) ===
+# === APPLICANT DETAILS API – FIXED FOR REAL USAC STRUCTURE (NO PREFIX, NO ORIGINAL FOLDER) ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     deduct_point()
@@ -869,22 +869,25 @@ def details(app_number):
 
             row = row[1:]  # skip first column (app_number)
 
-            # Extract FRN and raw PDF field (old full URL)
+            # Extract FRN and raw PDF field (old full URL or filename)
             frn = row[0] or ''                    # column 0 = frn
             raw_pdf_url = row[2] or ''            # column 2 = form_pdf (old full URL)
 
-            # BUILD CLEAN, CORRECT, HTTP 2025 USAC URL (NON-ENCRYPTED)
+            # BUILD REAL USAC 2025 URL – STRIP PREFIX, NO "Original/" FOLDER
             correct_pdf_url = None
             if frn:
                 frn = str(frn).strip()
                 if raw_pdf_url and 'http' in raw_pdf_url:
-                    # Extract ONLY the filename from the old URL
+                    # Extract filename and strip any prefix (e.g., "20707947-")
                     filename = raw_pdf_url.split('/')[-1].strip()
+                    # Remove common prefixes like numbers + dash
+                    if '-' in filename and filename.split('-')[0].isdigit():
+                        filename = '-'.join(filename.split('-')[1:])
                 else:
                     filename = f"USAC_FCC_FORM_470_APPLICATION_{frn}_CERTIFIED.pdf"
 
-                # Use HTTP (non-encrypted) and correct path
-                correct_pdf_url = f"http://publicdata.usac.org/SL/Prd/Form470/{frn[:3]}/{frn}/Original/{filename}"
+                # Use HTTP, no "Original/" folder (matches real USAC for recent forms)
+                correct_pdf_url = f"http://publicdata.usac.org/SL/Prd/Form470/{frn[:3]}/{frn}/{filename}"
 
             def fmt_date(dt):
                 return dt.strftime('%m/%d/%Y') if isinstance(dt, datetime) else '—'
