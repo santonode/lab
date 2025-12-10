@@ -1485,38 +1485,43 @@
             }
         });
 
-        // === USER SETTINGS MODAL ===
-        document.getElementById('user-settings-btn')?.addEventListener('click', () => {
-            fetch('/erate/user_settings')
-                .then(r => r.json())
-                .then(data => {
-                    document.getElementById('settings-ft').value = data.ft || 100;
-                    document.getElementById('settings-dm').value = data.dm || 5.0;
-                    document.getElementById('settings-modal').classList.add('show');
-                })
-                .catch(() => {
-                    document.getElementById('settings-ft').value = 100;
-                    document.getElementById('settings-dm').value = 5.0;
-                    document.getElementById('settings-modal').classList.add('show');
-                });
-        });
+        // === USER SETTINGS MODAL – FINAL WORKING VERSION (uses your existing IDs) ===
+        document.addEventListener('DOMContentLoaded', () => {
+            const modal = document.getElementById('settings-modal');
+            const openBtn = document.getElementById('user-settings-btn');
 
-        document.getElementById('settings-form')?.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            fetch('/erate/user_settings', {
-                method: 'POST',
-                body: formData
-            }).then(() => {
-                location.reload();
+            if (!modal || !openBtn) return;
+
+            // Open modal
+            openBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                fetch('/erate/user_settings')
+                    .then(r => r.json())
+                    .then(data => {
+                        document.getElementById('settings-ft').value = data.ft || 100;
+                        document.getElementById('settings-dm').value = data.dm || 5.0;
+                        modal.classList.add('show');
+                    })
+                    .catch(() => {
+                        document.getElementById('settings-ft').value = 100;
+                        document.getElementById('settings-dm').value = 5.0;
+                        modal.classList.add('show');
+                    });
             });
-        });
 
-        // Close modal when clicking outside or X
-        document.getElementById('settings-modal')?.addEventListener('click', (e) => {
-            if (e.target === document.getElementById('settings-modal') || e.target.classList.contains('modal-close')) {
-                document.getElementById('settings-modal').classList.remove('show');
-            }
+            // Close when clicking X or outside
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal || e.target.classList.contains('modal-close')) {
+                    modal.classList.remove('show');
+                }
+            });
+
+            // Close on Escape
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && modal.classList.contains('show')) {
+                    modal.classList.remove('show');
+                }
+            });
         });
 
         // === SYNC NETWORK DISPLAY WITH MAP SWITCHER ===
