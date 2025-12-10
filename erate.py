@@ -855,7 +855,7 @@ def dashboard():
     finally:
         conn.close()
 
-# === APPLICANT DETAILS API – FINAL 2025 VERSION (PDF LINKS FIXED FOREVER) ===
+# === APPLICANT DETAILS API – FINAL 2025 VERSION (NO DUPLICATE URLS) ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     deduct_point()
@@ -866,31 +866,35 @@ def details(app_number):
             row = cur.fetchone()
             if not row:
                 return jsonify({"error": "Applicant not found"}), 404
+            row = row[1:]  # skip the first column (probably id or app_number)
 
-            # Skip first column (app_number), so row[0] = frn, row[1] = form_nickname, row[2] = form_pdf (filename)
-            row = row[1:]
-
-            # Extract FRN and raw PDF filename
+            # Extract FRN and raw PDF field (which contains the full old URL)
             frn = row[0] or ''  # column 0 = frn
-            raw_pdf_filename = row[2] or ''  # column 2 = form_pdf (just filename, not URL)
+            raw_pdf_url = row[2] or ''  # column 2 = form_pdf (full old URL)
 
-            # BUILD CORRECT 2025 USAC PDF URL
+            # BUILD CORRECT 2025 USAC PDF URL – NO DUPLICATES
             correct_pdf_url = None
             if frn:
                 frn = str(frn).strip()
-                filename = raw_pdf_filename.strip() if raw_pdf_filename.strip() else f"USAC_FCC_FORM_470_APPLICATION_{frn}_CERTIFIED.pdf"
+                if raw_pdf_url:
+                    # Extract ONLY the filename from the old URL (remove everything before the last /)
+                    filename = raw_pdf_url.split('/')[-1].strip()
+                    if not filename:
+                        filename = f"USAC_FCC_FORM_470_APPLICATION_{frn}_CERTIFIED.pdf"
+                else:
+                    filename = f"USAC_FCC_FORM_470_APPLICATION_{frn}_CERTIFIED.pdf"
+                
+                # Build clean URL – no duplicates, correct path
                 correct_pdf_url = f"https://publicdata.usac.org/SL/Prd/Form470/{frn[:3]}/{frn}/Original/{filename}"
 
             def fmt_date(dt):
                 if isinstance(dt, datetime):
                     return dt.strftime('%m/%d/%Y')
                 return '—'
-
             def fmt_datetime(dt):
                 if isinstance(dt, datetime):
                     return dt.strftime('%m/%d/%Y %I:%M %p')
                 return '—'
-
             data = {
                 "form_nickname": row[1] or '—',
                 "form_pdf": Markup(f'<a href="{correct_pdf_url}" target="_blank" rel="noopener">View PDF</a>') if correct_pdf_url else '—',
@@ -963,7 +967,6 @@ def details(app_number):
                 "form_version": row[69] or '—'
             }
             return jsonify(data), 200, {'Content-Type': 'application/json'}
-
     except Exception as e:
         log("Details API error: %s", e)
         return jsonify({"error": "Service unavailable"}), 500
