@@ -1282,7 +1282,7 @@ def admin():
         session.clear()
         flash("Logged out", "success")
         return redirect(url_for('erate.dashboard'))
-if request.method == 'POST':
+    if request.method == 'POST':
         action = request.form.get('action')
         if action == 'register':
             username = request.form['username'].strip()
