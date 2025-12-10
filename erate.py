@@ -855,7 +855,7 @@ def dashboard():
     finally:
         conn.close()
 
-# === APPLICANT DETAILS API ===
+# === APPLICANT DETAILS API – FINAL 2025 VERSION (PDF LINKS FIXED FOREVER) ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     deduct_point()
@@ -866,18 +866,34 @@ def details(app_number):
             row = cur.fetchone()
             if not row:
                 return jsonify({"error": "Applicant not found"}), 404
+
+            # Skip first column (app_number), so row[0] = frn, row[1] = form_nickname, row[2] = form_pdf (filename)
             row = row[1:]
+
+            # Extract FRN and raw PDF filename
+            frn = row[0] or ''  # column 0 = frn
+            raw_pdf_filename = row[2] or ''  # column 2 = form_pdf (just filename, not URL)
+
+            # BUILD CORRECT 2025 USAC PDF URL
+            correct_pdf_url = None
+            if frn:
+                frn = str(frn).strip()
+                filename = raw_pdf_filename.strip() if raw_pdf_filename.strip() else f"USAC_FCC_FORM_470_APPLICATION_{frn}_CERTIFIED.pdf"
+                correct_pdf_url = f"https://publicdata.usac.org/SL/Prd/Form470/{frn[:3]}/{frn}/Original/{filename}"
+
             def fmt_date(dt):
                 if isinstance(dt, datetime):
                     return dt.strftime('%m/%d/%Y')
                 return '—'
+
             def fmt_datetime(dt):
                 if isinstance(dt, datetime):
                     return dt.strftime('%m/%d/%Y %I:%M %p')
                 return '—'
+
             data = {
                 "form_nickname": row[1] or '—',
-                "form_pdf": Markup(f'<a href="{row[2]}" target="_blank">View PDF</a>') if row[2] else '—',
+                "form_pdf": Markup(f'<a href="{correct_pdf_url}" target="_blank" rel="noopener">View PDF</a>') if correct_pdf_url else '—',
                 "funding_year": row[3] or '—',
                 "fcc_status": row[4] or '—',
                 "allowable_contract_date": fmt_date(row[5]),
@@ -947,6 +963,7 @@ def details(app_number):
                 "form_version": row[69] or '—'
             }
             return jsonify(data), 200, {'Content-Type': 'application/json'}
+
     except Exception as e:
         log("Details API error: %s", e)
         return jsonify({"error": "Service unavailable"}), 500
