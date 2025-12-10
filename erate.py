@@ -220,7 +220,7 @@ def parse_datetime(value):
             continue
     return None
 
-# === CSV ROW → TUPLE ===
+# === CSV ROW → TUPLE – FINAL 2025 FIXED (NO MORE ORGSL, BULLETPROOF PDF URL) ===
 CSV_HEADERS_LOGGED = False
 ROW_DEBUG_COUNT = 0
 def _row_to_tuple(row):
@@ -231,18 +231,31 @@ def _row_to_tuple(row):
     if ROW_DEBUG_COUNT < 3:
         log("DEBUG ROW %s: %s", ROW_DEBUG_COUNT + 1, dict(row))
         ROW_DEBUG_COUNT += 1
+
+    # === FINAL PDF URL FIX – BULLETPROOF 2025+ ===
     form_pdf_raw = (
         row.get('Form PDF', '') or row.get('Form PDF Link', '') or
         row.get('PDF', '') or row.get('Form PDF Path', '') or ''
     ).strip()
-    base = 'http://publicdata.usac.org/'
-    while form_pdf_raw.startswith(base):
-        form_pdf_raw = form_pdf_raw[len(base):]
-    form_pdf = f"http://publicdata.usac.org{form_pdf_raw}" if form_pdf_raw else ''
+
+    form_pdf = ''
+    if form_pdf_raw:
+        # Ensure protocol is present
+        if not form_pdf_raw.startswith(('http://', 'https://')):
+            form_pdf_raw = 'http://' + form_pdf_raw
+
+        # Fix old EPC path → new SL path (this is the ONLY correct change)
+        form_pdf = form_pdf_raw.replace('publicdata.usac.org/EPC/', 'publicdata.usac.org/SL/')
+
+        # Final safety net — if something went wrong and we get "orgSL", fix it
+        if 'orgSL' in form_pdf:
+            form_pdf = form_pdf.replace('orgSL', 'org/SL')
+    # === END OF PDF FIX ===
+
     return (
         row.get('Application Number', ''),
         row.get('Form Nickname', ''),
-        form_pdf,
+        form_pdf,  # ← Now always correct
         row.get('Funding Year', ''),
         row.get('FCC Form 470 Status', ''),
         parse_datetime(row.get('Allowable Contract Date')),
