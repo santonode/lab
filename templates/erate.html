@@ -960,28 +960,46 @@
         function closeModal(type) {
             document.getElementById(type + 'Modal').style.display = 'none';
         }
-        // === POINT COUNTER + OUT-OF-POINTS POPUP ===
+
+        // === POINT COUNTER + USER SETTINGS CLICK + OUT-OF-POINTS POPUP ===
         function updatePoints() {
             fetch('/erate/points?' + Date.now())
                 .then(r => r.json())
                 .then(data => {
-                    const el = document.getElementById('points-display');
-                    if (el) {
-                        el.textContent = `(${data.points} pts)`;
-                        if (data.points <= 5) el.style.color = '#ffc107';
+                    const pointsEl = document.getElementById('points-display');
+                    if (pointsEl) {
+                        pointsEl.textContent = `(${data.points} pts)`;
+
+                        // colour warning
+                        if (data.points <= 5)  pointsEl.style.color = '#ffc107';
+                        if (data.points <= 0)  pointsEl.style.color = '#dc3545';
+
+                        // OUT OF POINTS MODAL
                         if (data.points <= 0) {
-                            el.style.color = '#dc3545';
                             fetch('/erate/out-of-points')
                                 .then(r => r.json())
                                 .then(msg => {
                                     document.getElementById('out-of-points-message').textContent = msg.message;
-                                    document.getElementById('outOfPointsModal').classList.add('show');
                                 })
                                 .catch(() => {
-                                    document.getElementById('out-of-points-message').textContent = "You have run out of points.";
+                                    document.getElementById('out-of-points-message').textContent = 
+                                        "You have run out of click points. Register for unlimited access!";
+                                })
+                                .finally(() => {
                                     document.getElementById('outOfPointsModal').classList.add('show');
+                                    document.getElementById('outOfPointsBackdrop').classList.add('show');
                                 });
                         }
+                    }
+
+                    // USER SETTINGS CLICK – now guaranteed to work
+                    const settingsBtn = document.getElementById('user-settings-btn');
+                    if (settingsBtn) {
+                        settingsBtn.style.cursor = 'pointer';
+                        settingsBtn.onclick = function(e) {
+                            e.preventDefault();
+                            openSettingsModal();
+                        };
                     }
                 })
                 .catch(() => {
@@ -989,6 +1007,9 @@
                     if (el) el.textContent = '(?)';
                 });
         }
+
+        // Call once on load and after every action that costs points
+        document.addEventListener('DOMContentLoaded', updatePoints);
 
         // === showDetails() — THIS WAS MISSING ===
         async function showDetails(appNumber) {
