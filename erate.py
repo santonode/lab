@@ -220,7 +220,7 @@ def parse_datetime(value):
             continue
     return None
 
-# === CSV ROW → TUPLE – FINAL 2025 FIXED (NO MORE ORGSL, BULLETPROOF PDF URL) ===
+# === CSV ROW → TUPLE ===
 CSV_HEADERS_LOGGED = False
 ROW_DEBUG_COUNT = 0
 def _row_to_tuple(row):
@@ -231,31 +231,18 @@ def _row_to_tuple(row):
     if ROW_DEBUG_COUNT < 3:
         log("DEBUG ROW %s: %s", ROW_DEBUG_COUNT + 1, dict(row))
         ROW_DEBUG_COUNT += 1
-
-    # === FINAL PDF URL FIX – BULLETPROOF 2025+ ===
     form_pdf_raw = (
         row.get('Form PDF', '') or row.get('Form PDF Link', '') or
         row.get('PDF', '') or row.get('Form PDF Path', '') or ''
     ).strip()
-
-    form_pdf = ''
-    if form_pdf_raw:
-        # Ensure protocol is present
-        if not form_pdf_raw.startswith(('http://', 'https://')):
-            form_pdf_raw = 'http://' + form_pdf_raw
-
-        # Fix old EPC path → new SL path (this is the ONLY correct change)
-        form_pdf = form_pdf_raw.replace('publicdata.usac.org/EPC/', 'publicdata.usac.org/SL/')
-
-        # Final safety net — if something went wrong and we get "orgSL", fix it
-        if 'orgSL' in form_pdf:
-            form_pdf = form_pdf.replace('orgSL', 'org/SL')
-    # === END OF PDF FIX ===
-
+    base = 'http://publicdata.usac.org/'
+    while form_pdf_raw.startswith(base):
+        form_pdf_raw = form_pdf_raw[len(base):]
+    form_pdf = f"http://publicdata.usac.org{form_pdf_raw}" if form_pdf_raw else ''
     return (
         row.get('Application Number', ''),
         row.get('Form Nickname', ''),
-        form_pdf,  # ← Now always correct
+        form_pdf,
         row.get('Funding Year', ''),
         row.get('FCC Form 470 Status', ''),
         parse_datetime(row.get('Allowable Contract Date')),
@@ -1283,30 +1270,24 @@ def admin():
         flash("Logged out", "success")
         return redirect(url_for('erate.dashboard'))
     if request.method == 'POST':
-        action = request.form.get('action')
+        action = request.form.get('action')
         if action == 'register':
             username = request.form['username'].strip()
             password = request.form['password']
-            email = request.form.get('email', '').strip()  # <-- saves email
-
             if len(username) < 3 or len(password) < 4:
-                flash("Username >=3, Password >=4", "error")
+                flash("Username ≥3, Password ≥4", "error")
                 return redirect(url_for('erate.admin'))
-
             with psycopg.connect(DATABASE_URL) as conn:
                 with conn.cursor() as cur:
                     cur.execute("SELECT id FROM users WHERE username = %s", (username,))
                     if cur.fetchone():
                         flash("Username taken", "error")
                         return redirect(url_for('erate.admin'))
-
                     cur.execute(
-                        "INSERT INTO users (username, password, user_type, points, email) "
-                        "VALUES (%s, %s, %s, %s, %s)",
-                        (username, hash_password(password), 'Member', 100, email or None)
+                        "INSERT INTO users (username, password, user_type, points) VALUES (%s, %s, %s, %s)",
+                        (username, hash_password(password), 'Member', 100)
                     )
                     conn.commit()
-
             session['username'] = username
             session['is_santo'] = (username == 'santo')
             flash(f"Welcome, {username}! You have 100 points.", "success")
