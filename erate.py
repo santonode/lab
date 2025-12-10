@@ -1284,27 +1284,33 @@ def admin():
         return redirect(url_for('erate.dashboard'))
     if request.method == 'POST':
         action = request.form.get('action')
-        if action == 'register':
-            username = request.form['username'].strip()
-            password = request.form['password']
-            if len(username) < 3 or len(password) < 4:
-                flash("Username ≥3, Password ≥4", "error")
-                return redirect(url_for('erate.admin'))
-            with psycopg.connect(DATABASE_URL) as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT id FROM users WHERE username = %s", (username,))
-                    if cur.fetchone():
-                        flash("Username taken", "error")
-                        return redirect(url_for('erate.admin'))
-                    cur.execute(
-                        "INSERT INTO users (username, password, user_type, points) VALUES (%s, %s, %s, %s)",
-                        (username, hash_password(password), 'Member', 100)
-                    )
-                    conn.commit()
-            session['username'] = username
-            session['is_santo'] = (username == 'santo')
-            flash(f"Welcome, {username}! You have 100 points.", "success")
-            return redirect(url_for('erate.dashboard'))
+        if action == 'register':
+            username = request.form['username'].strip()
+            password = request.form['password']
+            email = request.form.get('email', '').strip()  # <-- saves email
+
+            if len(username) < 3 or len(password) < 4:
+                flash("Username >=3, Password >=4", "error")
+                return redirect(url_for('erate.admin'))
+
+            with psycopg.connect(DATABASE_URL) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT id FROM users WHERE username = %s", (username,))
+                    if cur.fetchone():
+                        flash("Username taken", "error")
+                        return redirect(url_for('erate.admin'))
+
+                    cur.execute(
+                        "INSERT INTO users (username, password, user_type, points, email) "
+                        "VALUES (%s, %s, %s, %s, %s)",
+                        (username, hash_password(password), 'Member', 100, email or None)
+                    )
+                    conn.commit()
+
+            session['username'] = username
+            session['is_santo'] = (username == 'santo')
+            flash(f"Welcome, {username}! You have 100 points.", "success")
+            return redirect(url_for('erate.dashboard'))
         elif action == 'login':
             username = request.form['username'].strip()
             password = request.form['password']
