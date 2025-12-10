@@ -868,11 +868,11 @@ def details(app_number):
                 return jsonify({"error": "Applicant not found"}), 404
             row = row[1:]
 
-            # === THE ONLY CHANGE YOU NEED ===
+            # === ONLY CHANGE NEEDED — FINAL FIX ===
             raw_url = row[2] or ''
             pdf_url = None
             if raw_url:
-                if raw_url.startswith('publicdata.usac.org'):
+                if not raw_url.startswith(('http://', 'https://')):
                     raw_url = 'http://' + raw_url
                 pdf_url = raw_url.replace('/EPC/', '/SL/')
             # === END OF CHANGE ===
