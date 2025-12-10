@@ -386,6 +386,24 @@
         #settings-modal input,
         #settings-modal select              { width:100%; padding:0.85rem; border:1px solid var(--border); border-radius:8px; font-size:1rem; }
         #settings-modal .btn-primary        { width:100%; padding:1rem; font-size:1.1rem; margin-top:1rem 0 0; }
+
+        #settings-modal {
+            position: fixed !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            z-index: 10000 !important;
+        }
+        #settingsBackdrop {
+            display: none;
+            position: fixed !important;
+            inset: 0 !important;
+            background: rgba(0,0,0,0.6) !important;
+            backdrop-filter: blur(6px) !important;
+            z-index: 9999 !important;
+        }
+        #settingsBackdrop.show { display: block !important; }
+        
     </style>
 </head>
 <body>
