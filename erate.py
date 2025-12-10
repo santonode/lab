@@ -855,7 +855,7 @@ def dashboard():
     finally:
         conn.close()
 
-# === APPLICANT DETAILS API – FINAL 2025 (EXACT TABLE ORDER + BEN PREFIX) ===
+# === APPLICANT DETAILS API – YOUR ORIGINAL CODE + ONLY 1 FIX ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     deduct_point()
@@ -866,125 +866,88 @@ def details(app_number):
             row = cur.fetchone()
             if not row:
                 return jsonify({"error": "Applicant not found"}), 404
+            row = row[1:]  # skip id + app_number
 
-            # row[0] = id
-            # row[1] = app_number (skip)
-            # → we start from index 2
-
-            frn           = row[2] or ''     # form_nickname → wait no! → check below
-            # CORRECT COLUMN INDEXES FROM YOUR \d erate OUTPUT:
-            # id (0), app_number (1), form_nickname (2), form_pdf (3), funding_year (4), ..., ben (14)
-
-            # === CORRECT INDEXES (confirmed from your \d erate) ===
-            form_nickname = row[2] or ''
-            form_pdf_raw  = row[3] or ''     # old full URL or filename
-            funding_year  = row[4] or ''
-            fcc_status    = row[5] or ''
-            # ... skip others ...
-            ben           = row[14] or ''    # ben is column 14 → index 14
-            # frn is NOT in your table! — wait... you said 260002050 is the FRN
-            # → FRN is the app_number for new forms!
-
-            # CRITICAL: For FY2025+, FRN = app_number
-            frn = app_number  # THIS IS THE KEY — FRN IS THE APP NUMBER NOW
-
-            # === BUILD CORRECT USAC PDF URL USING BEN AS PREFIX ===
-            correct_pdf_url = None
-            if frn and ben and ben.strip():
-                frn = str(frn).strip()
-                ben_prefix = str(ben).zfill(6)  # e.g., 343136 → "343136"
-
-                # Extract filename from old URL, or generate standard one
-                if form_pdf_raw and isinstance(form_pdf_raw, str) and 'http' in form_pdf_raw:
-                    filename = form_pdf_raw.split('/')[-1].strip()
-                    # Strip batch prefix like "20707947-"
-                    if '-' in filename and filename.split('-', 1)[0].isdigit():
-                        filename = filename.split('-', 1)[1]
-                else:
-                    filename = f"USAC_FCC_FORM_470_APPLICATION_{frn}_CERTIFIED.pdf"
-
-                correct_pdf_url = f"http://publicdata.usac.org/SL/Prd/Form470/{ben_prefix}/{frn}/Original/{filename}"
+            # ONLY CHANGE: Fix outdated USAC path /EPC/ → /SL/
+            pdf_url = (row[2] or '').replace('publicdata.usac.org/EPC/', 'publicdata.usac.org/SL/') if row[2] else None
 
             def fmt_date(dt):
                 return dt.strftime('%m/%d/%Y') if isinstance(dt, datetime) else '—'
-
             def fmt_datetime(dt):
                 return dt.strftime('%m/%d/%Y %I:%M %p') if isinstance(dt, datetime) else '—'
 
             data = {
-                "form_nickname": form_nickname or '—',
-                "form_pdf": Markup(f'<a href="{correct_pdf_url}" target="_blank" rel="noopener">View PDF</a>') if correct_pdf_url else '—',
-                "funding_year": funding_year or '—',
-                "fcc_status": fcc_status or '—',
-                "allowable_contract_date": fmt_date(row[6]),
-                "created_datetime": fmt_datetime(row[7]),
-                "created_by": row[8] or '—',
-                "certified_datetime": fmt_datetime(row[9]),
-                "certified_by": row[10] or '—',
-                "last_modified_datetime": fmt_datetime(row[11]),
-                "last_modified_by": row[12] or '—',
-                "ben": ben or '—',
-                "entity_name": row[15] or '—',
-                "org_status": row[16] or '—',
-                "org_type": row[17] or '—',
-                "applicant_type": row[18] or '—',
-                "website": row[19] or '—',
-                "latitude": row[20],
-                "longitude": row[21],
-                "fcc_reg_num": row[22] or '—',
-                "address1": row[23] or '',
-                "address2": row[24] or '',
-                "city": row[25] or '',
-                "state": row[26] or '',
-                "zip_code": row[27] or '',
-                "zip_ext": row[28] or '',
-                "email": row[29] or '—',
-                "phone": row[30] or '',
-                "phone_ext": row[31] or '',
-                "num_eligible": row[32] if row[32] is not None else 0,
-                "contact_name": row[33] or '—',
-                "contact_address1": row[34] or '',
-                "contact_address2": row[35] or '',
-                "contact_city": row[36] or '',
-                "contact_state": row[37] or '',
-                "contact_zip": row[38] or '',
-                "contact_zip_ext": row[39] or '',
-                "contact_phone": row[40] or '',
-                "contact_phone_ext": row[41] or '',
-                "contact_email": row[42] or '—',
-                "tech_name": row[43] or '—',
-                "tech_title": row[44] or '—',
-                "tech_phone": row[45] or '',
-                "tech_phone_ext": row[46] or '',
-                "tech_email": row[47] or '—',
-                "auth_name": row[48] or '—',
-                "auth_address": row[49] or '—',
-                "auth_city": row[50] or '',
-                "auth_state": row[51] or '',
-                "auth_zip": row[52] or '',
-                "auth_zip_ext": row[53] or '',
-                "auth_phone": row[54] or '',
-                "auth_phone_ext": row[55] or '',
-                "auth_email": row[56] or '—',
-                "auth_title": row[57] or '—',
-                "auth_employer": row[58] or '—',
-                "cat1_desc": row[59] or '—',
-                "cat2_desc": row[60] or '—',
-                "installment_type": row[61] or '—',
-                "installment_min": row[62] if row[62] is not None else 0,
-                "installment_max": row[63] if row[63] is not None else 0,
-                "rfp_id": row[64] or '—',
-                "state_restrictions": row[65] or '—',
-                "restriction_desc": row[66] or '—',
-                "statewide": row[67] or '—',
-                "all_public": row[68] or '—',
-                "all_nonpublic": row[69] or '—',
-                "all_libraries": row[70] or '—',
-                "form_version": row[71] or '—'
+                "form_nickname": row[1] or '—',
+                "form_pdf": Markup(f'<a href="{pdf_url}" target="_blank" rel="noopener">View PDF</a>') if pdf_url else '—',
+                "funding_year": row[3] or '—',
+                "fcc_status": row[4] or '—',
+                "allowable_contract_date": fmt_date(row[5]),
+                "created_datetime": fmt_datetime(row[6]),
+                "created_by": row[7] or '—',
+                "certified_datetime": fmt_datetime(row[8]),
+                "certified_by": row[9] or '—',
+                "last_modified_datetime": fmt_datetime(row[10]),
+                "last_modified_by": row[11] or '—',
+                "ben": row[12] or '—',
+                "entity_name": row[13] or '—',
+                "org_status": row[14] or '—',
+                "org_type": row[15] or '—',
+                "applicant_type": row[16] or '—',
+                "website": row[17] or '—',
+                "latitude": row[18],
+                "longitude": row[19],
+                "fcc_reg_num": row[20] or '—',
+                "address1": row[21] or '',
+                "address2": row[22] or '',
+                "city": row[23] or '',
+                "state": row[24] or '',
+                "zip_code": row[25] or '',
+                "zip_ext": row[26] or '',
+                "email": row[27] or '—',
+                "phone": row[28] or '',
+                "phone_ext": row[29] or '',
+                "num_eligible": row[30] if row[30] is not None else 0,
+                "contact_name": row[31] or '—',
+                "contact_address1": row[32] or '',
+                "contact_address2": row[33] or '',
+                "contact_city": row[34] or '',
+                "contact_state": row[35] or '',
+                "contact_zip": row[36] or '',
+                "contact_zip_ext": row[37] or '',
+                "contact_phone": row[38] or '',
+                "contact_phone_ext": row[39] or '',
+                "contact_email": row[40] or '—',
+                "tech_name": row[41] or '—',
+                "tech_title": row[42] or '—',
+                "tech_phone": row[43] or '',
+                "tech_phone_ext": row[44] or '',
+                "tech_email": row[45] or '—',
+                "auth_name": row[46] or '—',
+                "auth_address": row[47] or '—',
+                "auth_city": row[48] or '',
+                "auth_state": row[49] or '',
+                "auth_zip": row[50] or '',
+                "auth_zip_ext": row[51] or '',
+                "auth_phone": row[52] or '',
+                "auth_phone_ext": row[53] or '',
+                "auth_email": row[54] or '—',
+                "auth_title": row[55] or '—',
+                "auth_employer": row[56] or '—',
+                "cat1_desc": row[57] or '—',
+                "cat2_desc": row[58] or '—',
+                "installment_type": row[59] or '—',
+                "installment_min": row[60] if row[60] is not None else 0,
+                "installment_max": row[61] if row[61] is not None else 0,
+                "rfp_id": row[62] or '—',
+                "state_restrictions": row[63] or '—',
+                "restriction_desc": row[64] or '—',
+                "statewide": row[65] or '—',
+                "all_public": row[66] or '—',
+                "all_nonpublic": row[67] or '—',
+                "all_libraries": row[68] or '—',
+                "form_version": row[69] or '—'
             }
-
             return jsonify(data), 200, {'Content-Type': 'application/json'}
-
     except Exception as e:
         log("Details API error: %s", e)
         return jsonify({"error": "Service unavailable"}), 500
