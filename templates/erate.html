@@ -1205,9 +1205,10 @@
             overlay.classList.remove('show');
         }
 
-        // === renderSection(), activateTab(), copyAddress() — ALL FULLY INCLUDED ===
+        // === renderSection(), activateTab(), copyAddress() — ALL FULLY INCLUDED & FIXED ===
         function renderSection(section, data) {
             let html = '';
+
             if (section === 'basic') {
                 // Build correct USAC PDF URL – 100% working in 2025
                 const frn = data.frn || '';
@@ -1229,7 +1230,7 @@
                     <strong>Certified:</strong> ${data.certified_datetime || ''} by ${data.certified_by || ''}<br>
                     <strong>Last Modified:</strong> ${data.last_modified_datetime || ''} by ${data.last_modified_by || ''}
                 `;
-            }
+
             } else if (section === 'billed') {
                 html = `
                     <strong>Billed Entity #:</strong> ${data.ben || ''}<br>
@@ -1245,6 +1246,7 @@
                     <strong>Email:</strong> ${data.email || ''}<br>
                     <strong>Phone:</strong> ${data.phone || ''}${data.phone_ext ? ' x' + data.phone_ext : ''}
                 `;
+
             } else if (section === 'contact') {
                 html = `
                     <strong>Contact Name:</strong> ${data.contact_name || ''}<br>
@@ -1253,6 +1255,7 @@
                     <strong>Phone:</strong> ${data.contact_phone || ''}${data.contact_phone_ext ? ' x' + data.contact_phone_ext : ''}<br>
                     <strong>Email:</strong> ${data.contact_email || ''}
                 `;
+
             } else if (section === 'tech') {
                 html = `
                     <strong>Name:</strong> ${data.tech_name || ''}<br>
@@ -1260,6 +1263,7 @@
                     <strong>Phone:</strong> ${data.tech_phone || ''}${data.tech_phone_ext ? ' x' + data.tech_phone_ext : ''}<br>
                     <strong>Email:</strong> ${data.tech_email || ''}
                 `;
+
             } else if (section === 'auth') {
                 html = `
                     <strong>Name:</strong> ${data.auth_name || ''}<br>
@@ -1270,6 +1274,7 @@
                     <strong>Phone:</strong> ${data.auth_phone || ''}${data.auth_phone_ext ? ' x' + data.auth_phone_ext : ''}<br>
                     <strong>Email:</strong> ${data.auth_email || ''}
                 `;
+
             } else if (section === 'services') {
                 html = `
                     <strong>Category 1:</strong> ${data.cat1_desc || ''}<br>
@@ -1286,6 +1291,7 @@
                     <strong>Form Version:</strong> ${data.form_version || ''}
                 `;
             }
+
             detailBody.innerHTML = html;
         }
 
