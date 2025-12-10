@@ -961,7 +961,7 @@
             document.getElementById(type + 'Modal').style.display = 'none';
         }
 
-        // === POINT COUNTER + USER SETTINGS CLICK + OUT-OF-POINTS POPUP ===
+        // === POINT COUNTER + USER SETTINGS CLICK + OUT-OF-POINTS POPUP (FINAL WORKING) ===
         function updatePoints() {
             fetch('/erate/points?' + Date.now())
                 .then(r => r.json())
@@ -969,37 +969,40 @@
                     const pointsEl = document.getElementById('points-display');
                     if (pointsEl) {
                         pointsEl.textContent = `(${data.points} pts)`;
-
-                        // colour warning
-                        if (data.points <= 5)  pointsEl.style.color = '#ffc107';
-                        if (data.points <= 0)  pointsEl.style.color = '#dc3545';
-
-                        // OUT OF POINTS MODAL
-                        if (data.points <= 0) {
-                            fetch('/erate/out-of-points')
-                                .then(r => r.json())
-                                .then(msg => {
-                                    document.getElementById('out-of-points-message').textContent = msg.message;
-                                })
-                                .catch(() => {
-                                    document.getElementById('out-of-points-message').textContent = 
-                                        "You have run out of click points. Register for unlimited access!";
-                                })
-                                .finally(() => {
-                                    document.getElementById('outOfPointsModal').classList.add('show');
-                                    document.getElementById('outOfPointsBackdrop').classList.add('show');
-                                });
-                        }
+                        pointsEl.style.color = data.points <= 0 ? '#dc3545' : 
+                                              data.points <= 5 ? '#ffc107' : '';
                     }
 
-                    // USER SETTINGS CLICK – now guaranteed to work
+                    // OUT OF POINTS MODAL
+                    if (data.points <= 0) {
+                        fetch('/erate/out-of-points')
+                            .then(r => r.json())
+                            .then(msg => {
+                                document.getElementById('out-of-points-message').textContent = msg.message;
+                            })
+                            .catch(() => {
+                                document.getElementById('out-of-points-message').textContent = 
+                                    "You have run out of click points. Register for unlimited access!";
+                            })
+                            .finally(() => {
+                                document.getElementById('outOfPointsModal')?.classList.add('show');
+                                document.getElementById('outOfPointsBackdrop')?.classList.add('show');
+                            });
+                    }
+
+                    // CRITICAL FIX: Attach settings click handler HERE (after DOM ready)
                     const settingsBtn = document.getElementById('user-settings-btn');
                     if (settingsBtn) {
-                        settingsBtn.style.cursor = 'pointer';
-                        settingsBtn.onclick = function(e) {
+                        // Remove any old listeners first (prevents duplicates)
+                        settingsBtn.onclick = null;
+                        settingsBtn.replaceWith(settingsBtn.cloneNode(true)); // clean slate
+                        const newBtn = document.getElementById('user-settings-btn');
+                        newBtn.style.cursor = 'pointer';
+                        newBtn.addEventListener('click', function(e) {
                             e.preventDefault();
+                            e.stopPropagation();
                             openSettingsModal();
-                        };
+                        });
                     }
                 })
                 .catch(() => {
@@ -1008,8 +1011,14 @@
                 });
         }
 
-        // Call once on load and after every action that costs points
+        // Run on load + after every point spend
         document.addEventListener('DOMContentLoaded', updatePoints);
+        // Also run again after export clicks (they cost points)
+        document.addEventListener('click', e => {
+            if (e.target.closest('.add-to-export')) {
+                setTimeout(updatePoints, 600); // slight delay so server can update
+            }
+        });
 
         // === showDetails() — THIS WAS MISSING ===
         async function showDetails(appNumber) {
@@ -1635,9 +1644,6 @@
             settingsBackdrop.classList.remove('show');
             settingsModal.setAttribute('aria-hidden', 'true');
         }
-
-        // Open from header button
-        document.getElementById('user-settings-btn')?.addEventListener('click', openSettingsModal);
 
         // Close on X button or backdrop click
         document.querySelector('#settingsModal .modal-close-btn')?.addEventListener('click', closeSettingsModal);
