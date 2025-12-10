@@ -855,7 +855,7 @@ def dashboard():
     finally:
         conn.close()
 
-# === APPLICANT DETAILS API – YOUR ORIGINAL CODE + ONLY 1 FIX ===
+# === APPLICANT DETAILS API – YOUR ORIGINAL + MISSING PROTOCOL FIX ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     deduct_point()
@@ -866,19 +866,26 @@ def details(app_number):
             row = cur.fetchone()
             if not row:
                 return jsonify({"error": "Applicant not found"}), 404
-            row = row[1:]  # skip id + app_number
+            row = row[1:]
 
-            # ONLY CHANGE: Fix outdated USAC path /EPC/ → /SL/
-            pdf_url = (row[2] or '').replace('publicdata.usac.org/EPC/', 'publicdata.usac.org/SL/') if row[2] else None
+            # FIX: Add missing http:// if not present, then replace /EPC/ → /SL/
+            raw_url = row[2] or ''
+            if raw_url and not raw_url.startswith(('http://', 'https://')):
+                raw_url = 'http://' + raw_url
+            pdf_url = raw_url.replace('publicdata.usac.org/EPC/', 'publicdata.usac.org/SL/') if raw_url else None
 
             def fmt_date(dt):
-                return dt.strftime('%m/%d/%Y') if isinstance(dt, datetime) else '—'
+                if isinstance(dt, datetime):
+                    return dt.strftime('%m/%d/%Y')
+                return '—'
             def fmt_datetime(dt):
-                return dt.strftime('%m/%d/%Y %I:%M %p') if isinstance(dt, datetime) else '—'
+                if isinstance(dt, datetime):
+                    return dt.strftime('%m/%d/%Y %I:%M %p')
+                return '—'
 
             data = {
                 "form_nickname": row[1] or '—',
-                "form_pdf": Markup(f'<a href="{pdf_url}" target="_blank" rel="noopener">View PDF</a>') if pdf_url else '—',
+                "form_pdf": Markup(f'<a href="{pdf_url}" target="_blank">View PDF</a>') if pdf_url else '—',
                 "funding_year": row[3] or '—',
                 "fcc_status": row[4] or '—',
                 "allowable_contract_date": fmt_date(row[5]),
