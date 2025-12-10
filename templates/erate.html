@@ -1205,20 +1205,21 @@
             overlay.classList.remove('show');
         }
 
-        // === renderSection() – FINAL 100% WORKING VERSION (PDF links fixed) ===
+        // === renderSection() – FINAL WORKING VERSION (only URL fixed) ===
         function renderSection(section, data) {
             let html = '';
 
             if (section === 'basic') {
-                // Use FRN from data (it's there — your DB returns it as "frn")
-                const frn = data.frn || '';
-                let pdfLink = 'PDF not available';
-
-                if (frn) {
-                    const pdfName = data.form_pdf || `USAC_FCC_FORM_470_APPLICATION_${frn}_CERTIFIED.pdf`;
-                    const pdfUrl = `https://publicdata.usac.org/SL/Prd/Form470/${frn.slice(0,3)}/${frn}/Original/${pdfName}`;
-                    pdfLink = `<a href="${pdfUrl}" target="_blank" rel="noopener" style="color:#007bff;font-weight:600;text-decoration:underline;">View PDF</a>`;
-                }
+                // Your old code used data.form_pdf directly — it worked!
+                // Just fix the URL prefix from "epc" → "SL"
+                const oldPdfUrl = data.form_pdf || '';
+                let pdfLink = oldPdfUrl 
+                    ? `<a href="${oldPdfUrl.replace('publicdata.usac.org/epc/', 'publicdata.usac.org/SL/')}" 
+                         target="_blank" rel="noopener" 
+                         style="color:#007bff;font-weight:600;text-decoration:underline;">
+                           View PDF
+                       </a>`
+                    : 'PDF not available';
 
                 html = `
                     <strong>Form Nickname:</strong> ${data.form_nickname || ''}<br>
