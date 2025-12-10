@@ -4,64 +4,7 @@
 <head>
     <title>E-Rate</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel=        // === POINT COUNTER + USER SETTINGS CLICK + OUT-OF-POINTS POPUP (FINAL WORKING) ===
-        function updatePoints() {
-            fetch('/erate/points?' + Date.now())
-                .then(r => r.json())
-                .then(data => {
-                    const pointsEl = document.getElementById('points-display');
-                    if (pointsEl) {
-                        pointsEl.textContent = `(${data.points} pts)`;
-                        pointsEl.style.color = data.points <= 0 ? '#dc3545' : 
-                                              data.points <= 5 ? '#ffc107' : '';
-                    }
-
-                    // OUT OF POINTS MODAL
-                    if (data.points <= 0) {
-                        fetch('/erate/out-of-points')
-                            .then(r => r.json())
-                            .then(msg => {
-                                document.getElementById('out-of-points-message').textContent = msg.message;
-                            })
-                            .catch(() => {
-                                document.getElementById('out-of-points-message').textContent = 
-                                    "You have run out of click points. Register for unlimited access!";
-                            })
-                            .finally(() => {
-                                document.getElementById('outOfPointsModal')?.classList.add('show');
-                                document.getElementById('outOfPointsBackdrop')?.classList.add('show');
-                            });
-                    }
-
-                    // CRITICAL FIX: Attach settings click handler HERE (after DOM ready)
-                    const settingsBtn = document.getElementById('user-settings-btn');
-                    if (settingsBtn) {
-                        // Remove any old listeners first (prevents duplicates)
-                        settingsBtn.onclick = null;
-                        settingsBtn.replaceWith(settingsBtn.cloneNode(true)); // clean slate
-                        const newBtn = document.getElementById('user-settings-btn');
-                        newBtn.style.cursor = 'pointer';
-                        newBtn.addEventListener('click', function(e) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            openSettingsModal();
-                        });
-                    }
-                })
-                .catch(() => {
-                    const el = document.getElementById('points-display');
-                    if (el) el.textContent = '(?)';
-                });
-        }
-
-        // Run on load + after every point spend
-        document.addEventListener('DOMContentLoaded', updatePoints);
-        // Also run again after export clicks (they cost points)
-        document.addEventListener('click', e => {
-            if (e.target.closest('.add-to-export')) {
-                setTimeout(updatePoints, 600); // slight delay so server can update
-            }
-        });"icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
@@ -432,43 +375,6 @@
             .logout { right: 0.5rem; }
             .points { font-size: 0.7rem; }
             .filters input[name="text"] { width: 100%; }
-        }
-
-        #settingsModal .modal-dialog {
-          max-width: 520px;
-        }
-
-        #settingsModal input,
-        #settingsModal select {
-          width: 100%;
-          padding: 0.75rem;
-          border: 1px solid #ccc;
-          border-radius: 8px;
-          font-size: 1rem;
-          background: white;
-          transition: border 0.2s, box-shadow 0.2s;
-        }
-
-        #settingsModal input:focus,
-        #settingsModal select:focus {
-          outline: none;
-          border-color: var(--accent);
-          box-shadow: 0 0 0 3px rgba(0,123,255,0.15);
-        }
-
-        #settingsModal label {
-          display: block;
-          margin-bottom: 0.4rem;
-          font-weight: 600;
-          color: var(--primary);
-        }
-
-        #settingsModal label small {
-          display: block;
-          margin-top: 0.25rem;
-          font-weight: 400;
-          color: #666;
-          font-size: 0.85rem;
         }
     </style>
 </head>
@@ -913,90 +819,31 @@
         </div>
     </div>
 
-    <!-- ==================== USER SETTINGS MODAL (2025 FINAL) ==================== -->
-    <div class="modal-backdrop" id="settingsBackdrop"></div>
-
-    <div class="modal-container" id="settingsModal" role="dialog" aria-labelledby="settingsTitle" aria-hidden="true">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <button class="modal-close-btn" aria-label="Close">×</button>
-          <h2 class="modal-title" id="settingsTitle">User Settings</h2>
-
-          <form id="settingsForm">
-            <div class="modal-body" style="display: grid; gap: 1rem;">
-
-              <div>
-                <label style="display:block; margin-bottom:0.4rem; font-weight:600; color:var(--primary);">
-                  Password <small style="font-weight:400; color:#666;">(leave blank to keep current)</small>
-                </label>
-                <input type="password" name="password" placeholder="New password" autocomplete="new-password">
-              </div>
-
-              <div>
-                <label style="display:block; margin-bottom:0.4rem; font-weight:600; color:var(--primary);">Email</label>
-                <input type="email" name="email" id="settingsEmail" placeholder="your@email.com">
-              </div>
-
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                <div>
-                  <label style="display:block; margin-bottom:0.4rem; font-weight:600; color:var(--primary);">
-                    Filter Threshold <small style="font-weight:400; color:#666;">(max records to calculate distance)</small>
-                  </label>
-                  <input type="number" name="ft" id="settingsFT" min="10" max="1000" value="100">
-                </div>
-
-                <div>
-                  <label style="display:block; margin-bottom:0.4rem; font-weight:600; color:var(--primary);">
-                    Distance Minimum <small style="font-weight:400; color:#666;">(miles) — hide farther results</small>
-                  </label>
-                  <input type="number" name="dm" id="settingsDM" step="0.1" min="0" max="100" value="5.0">
-                </div>
-              </div>
-
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                <div>
-                  <label style="display:block; margin-bottom:0.4rem; font-weight:600; color:var(--primary);">My State</label>
-                  <select name="mystate" id="settingsState">
-                    <option value="">-- Select State --</option>
-                    <option value="AL">AL - Alabama</option>
-                    <option value="CA">CA - California</option>
-                    <option value="FL">FL - Florida</option>
-                    <option value="GA">GA - Georgia</option>
-                    <option value="IL">IL - Illinois</option>
-                    <option value="IA">IA - Iowa</option>
-                    <option value="KS">KS - Kansas</option>
-                    <option value="KY">KY - Kentucky</option>
-                    <option value="MI">MI - Michigan</option>
-                    <option value="MO">MO - Missouri</option>
-                    <option value="OH">OH - Ohio</option>
-                    <option value="OK">OK - Oklahoma</option>
-                    <option value="TX">TX - Texas</option>
-                    <!-- Add more states as needed -->
-                  </select>
-                </div>
-
-                <div>
-                  <label style="display:block; margin-bottom:0.4rem; font-weight:600; color:var(--primary);">Provider</label>
-                  <select name="provider" id="settingsProvider">
-                    <option value="">None</option>
-                    <option value="Bluebird Network">Bluebird Network</option>
-                    <option value="FNA Network">FNA Network</option>
-                    <option value="Segra EAST">Segra EAST</option>
-                    <option value="Segra WEST">Segra WEST</option>
-                  </select>
-                </div>
-              </div>
-
+    <!-- USER SETTINGS MODAL -->
+    <div class="modal" id="settings-modal">
+        <div class="modal-content" style="max-width:420px;">
+            <div class="modal-header">
+                <div class="modal-title">User Settings</div>
+                <button class="modal-close" onclick="closeModal('settings')">x</button>
             </div>
-
-            <div class="modal-footer" style="margin-top:1.5rem;">
-              <button type="submit" class="btn btn-primary" style="width:100%; padding:0.9rem; font-size:1.1rem;">
-                Save Settings
-              </button>
+            <div class="modal-body">
+                <form id="settings-form">
+                    <label style="display:block;margin:15px 0 5px;">
+                        <strong>Password</strong> (leave blank to keep current)<br>
+                        <input type="password" name="password" placeholder="New password" style="width:100%;padding:10px;margin-top:5px;border:1px solid #ccc;border-radius:6px;">
+                    </label>
+                    <label style="display:block;margin:15px 0 5px;">
+                        <strong>Filter Threshold</strong> (max records to calculate distance)<br>
+                        <input type="number" name="ft" id="settings-ft" min="10" max="1000" value="100" style="width:100%;padding:10px;margin-top:5px;border:1px solid #ccc;border-radius:6px;">
+                    </label>
+                    <label style="display:block;margin:15px 0 5px;">
+                        <strong>Distance Minimum</strong> (miles) — hide farther results<br>
+                        <input type="number" name="dm" id="settings-dm" step="0.1" min="0" max="100" value="5.0" style="width:100%;padding:10px;margin-top:5px;border:1px solid #ccc;border-radius:6px;">
+                    </label>
+                    <button type="submit" class="btn btn-primary" style="margin-top:20px;width:100%;">Save Settings</button>
+                </form>
             </div>
-          </form>
         </div>
-      </div>
     </div>
     
     <script>
@@ -1017,49 +864,28 @@
         function closeModal(type) {
             document.getElementById(type + 'Modal').style.display = 'none';
         }
-
-        // === POINT COUNTER + USER SETTINGS CLICK + OUT-OF-POINTS POPUP (FINAL WORKING) ===
+        // === POINT COUNTER + OUT-OF-POINTS POPUP ===
         function updatePoints() {
             fetch('/erate/points?' + Date.now())
                 .then(r => r.json())
                 .then(data => {
-                    const pointsEl = document.getElementById('points-display');
-                    if (pointsEl) {
-                        pointsEl.textContent = `(${data.points} pts)`;
-                        pointsEl.style.color = data.points <= 0 ? '#dc3545' : 
-                                              data.points <= 5 ? '#ffc107' : '';
-                    }
-
-                    // OUT OF POINTS MODAL
-                    if (data.points <= 0) {
-                        fetch('/erate/out-of-points')
-                            .then(r => r.json())
-                            .then(msg => {
-                                document.getElementById('out-of-points-message').textContent = msg.message;
-                            })
-                            .catch(() => {
-                                document.getElementById('out-of-points-message').textContent = 
-                                    "You have run out of click points. Register for unlimited access!";
-                            })
-                            .finally(() => {
-                                document.getElementById('outOfPointsModal')?.classList.add('show');
-                                document.getElementById('outOfPointsBackdrop')?.classList.add('show');
-                            });
-                    }
-
-                    // CRITICAL FIX: Attach settings click handler HERE (after DOM ready)
-                    const settingsBtn = document.getElementById('user-settings-btn');
-                    if (settingsBtn) {
-                        // Remove any old listeners first (prevents duplicates)
-                        settingsBtn.onclick = null;
-                        settingsBtn.replaceWith(settingsBtn.cloneNode(true)); // clean slate
-                        const newBtn = document.getElementById('user-settings-btn');
-                        newBtn.style.cursor = 'pointer';
-                        newBtn.addEventListener('click', function(e) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            openSettingsModal();
-                        });
+                    const el = document.getElementById('points-display');
+                    if (el) {
+                        el.textContent = `(${data.points} pts)`;
+                        if (data.points <= 5) el.style.color = '#ffc107';
+                        if (data.points <= 0) {
+                            el.style.color = '#dc3545';
+                            fetch('/erate/out-of-points')
+                                .then(r => r.json())
+                                .then(msg => {
+                                    document.getElementById('out-of-points-message').textContent = msg.message;
+                                    document.getElementById('outOfPointsModal').classList.add('show');
+                                })
+                                .catch(() => {
+                                    document.getElementById('out-of-points-message').textContent = "You have run out of points.";
+                                    document.getElementById('outOfPointsModal').classList.add('show');
+                                });
+                        }
                     }
                 })
                 .catch(() => {
@@ -1067,15 +893,6 @@
                     if (el) el.textContent = '(?)';
                 });
         }
-
-        // Run on load + after every point spend
-        document.addEventListener('DOMContentLoaded', updatePoints);
-        // Also run again after export clicks (they cost points)
-        document.addEventListener('click', e => {
-            if (e.target.closest('.add-to-export')) {
-                setTimeout(updatePoints, 600); // slight delay so server can update
-            }
-        });
 
         // === showDetails() — THIS WAS MISSING ===
         async function showDetails(appNumber) {
@@ -1668,84 +1485,38 @@
             }
         });
 
-        // === USER SETTINGS MODAL – FINAL 2025 VERSION ===
-        const settingsModal     = document.getElementById('settingsModal');
-        const settingsBackdrop  = document.getElementById('settingsBackdrop');
-
-        function openSettingsModal() {
+        // === USER SETTINGS MODAL ===
+        document.getElementById('user-settings-btn')?.addEventListener('click', () => {
             fetch('/erate/user_settings')
                 .then(r => r.json())
                 .then(data => {
-                    document.getElementById('settingsEmail').value     = data.Email     || '';
-                    document.getElementById('settingsFT').value        = data.ft        || 100;
-                    document.getElementById('settingsDM').value        = data.dm        || 5.0;
-                    document.getElementById('settingsState').value     = data.MyState   || '';
-                    document.getElementById('settingsProvider').value = data.Provider  || '';
-
-                    settingsModal.classList.add('show');
-                    settingsBackdrop.classList.add('show');
-                    settingsModal.setAttribute('aria-hidden', 'false');
+                    document.getElementById('settings-ft').value = data.ft || 100;
+                    document.getElementById('settings-dm').value = data.dm || 5.0;
+                    document.getElementById('settings-modal').classList.add('show');
                 })
-                .catch(err => {
-                    console.warn('Failed to load settings, using defaults', err);
-                    document.getElementById('settingsFT').value = 100;
-                    document.getElementById('settingsDM').value = 5.0;
-
-                    settingsModal.classList.add('show');
-                    settingsBackdrop.classList.add('show');
+                .catch(() => {
+                    document.getElementById('settings-ft').value = 100;
+                    document.getElementById('settings-dm').value = 5.0;
+                    document.getElementById('settings-modal').classList.add('show');
                 });
-        }
-
-        function closeSettingsModal() {
-            settingsModal.classList.remove('show');
-            settingsBackdrop.classList.remove('show');
-            settingsModal.setAttribute('aria-hidden', 'true');
-        }
-
-        // Close on X button or backdrop click
-        document.querySelector('#settingsModal .modal-close-btn')?.addEventListener('click', closeSettingsModal);
-        settingsBackdrop.addEventListener('click', closeSettingsModal);
-
-        // Close on Escape key
-        document.addEventListener('keydown', e => {
-            if (e.key === 'Escape' && settingsModal.classList.contains('show')) {
-                closeSettingsModal();
-            }
         });
 
-        // Form submit with feedback
-        document.getElementById('settingsForm').addEventListener('submit', function(e) {
+        document.getElementById('settings-form')?.addEventListener('submit', (e) => {
             e.preventDefault();
-
-            const submitBtn = this.querySelector('button[type="submit"]');
-            const originalText = submitBtn.textContent;
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Saving...';
-
-            const formData = new FormData(this);
-
+            const formData = new FormData(e.target);
             fetch('/erate/user_settings', {
                 method: 'POST',
                 body: formData
-            })
-            .then(r => r.json())
-            .then(result => {
-                if (result.status === 'success') {
-                    alert('Settings saved successfully!');
-                    closeSettingsModal();
-                    location.reload();
-                } else {
-                    throw new Error(result.message || 'Unknown error');
-                }
-            })
-            .catch(err => {
-                console.error('Settings save error:', err);
-                alert('Failed to save settings. Please try again.');
-            })
-            .finally(() => {
-                submitBtn.disabled = false;
-                submitBtn.textContent = originalText;
+            }).then(() => {
+                location.reload();
             });
+        });
+
+        // Close modal when clicking outside or X
+        document.getElementById('settings-modal')?.addEventListener('click', (e) => {
+            if (e.target === document.getElementById('settings-modal') || e.target.classList.contains('modal-close')) {
+                document.getElementById('settings-modal').classList.remove('show');
+            }
         });
 
         // === SYNC NETWORK DISPLAY WITH MAP SWITCHER ===
