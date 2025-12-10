@@ -4,7 +4,64 @@
 <head>
     <title>E-Rate</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <link rel=        // === POINT COUNTER + USER SETTINGS CLICK + OUT-OF-POINTS POPUP (FINAL WORKING) ===
+        function updatePoints() {
+            fetch('/erate/points?' + Date.now())
+                .then(r => r.json())
+                .then(data => {
+                    const pointsEl = document.getElementById('points-display');
+                    if (pointsEl) {
+                        pointsEl.textContent = `(${data.points} pts)`;
+                        pointsEl.style.color = data.points <= 0 ? '#dc3545' : 
+                                              data.points <= 5 ? '#ffc107' : '';
+                    }
+
+                    // OUT OF POINTS MODAL
+                    if (data.points <= 0) {
+                        fetch('/erate/out-of-points')
+                            .then(r => r.json())
+                            .then(msg => {
+                                document.getElementById('out-of-points-message').textContent = msg.message;
+                            })
+                            .catch(() => {
+                                document.getElementById('out-of-points-message').textContent = 
+                                    "You have run out of click points. Register for unlimited access!";
+                            })
+                            .finally(() => {
+                                document.getElementById('outOfPointsModal')?.classList.add('show');
+                                document.getElementById('outOfPointsBackdrop')?.classList.add('show');
+                            });
+                    }
+
+                    // CRITICAL FIX: Attach settings click handler HERE (after DOM ready)
+                    const settingsBtn = document.getElementById('user-settings-btn');
+                    if (settingsBtn) {
+                        // Remove any old listeners first (prevents duplicates)
+                        settingsBtn.onclick = null;
+                        settingsBtn.replaceWith(settingsBtn.cloneNode(true)); // clean slate
+                        const newBtn = document.getElementById('user-settings-btn');
+                        newBtn.style.cursor = 'pointer';
+                        newBtn.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openSettingsModal();
+                        });
+                    }
+                })
+                .catch(() => {
+                    const el = document.getElementById('points-display');
+                    if (el) el.textContent = '(?)';
+                });
+        }
+
+        // Run on load + after every point spend
+        document.addEventListener('DOMContentLoaded', updatePoints);
+        // Also run again after export clicks (they cost points)
+        document.addEventListener('click', e => {
+            if (e.target.closest('.add-to-export')) {
+                setTimeout(updatePoints, 600); // slight delay so server can update
+            }
+        });"icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
