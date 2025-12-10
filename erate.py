@@ -1409,48 +1409,70 @@ def set_guest():
 # === USER SETTINGS API (FT = Filter Threshold, DM = Distance Minimum) ===
 @erate_bp.route('/user_settings', methods=['GET', 'POST'])
 def user_settings():
-    
     # BLOCK GUESTS — safest place, no frontend changes
     if session.get('username', '').startswith('guest_'):
         return jsonify({"error": "Settings disabled for guest accounts"}), 403
-    
+   
     if not session.get('username'):
         return jsonify({"ft": 100, "dm": 5.0})
-
+    
     username = session['username']
-
+    
     # Guest users get defaults
     if username.startswith('guest_'):
         return jsonify({"ft": 100, "dm": 5.0})
-
+    
     with psycopg.connect(DATABASE_URL) as conn:
         with conn.cursor() as cur:
             if request.method == 'POST':
                 data = request.form
-                password = data.get('password')
-                ft = int(data.get('ft', 100))
-                dm = float(data.get('dm', 5.0))
+                password = data.get('password', '').strip()
+                ft = max(10, min(1000, int(data.get('ft', 100))))
+                dm = max(0.0, min(100.0, float(data.get('dm', 5.0))))
+                email = data.get('email', '').strip()
+                mystate = (data.get('mystate', '') or 'KS')[:2].upper()
+                provider = data.get('provider', '').strip()
+
+                # Build dynamic SET clause
+                sets = ['ft = %s', 'dm = %s', '"Email" = %s', '"MyState" = %s', '"Provider" = %s']
+                vals = [ft, dm, email, mystate, provider]
 
                 if password:
-                    cur.execute(
-                        "UPDATE users SET ft=%s, dm=%s, password=%s WHERE username=%s",
-                        (ft, dm, hash_password(password), username)
-                    )
-                else:
-                    cur.execute(
-                        "UPDATE users SET ft=%s, dm=%s WHERE username=%s",
-                        (ft, dm, username)
-                    )
-                conn.commit()
-                flash("Settings saved!", "success")
+                    sets.append('password = %s')
+                    vals.append(hash_password(password))
 
-            # GET: return current values
-            cur.execute("SELECT ft, dm FROM users WHERE username=%s", (username,))
+                vals.append(username)
+
+                cur.execute(
+                    f"UPDATE users SET {', '.join(sets)} WHERE username = %s",
+                    vals
+                )
+                conn.commit()
+                return jsonify({"status": "success", "message": "Settings saved!"})
+            
+            # GET: return ALL current values
+            cur.execute("""
+                SELECT ft, dm, "Email", "MyState", "Provider" 
+                FROM users WHERE username=%s
+            """, (username,))
             row = cur.fetchone()
-            return jsonify({
-                "ft": row[0] if row and row[0] is not None else 100,
-                "dm": float(row[1]) if row and row[1] is not None else 5.0
-            })
+            
+            if row:
+                return jsonify({
+                    "ft": row[0] if row[0] is not None else 100,
+                    "dm": float(row[1]) if row[1] is not None else 5.0,
+                    "Email": row[2] or '',
+                    "MyState": row[3] or '',
+                    "Provider": row[4] or ''
+                })
+            else:
+                return jsonify({
+                    "ft": 100,
+                    "dm": 5.0,
+                    "Email": '',
+                    "MyState": '',
+                    "Provider": ''
+                })
 
 # === DYNAMIC COVERAGE REPORT — PURE DATA ONLY (FOR MODAL) ===
 @erate_bp.route('/coverage-report')
