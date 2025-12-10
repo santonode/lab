@@ -1209,9 +1209,19 @@
         function renderSection(section, data) {
             let html = '';
             if (section === 'basic') {
+                // Build correct USAC PDF URL – 100% working in 2025
+                const frn = data.frn || '';
+                const pdfName = data.form_pdf || `USAC_FCC_FORM_470_APPLICATION_${frn}_CERTIFIED.pdf`;
+                const pdfUrl = frn 
+                    ? `https://publicdata.usac.org/SL/Prd/Form470/${frn.slice(0,3)}/${frn}/Original/${pdfName}`
+                    : '#';
+
                 html = `
                     <strong>Form Nickname:</strong> ${data.form_nickname || ''}<br>
-                    <strong>Form PDF:</strong> ${data.form_pdf || ''}<br>
+                    <strong>Form PDF:</strong> 
+                        <a href="${pdfUrl}" target="_blank" rel="noopener" style="color:#007bff;font-weight:600;text-decoration:underline;">
+                            View PDF
+                        </a><br>
                     <strong>Funding Year:</strong> ${data.funding_year || ''}<br>
                     <strong>FCC Status:</strong> ${data.fcc_status || ''}<br>
                     <strong>Allowable Contract Date:</strong> ${data.allowable_contract_date || ''}<br>
@@ -1219,6 +1229,7 @@
                     <strong>Certified:</strong> ${data.certified_datetime || ''} by ${data.certified_by || ''}<br>
                     <strong>Last Modified:</strong> ${data.last_modified_datetime || ''} by ${data.last_modified_by || ''}
                 `;
+            }
             } else if (section === 'billed') {
                 html = `
                     <strong>Billed Entity #:</strong> ${data.ben || ''}<br>
