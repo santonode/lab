@@ -855,7 +855,7 @@ def dashboard():
     finally:
         conn.close()
 
-# === APPLICANT DETAILS API – FINAL 2025 VERSION (SMART FALLBACK FOR USAC URL VARIATIONS) ===
+# === APPLICANT DETAILS API – WITH INDEXING DELAY HANDLING ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     deduct_point()
@@ -869,30 +869,28 @@ def details(app_number):
 
             row = row[1:]  # skip first column (app_number)
 
-            # Extract FRN and raw PDF field (old full URL or filename)
+            # Extract FRN and raw PDF field
             frn = row[0] or ''                    # column 0 = frn
             raw_pdf_url = row[2] or ''            # column 2 = form_pdf (old full URL)
+            certified_date = row[8]  # certified_datetime
 
-            # BUILD CORRECT 2025 USAC PDF URL WITH FALLBACK
+            # BUILD CORRECT 2025 USAC PDF URL
             correct_pdf_url = None
             if frn:
                 frn = str(frn).strip()
                 if raw_pdf_url and 'http' in raw_pdf_url:
-                    # Extract ONLY the filename from the old URL
                     filename = raw_pdf_url.split('/')[-1].strip()
-                    # Strip common prefixes like numbers + dash
                     if '-' in filename and filename.split('-')[0].isdigit():
                         filename = '-'.join(filename.split('-')[1:])
                 else:
                     filename = f"USAC_FCC_FORM_470_APPLICATION_{frn}_CERTIFIED.pdf"
 
-                # Try URL without "Original/" first (common for recent forms)
-                base_url = f"http://publicdata.usac.org/SL/Prd/Form470/{frn[:3]}/{frn}/{filename}"
-                # Fallback: with "Original/" if the first fails (for older forms)
-                fallback_url = f"http://publicdata.usac.org/SL/Prd/Form470/{frn[:3]}/{frn}/Original/{filename}"
+                correct_pdf_url = f"http://publicdata.usac.org/SL/Prd/Form470/{frn[:3]}/{frn}/Original/{filename}"
 
-                # For now, use the base URL (no "Original/") — switch to fallback if needed
-                correct_pdf_url = base_url
+            # Check if form is too new for indexing (certified < 72 hours ago)
+            pdf_status = 'ready'
+            if certified_date and (datetime.now() - certified_date).total_seconds() < 259200:  # 3 days
+                pdf_status = 'pending'
 
             def fmt_date(dt):
                 return dt.strftime('%m/%d/%Y') if isinstance(dt, datetime) else '—'
@@ -902,7 +900,7 @@ def details(app_number):
 
             data = {
                 "form_nickname": row[1] or '—',
-                "form_pdf": Markup(f'<a href="{correct_pdf_url}" target="_blank" rel="noopener">View PDF</a>') if correct_pdf_url else '—',
+                "form_pdf": Markup(f'<a href="{correct_pdf_url}" target="_blank" rel="noopener">View PDF</a>') if correct_pdf_url and pdf_status == 'ready' else (Markup('PDF Pending Indexing (24-72 hours)') if pdf_status == 'pending' else '—'),
                 "funding_year": row[3] or '—',
                 "fcc_status": row[4] or '—',
                 "allowable_contract_date": fmt_date(row[5]),
