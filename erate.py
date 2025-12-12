@@ -1662,6 +1662,104 @@ def coverage_map_data():
 
     return Response(generate(), mimetype='application/x-ndjson')
 
+# =======================================================
+# === NEW NATIONAL MAP =================================
+# =======================================================
+@erate_bp.route('/national-map')
+def national_map():
+    return render_template('local_test.html')
+
+@erate_bp.route('/stream-national')
+def stream_national():
+    print("=== STREAMING NATIONAL FIBER MAP (SUPERIOR VERSION) ===")
+    requested_state = request.args.get('state', '').upper()
+    print(f"Requested state: '{requested_state}'")
+
+    def stream_kmz(path, name, color):
+        if not os.path.exists(path):
+            print(f"Missing KMZ: {path}")
+            return
+        try:
+            with zipfile.ZipFile(path, 'r') as z:
+                kml_files = [f for f in z.namelist() if f.lower().endswith('.kml')]
+                if not kml_files:
+                    return
+                root = ET.fromstring(z.read(kml_files[0]))
+                ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+                count = 0
+                for coords in root.findall('.//kml:LineString/kml:coordinates', ns):
+                    if not coords.text:
+                        continue
+                    points = []
+                    for token in coords.text.strip().split():
+                        p = token.split(',')
+                        if len(p) >= 2:
+                            try:
+                                lon, lat = float(p[0]), float(p[1])
+                                points.append([lat, lon])
+                            except:
+                                continue
+                    if len(points) >= 2:
+                        yield json.dumps({"name": name, "color": color, "coords": points}) + "\n"
+                        count += 1
+                if count:
+                    print(f" → {name}: {count} lines (KMZ)")
+        except Exception as e:
+            print(f"KMZ error {path}: {e}")
+
+    def stream_kml(path, name, color):
+        if not os.path.exists(path):
+            print(f"Missing KML: {path}")
+            return
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                root = ET.fromstring(f.read())
+            ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+            count = 0
+            for coords in root.findall('.//kml:LineString/kml:coordinates', ns):
+                if not coords.text:
+                    continue
+                points = []
+                for token in coords.text.strip().split():
+                    p = token.split(',')
+                    if len(p) >= 2:
+                        try:
+                            lon, lat = float(p[0]), float(p[1])
+                            points.append([lat, lon])
+                        except:
+                            continue
+                if len(points) >= 2:
+                    yield json.dumps({"name": name, "color": color, "coords": points}) + "\n"
+                    count += 1
+            if count:
+                print(f" → {name}: {count} lines (KML)")
+        except Exception as e:
+            print(f"KML error {path}: {e}")
+
+    def generate():
+        # BLUEBIRD
+        if os.path.exists("BBN Map KMZ 122023.kmz"):
+            yield from stream_kmz("BBN Map KMZ 122023.kmz", "Bluebird Network", "#0066cc")
+
+        # CDT.kml — ONLY WHEN CA REQUESTED
+        if requested_state == "CA" and os.path.exists("CDT.kml"):
+            print("CDT.kml STREAMED FOR CALIFORNIA — NEON GREEN")
+            yield from stream_kml("CDT.kml", "CDT", "#00ff00")
+
+        # FNA MEMBERS
+        fna_dir = "fna_members"
+        if os.path.isdir(fna_dir):
+            colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
+            idx = 0
+            for f in sorted(os.listdir(fna_dir)):
+                if f.lower().endswith('.kmz'):
+                    path = os.path.join(fna_dir, f)
+                    name = os.path.splitext(f)[0].replace('_', ' ').title()
+                    yield from stream_kmz(path, name, colors[idx % len(colors)])
+                    idx += 1
+
+    return Response(generate(), mimetype='application/x-ndjson')
+
 # === ADD TO EXPORT FILE ON CLICK =======================
 @erate_bp.route('/add-to-export', methods=['POST'])
 def add_to_export():
