@@ -855,7 +855,7 @@ def dashboard():
     finally:
         conn.close()
 
-# === APPLICANT DETAILS API – FINAL FIXED (NO MORE "orgsl") ===
+# === APPLICANT DETAILS API – FINAL FIXED (NO MORE FORCED /SL/) ===
 @erate_bp.route('/details/<app_number>')
 def details(app_number):
     deduct_point()
@@ -866,99 +866,99 @@ def details(app_number):
             row = cur.fetchone()
             if not row:
                 return jsonify({"error": "Applicant not found"}), 404
-            row = row[1:]
 
-            # === ONLY CHANGE NEEDED — FINAL FIX ===
-            raw_url = row[2] or ''
-            pdf_url = None
-            if raw_url:
-                if not raw_url.startswith(('http://', 'https://')):
-                    raw_url = 'http://' + raw_url
-                pdf_url = raw_url.replace('/EPC/', '/SL/')
-            # === END OF CHANGE ===
+            # Get column names and values
+            columns = [desc[0] for desc in cur.description]
+            data = dict(zip(columns, row))
+
+            # USE THE URL DIRECTLY FROM DB — NO REPLACEMENT
+            form_pdf = data.get('form_pdf', '') or ''
+            if form_pdf and not form_pdf.startswith(('http://', 'https://')):
+                form_pdf = 'http://' + form_pdf
 
             def fmt_date(dt):
                 return dt.strftime('%m/%d/%Y') if isinstance(dt, datetime) else '—'
             def fmt_datetime(dt):
                 return dt.strftime('%m/%d/%Y %I:%M %p') if isinstance(dt, datetime) else '—'
 
-            data = {
-                "form_nickname": row[1] or '—',
-                "form_pdf": Markup(f'<a href="{pdf_url}" target="_blank" rel="noopener">View PDF</a>') if pdf_url else '—',
-                "funding_year": row[3] or '—',
-                "fcc_status": row[4] or '—',
-                "allowable_contract_date": fmt_date(row[5]),
-                "created_datetime": fmt_datetime(row[6]),
-                "created_by": row[7] or '—',
-                "certified_datetime": fmt_datetime(row[8]),
-                "certified_by": row[9] or '—',
-                "last_modified_datetime": fmt_datetime(row[10]),
-                "last_modified_by": row[11] or '—',
-                "ben": row[12] or '—',
-                "entity_name": row[13] or '—',
-                "org_status": row[14] or '—',
-                "org_type": row[15] or '—',
-                "applicant_type": row[16] or '—',
-                "website": row[17] or '—',
-                "latitude": row[18],
-                "longitude": row[19],
-                "fcc_reg_num": row[20] or '—',
-                "address1": row[21] or '',
-                "address2": row[22] or '',
-                "city": row[23] or '',
-                "state": row[24] or '',
-                "zip_code": row[25] or '',
-                "zip_ext": row[26] or '',
-                "email": row[27] or '—',
-                "phone": row[28] or '',
-                "phone_ext": row[29] or '',
-                "num_eligible": row[30] if row[30] is not None else 0,
-                "contact_name": row[31] or '—',
-                "contact_address1": row[32] or '',
-                "contact_address2": row[33] or '',
-                "contact_city": row[34] or '',
-                "contact_state": row[35] or '',
-                "contact_zip": row[36] or '',
-                "contact_zip_ext": row[37] or '',
-                "contact_phone": row[38] or '',
-                "contact_phone_ext": row[39] or '',
-                "contact_email": row[40] or '—',
-                "tech_name": row[41] or '—',
-                "tech_title": row[42] or '—',
-                "tech_phone": row[43] or '',
-                "tech_phone_ext": row[44] or '',
-                "tech_email": row[45] or '—',
-                "auth_name": row[46] or '—',
-                "auth_address": row[47] or '—',
-                "auth_city": row[48] or '',
-                "auth_state": row[49] or '',
-                "auth_zip": row[50] or '',
-                "auth_zip_ext": row[51] or '',
-                "auth_phone": row[52] or '',
-                "auth_phone_ext": row[53] or '',
-                "auth_email": row[54] or '—',
-                "auth_title": row[55] or '—',
-                "auth_employer": row[56] or '—',
-                "cat1_desc": row[57] or '—',
-                "cat2_desc": row[58] or '—',
-                "installment_type": row[59] or '—',
-                "installment_min": row[60] if row[60] is not None else 0,
-                "installment_max": row[61] if row[61] is not None else 0,
-                "rfp_id": row[62] or '—',
-                "state_restrictions": row[63] or '—',
-                "restriction_desc": row[64] or '—',
-                "statewide": row[65] or '—',
-                "all_public": row[66] or '—',
-                "all_nonpublic": row[67] or '—',
-                "all_libraries": row[68] or '—',
-                "form_version": row[69] or '—'
-            }
-            return jsonify(data), 200, {'Content-Type': 'application/json'}
+            return jsonify({
+                "form_nickname": data.get('form_nickname') or '—',
+                "form_pdf": Markup(f'<a href="{form_pdf}" target="_blank" rel="noopener">View PDF</a>') if form_pdf else '—',
+                "funding_year": data.get('funding_year') or '—',
+                "fcc_status": data.get('fcc_status') or '—',
+                "allowable_contract_date": fmt_date(data.get('allowable_contract_date')),
+                "created_datetime": fmt_datetime(data.get('created_datetime')),
+                "created_by": data.get('created_by') or '—',
+                "certified_datetime": fmt_datetime(data.get('certified_datetime')),
+                "certified_by": data.get('certified_by') or '—',
+                "last_modified_datetime": fmt_datetime(data.get('last_modified_datetime')),
+                "last_modified_by": data.get('last_modified_by') or '—',
+                "ben": data.get('ben') or '—',
+                "entity_name": data.get('entity_name') or '—',
+                "org_status": data.get('org_status') or '—',
+                "org_type": data.get('org_type') or '—',
+                "applicant_type": data.get('applicant_type') or '—',
+                "website": data.get('website') or '—',
+                "latitude": data.get('latitude'),
+                "longitude": data.get('longitude'),
+                "fcc_reg_num": data.get('fcc_reg_num') or '—',
+                "address1": data.get('address1') or '',
+                "address2": data.get('address2') or '',
+                "city": data.get('city') or '',
+                "state": data.get('state') or '',
+                "zip_code": data.get('zip_code') or '',
+                "zip_ext": data.get('zip_ext') or '',
+                "email": data.get('email') or '—',
+                "phone": data.get('phone') or '',
+                "phone_ext": data.get('phone_ext') or '',
+                "num_eligible": data.get('num_eligible') if data.get('num_eligible') is not None else 0,
+                "contact_name": data.get('contact_name') or '—',
+                "contact_address1": data.get('contact_address1') or '',
+                "contact_address2": data.get('contact_address2') or '',
+                "contact_city": data.get('contact_city') or '',
+                "contact_state": data.get('contact_state') or '',
+                "contact_zip": data.get('contact_zip') or '',
+                "contact_zip_ext": data.get('contact_zip_ext') or '',
+                "contact_phone": data.get('contact_phone') or '',
+                "contact_phone_ext": data.get('contact_phone_ext') or '',
+                "contact_email": data.get('contact_email') or '—',
+                "tech_name": data.get('tech_name') or '—',
+                "tech_title": data.get('tech_title') or '—',
+                "tech_phone": data.get('tech_phone') or '',
+                "tech_phone_ext": data.get('tech_phone_ext') or '',
+                "tech_email": data.get('tech_email') or '—',
+                "auth_name": data.get('auth_name') or '—',
+                "auth_address": data.get('auth_address') or '—',
+                "auth_city": data.get('auth_city') or '',
+                "auth_state": data.get('auth_state') or '',
+                "auth_zip": data.get('auth_zip') or '',
+                "auth_zip_ext": data.get('auth_zip_ext') or '',
+                "auth_phone": data.get('auth_phone') or '',
+                "auth_phone_ext": data.get('auth_phone_ext') or '',
+                "auth_email": data.get('auth_email') or '—',
+                "auth_title": data.get('auth_title') or '—',
+                "auth_employer": data.get('auth_employer') or '—',
+                "cat1_desc": data.get('cat1_desc') or '—',
+                "cat2_desc": data.get('cat2_desc') or '—',
+                "installment_type": data.get('installment_type') or '—',
+                "installment_min": data.get('installment_min') if data.get('installment_min') is not None else 0,
+                "installment_max": data.get('installment_max') if data.get('installment_max') is not None else 0,
+                "rfp_id": data.get('rfp_id') or '—',
+                "state_restrictions": data.get('state_restrictions') or '—',
+                "restriction_desc": data.get('restriction_desc') or '—',
+                "statewide": data.get('statewide') or '—',
+                "all_public": data.get('all_public') or '—',
+                "all_nonpublic": data.get('all_nonpublic') or '—',
+                "all_libraries": data.get('all_libraries') or '—',
+                "form_version": data.get('form_version') or '—'
+            })
+
     except Exception as e:
         log("Details API error: %s", e)
         return jsonify({"error": "Service unavailable"}), 500
     finally:
         conn.close()
+
 
 # === EXTRACT CSV, IMPORT, LOG, RESET ===
 @erate_bp.route('/extract-csv')
