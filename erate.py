@@ -1850,7 +1850,7 @@ def add_to_export():
         current_app.logger.error(f"Export failed: {e}")
         return jsonify({"error": "Server error"}), 500
 
-# ======= DOWNLOAD EXPORT CSV ============ 
+# ======= DOWNLOAD EXPORT CSV WITH 50 POINTS DEDUCT ============ 
 @erate_bp.route('/download-export')
 def download_export():
     if 'username' not in session:
@@ -1860,8 +1860,39 @@ def download_export():
     filename = f"exports/{username}_001.csv"
 
     if not os.path.exists(filename):
-        return "No export file yet. Click some red distances first!", 404
+        flash("No export file yet. Click some red distances first!", "error")
+        return redirect(url_for('erate.dashboard'))
 
+    # COUNT DATA ROWS ONLY
+    try:
+        with open(filename, 'r', encoding='utf-8', newline='') as f:
+            reader = csv.reader(f)
+            rows = list(reader)
+            row_count = len(rows) - 1 if len(rows) > 0 else 0
+        cost = row_count * 50
+    except Exception as e:
+        flash("Error reading export file", "error")
+        return redirect(url_for('erate.dashboard'))
+
+    # CHECK AND DEDUCT POINTS
+    try:
+        with psycopg.connect(DATABASE_URL) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT points FROM users WHERE username = %s", (username,))
+                current_points = cur.fetchone()[0]
+
+                if current_points < cost:
+                    flash(f"Not enough points! Need {cost}, you have {current_points}", "error")
+                    return redirect(url_for('erate.dashboard'))
+
+                # DEDUCT POINTS — NO SUCCESS FLASH
+                cur.execute("UPDATE users SET points = points - %s WHERE username = %s", (cost, username))
+            conn.commit()
+    except Exception as e:
+        flash("Point deduction failed", "error")
+        return redirect(url_for('erate.dashboard'))
+
+    # SEND THE FILE
     return send_file(
         filename,
         as_attachment=True,
