@@ -547,7 +547,11 @@
                     <span class="points" id="points-display">Loading...</span>
                 </span>
             {% endif %}
-            <h1>E-Rate</h1>
+            <!-- CENTERED LOGO + TITLE -->
+            <div style="display:flex; align-items:center; gap:12px;">
+                <img src="{{ url_for('static', filename='m4logo-w.png') }}" alt="Logo" style="height:48px; width:48px;">
+                <h1 style="margin:0; font-size:1.8rem;">E-Rate</h1>
+            </div>
             {% if session.username %}
                 <a href="{{ url_for('erate.logout') }}" class="logout">Logout</a>
             {% endif %}
