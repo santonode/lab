@@ -179,7 +179,7 @@
         .btn:hover { opacity: 0.9; transform: translateY(-1px); }
         .summary {
             font-weight: 600;
-            color: var(--primary);
+            color: black;
             margin: 15px 0;
             font-size: 1rem;
             text-align: center;
@@ -587,7 +587,7 @@
         </div>
         <p class="summary">Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</p>
         {% if total_filtered <= (session.ft | default(100) | int) %}
-        <div style="text-align:center; margin:10px 0; font-size:0.9rem; color:#1a5d57;">
+        <div style="text-align:center; margin:10px 0; font-size:0.9rem; color:#000000;">
             <strong>Current Network:</strong> 
             <span id="current-network-display">Bluebird Network</span>
             &nbsp;&nbsp;|&nbsp;&nbsp;
