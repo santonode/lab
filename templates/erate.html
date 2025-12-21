@@ -7,7 +7,6 @@
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
@@ -77,12 +76,12 @@
             flex: 1;
         }
         .header {
-            background: var(--primary);
+            background: #000000;  /* BLACK */
             color: white;
             padding: 1rem;
             text-align: center;
             position: relative;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4); /* slightly stronger shadow for black */
             display: flex;
             justify-content: center;
             align-items: center;
@@ -138,7 +137,7 @@
         }
         .filters label {
             font-weight: 600;
-            color: var(--primary);
+            color: black;
             display: flex;
             align-items: center;
             gap: 6px;
@@ -180,7 +179,7 @@
         .btn:hover { opacity: 0.9; transform: translateY(-1px); }
         .summary {
             font-weight: 600;
-            color: var(--primary);
+            color: black;
             margin: 15px 0;
             font-size: 1rem;
             text-align: center;
@@ -198,7 +197,7 @@
             vertical-align: middle;
         }
         th {
-            background: var(--primary);
+            background: #6c757d;  /* GREY */
             color: white;
             font-weight: 600;
             position: sticky;
@@ -247,8 +246,8 @@
             font-weight: 600;
             font-size: 0.9rem;
         }
-        .flash.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .flash.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .flash.success { background: #e2e3e5; color: #000000; border: 1px solid #000000; }
+        .flash.error { background: #e2e3e5; color: #721c24; border: 1px solid #000000; }
         .modal {
             display: none;
             position: fixed;
@@ -280,7 +279,7 @@
         }
         .modal-title {
             font-weight: 600;
-            color: var(--primary);
+            color: black;
             font-size: 1.3rem;
         }
         .modal-close {
@@ -419,8 +418,8 @@
             position:absolute;top:0.8rem;right:1rem;background:none;border:none;
             font-size:2rem;color:#999;cursor:pointer;width:44px;height:44px;
         }
-        #settings-modal h2 {margin:0 0 1.2rem;font-size:1.5rem;color:var(--primary)}
-        #settings-modal label {display:block;margin:1rem 0 0.4rem;font-weight:600;color:var(--primary);font-size:0.95rem}
+        #settings-modal h2 {margin:0 0 1.2rem;font-size:1.5rem;color:black}
+        #settings-modal label {display:block;margin:1rem 0 0.4rem;font-weight:600;color:black;font-size:0.95rem}
         #settings-modal input,#settings-modal select {
             width:100%;padding:0.9rem;border:1px solid #ccc;border-radius:8px;font-size:1rem;
         }
@@ -494,18 +493,26 @@
             </div>
         </div>
     </div>
-    <!-- REGISTER MODAL -->
+    <!-- REGISTER MODAL – NOW WITH EMAIL (SAFE UPDATE) -->
     <div class="modal" id="registerModal" style="display:none;">
         <div class="modal-content">
             <div class="modal-header">
                 <div class="modal-title">Register</div>
-                <button class="modal-close" onclick="closeModal('register')">x</button>
+                <button class="modal-close" onclick="closeModal('register')">×</button>
             </div>
             <div class="modal-body">
                 <form method="POST" action="{{ url_for('erate.admin') }}">
                     <input type="hidden" name="action" value="register">
-                    <input type="text" name="username" placeholder="Username" required minlength="3" style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
-                    <input type="password" name="password" placeholder="Password" required minlength="4" style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
+                    
+                    <input type="text" name="username" placeholder="Username" required minlength="3" 
+                           style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
+                    
+                    <input type="email" name="email" placeholder="Email" required 
+                           style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
+                    
+                    <input type="password" name="password" placeholder="Password" required minlength="4" 
+                           style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
+                    
                     <button type="submit" class="btn btn-primary">Register</button>
                 </form>
             </div>
@@ -540,7 +547,11 @@
                     <span class="points" id="points-display">Loading...</span>
                 </span>
             {% endif %}
-            <h1>E-Rate</h1>
+            <!-- CENTERED LOGO + TITLE -->
+            <div style="display:flex; align-items:center; gap:3px;">
+                <img src="{{ url_for('static', filename='m4logo-w.png') }}" alt="Logo" style="height:48px; width:48px;">
+                <h1 style="margin:0; font-size:1.8rem;">E-Rate</h1>
+            </div>
             {% if session.username %}
                 <a href="{{ url_for('erate.logout') }}" class="logout">Logout</a>
             {% endif %}
@@ -576,7 +587,7 @@
         </div>
         <p class="summary">Showing {{ total_filtered|default(0) }} of {{ total_count|default(0) }} records</p>
         {% if total_filtered <= (session.ft | default(100) | int) %}
-        <div style="text-align:center; margin:10px 0; font-size:0.9rem; color:#1a5d57;">
+        <div style="text-align:center; margin:10px 0; font-size:0.9rem; color:#000000;">
             <strong>Current Network:</strong> 
             <span id="current-network-display">Bluebird Network</span>
             &nbsp;&nbsp;|&nbsp;&nbsp;
@@ -589,7 +600,7 @@
                     <th>Entity Name</th>
                     <th>ST</th>
                     <th>Modified</th>
-                    <th class="distance-header" style="display:none; color:#dc3545; font-weight:600;">Dist</th>
+                    <th class="distance-header" style="display:none; color:white; font-weight:600;">Dist</th>
                     <th>Map</th>
                 </tr>
             </thead>
@@ -668,7 +679,9 @@
         <a href="https://santoelectronics.com/usersguide">Users Guide</a>
         <a href="mailto:sales@santoelectronics.com">sales@santoelectronics.com</a>
         <a href="https://santoelectronics.com/toser">Terms of Service</a>
-	<a href="{{ url_for('erate.national_map') }}">Our Fiber Networks</a>
+        <a href="#" id="coverage-link">
+            Our Fiber Networks
+        </a>
     </div>
 
     <!-- COVERAGE REPORT MODAL – NOW WITH THREE TABS -->
