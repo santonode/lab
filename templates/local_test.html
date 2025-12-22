@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Map4.net</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        html, body { margin:0; padding:0; height:100%; }
+        #map { width:100%; height:100%; }
+        #controls {
+            position:absolute; top:20px; left:50%; transform:translateX(-50%);
+            z-index:10000; background:white; padding:15px; border-radius:12px;
+            box-shadow:0 6px 20px rgba(0,0,0,0.3); display:flex; gap:10px; align-items:center;
+        }
+        #controls select, #controls button {
+            padding:10px; font-size:18px;
+        }
+        #controls button {
+            cursor:pointer;
+            background:#0066cc; color:white; border:none; border-radius:8px;
+        }
+        #closeBtn {
+            cursor:pointer;
+            font-size:24px; font-weight:bold; color:#666;
+            margin-left:10px;
+        }
+        #closeBtn:hover {
+            color:#000;
+        }
+        #logo {
+            height:48px; /* matches control height */
+            width:auto;
+            margin-right:10px;
+        }
+        #loading {
+            position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+            background:rgba(0,0,0,0.9); color:#fff; padding:40px 60px;
+            border-radius:20px; z-index:9999; display:none; text-align:center;
+            font-size:22px; font-weight:bold;
+        }
+        .spinner {
+            border:10px solid #333; border-top:10px solid #fff;
+            border-radius:50%; width:80px; height:80px;
+            animation:spin 1s linear infinite; margin:0 auto 20px;
+        }
+        @keyframes spin { 0% { transform:rotate(0deg); } 100% { transform:rotate(360deg); } }
+        .leaflet-tooltip.fiber-tooltip {
+            background:rgba(0,0,0,0.9); color:#fff; border:none;
+            font-weight:bold; font-size:14px; padding:8px 16px; border-radius:8px;
+            pointer-events: all !important;
+        }
+        .leaflet-tooltip.fiber-tooltip a {
+            color: #00ff00;
+            text-decoration: underline;
+            pointer-events: all;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <img src="{{ url_for('static', filename='m4logo-4.png') }}" alt="Map4.net" id="logo">
+        <select id="providerSelect">
+            <option value="">All Providers</option>
+        </select>
+        <button onclick="loadMap()">Go</button>
+        <span id="closeBtn" onclick="window.location.href='/erate'">×</span>
+    </div>
+    <div id="loading">
+        <div class="spinner"></div>
+        <div>Loading fiber...</div>
+    </div>
+    <div id="map"></div>
+
+    <script>
+        const map = L.map('map').setView([39.8, -98.5], 5);
+        L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', {
+            attribution: '© Stadia Maps | <strong>Map4.net</strong>',
+            maxZoom: 20
+        }).addTo(map);
+
+        const lines = L.layerGroup().addTo(map);
+        const loading = document.getElementById('loading');
+
+        // FETCH PROVIDERS FOR DROPDOWN
+        fetch('/erate/providers')
+            .then(r => r.json())
+            .then(providers => {
+                const select = document.getElementById('providerSelect');
+                providers.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p;
+                    opt.textContent = p;
+                    select.appendChild(opt);
+                });
+            });
+
+        function loadMap() {
+            const provider = document.getElementById('providerSelect').value;
+
+            lines.clearLayers();
+            loading.style.display = 'block';
+
+            let url = '/erate/stream-national';
+            if (provider) {
+                url += '?provider=' + encodeURIComponent(provider);
+            }
+
+            fetch(url)
+                .then(r => r.body.getReader())
+                .then(reader => {
+                    const decoder = new TextDecoder();
+                    function pump() {
+                        reader.read().then(({done, value}) => {
+                            if (done) {
+                                loading.style.display = 'none';
+                                return;
+                            }
+                            const chunk = decoder.decode(value, {stream: true});
+                            chunk.split('\n').forEach(line => {
+                                if (!line.trim()) return;
+                                try {
+                                    const obj = JSON.parse(line);
+                                    if (obj.coords && obj.coords.length >= 2) {
+                                        const polyline = L.polyline(obj.coords, {
+                                            color: obj.color || '#e6194b',
+                                            weight: 3.5,
+                                            opacity: 0.95
+                                        }).addTo(lines);
+
+                                        if (obj.name === "Bluebird Network") {
+                                            polyline.bindTooltip(
+                                                '<a href="https://bluebirdfiber.com" target="_blank">Bluebird Network</a>',
+                                                {
+                                                    permanent: false,
+                                                    direction: "center",
+                                                    className: "fiber-tooltip"
+                                                }
+                                            );
+                                        } else {
+                                            polyline.bindTooltip(obj.name, {
+                                                permanent: false,
+                                                direction: "center",
+                                                className: "fiber-tooltip"
+                                            });
+                                        }
+                                    }
+                                } catch(e) {}
+                            });
+                            pump();
+                        });
+                    }
+                    pump();
+                });
+        }
+
+        // MAP STARTS EMPTY — USER MUST CLICK GO
+    </script>
+</body>
+</html>
