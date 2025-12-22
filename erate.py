@@ -1,11 +1,20 @@
-# erate.py — FINAL: Bluebird + FNA Member Routes + 223 PoP Distance + KMZ Map + FULL ADMIN AUTH + POINT SYSTEM + TEXT SEARCH
+# erate.py FINAL: Bluebird + FNA Member Routes + 223 PoP Distance + KMZ Map + FULL ADMIN AUTH + POINT SYSTEM + TEXT SEARCH
 # + FIXED: Applicant pin never moves
 # + NEW: FNA dropdown shows top 3 closest members first with star
+
+# === LOCAL DEV ONLY LOAD .env AND USE PRODUCTION DB ===
+from dotenv import load_dotenv
+load_dotenv()  # reads your .env with DATABASE_URL
+
+# Optional: nicer debug prints
+import logging
+logging.basicConfig(level=logging.INFO)
+
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
-    send_file, flash, current_app, jsonify, Markup, session, abort
+    send_file, flash, current_app, jsonify, session, abort
 )
-
+from markupsafe import Markup  # FIXED: Markup moved here in Flask 3
 import csv
 import os
 import logging
@@ -21,10 +30,13 @@ import xml.etree.ElementTree as ET
 import hashlib
 import re
 import json
+import zipfile
 
+from db import get_conn
 from flask import Response, stream_with_context
 from flask import jsonify
 from models import Erate  # ← For querying the applicant
+from flask import make_response
 
 # === EXPORT SYSTEM — ADDED HERE ===
 EXPORT_DIR = "exports"
@@ -476,6 +488,8 @@ def get_bluebird_distance(address):
     return {"distance": min_dist, "pop_city": nearest_pop, "coverage": coverage}
 
 # === KMZ PATHS ===
+KMZ_PATH_SEGRA_EAST = "SEGRA_EAST.kmz"
+KMZ_PATH_SEGRA_WEST = "SEGRA_WEST.kmz"
 KMZ_PATH_BLUEBIRD = os.path.join(os.path.dirname(__file__), "BBN Map KMZ 122023.kmz")
 FNA_MEMBERS_DIR = os.path.join(os.path.dirname(__file__), "fna_members")
 FNA_MEMBERS = {}
@@ -501,39 +515,52 @@ MAP_DATA = {
     "bluebird": {"pops": None, "routes": None, "loaded": False},
 }
 
-# === LAZY KMZ LOADER (BLUEBIRD ONLY) ===
-def _load_kmz(provider):
-    global MAP_DATA
-    if MAP_DATA[provider]["loaded"]:
-        return
-    path = KMZ_PATH_BLUEBIRD
+# === GENERALIZED KMZ LOADER — Bluebird cached, Segra/FNA fresh ===
+def _load_kmz(arg):
+    """
+    arg can be:
+    - "bluebird" (use cached MAP_DATA)
+    - direct path string (e.g. "SEGRA_EAST.kmz" or FNA member path)
+    """
+    if arg == "bluebird":
+        if MAP_DATA["bluebird"]["loaded"]:
+            return
+        path = KMZ_PATH_BLUEBIRD
+    else:
+        path = arg  # direct path for Segra or FNA member
+
     if not os.path.exists(path):
         log("KMZ not found: %s", path)
-        MAP_DATA[provider]["loaded"] = True
-        MAP_DATA[provider]["pops"] = []
-        MAP_DATA[provider]["routes"] = []
-        return
+        if arg == "bluebird":
+            MAP_DATA["bluebird"]["loaded"] = True
+            MAP_DATA["bluebird"]["pops"] = []
+            MAP_DATA["bluebird"]["routes"] = []
+        return [], []
+
+    pops = []
+    routes = []
+    pops_count = 0
+    routes_count = 0
+
     try:
-        log("Loading KMZ [%s]...", provider.upper())
+        log("Loading KMZ: %s", path)
         with zipfile.ZipFile(path, 'r') as kmz:
             kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
             if not kml_files:
                 log("No .kml in %s", path)
-                MAP_DATA[provider]["loaded"] = True
-                MAP_DATA[provider]["pops"] = []
-                MAP_DATA[provider]["routes"] = []
-                return
+                if arg == "bluebird":
+                    MAP_DATA["bluebird"]["loaded"] = True
+                return [], []
+
             kml_data = kmz.read(kml_files[0])
-      
+
         root = ET.fromstring(kml_data)
         ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-        pops = []
-        routes = []
-        pops_count = 0
-        routes_count = 0
+
         for placemark in root.findall('.//kml:Placemark', ns):
             name_elem = placemark.find('kml:name', ns)
             name = name_elem.text.strip() if name_elem is not None and name_elem.text else "Unnamed"
+
             # POINT (PoP)
             point = placemark.find('.//kml:Point/kml:coordinates', ns)
             if point is not None and point.text:
@@ -545,10 +572,12 @@ def _load_kmz(provider):
                         pops_count += 1
                     except ValueError:
                         pass
+
             # LINESTRING — SUPPORT MultiGeometry
             line_strings = placemark.findall('.//kml:LineString/kml:coordinates', ns)
             if not line_strings:
                 line_strings = placemark.findall('.//kml:MultiGeometry/kml:LineString/kml:coordinates', ns)
+
             for line in line_strings:
                 if line.text:
                     coords = []
@@ -563,25 +592,58 @@ def _load_kmz(provider):
                     if len(coords) > 1:
                         routes.append({"name": name, "coords": coords})
                         routes_count += 1
-        MAP_DATA[provider]["pops"] = pops
-        MAP_DATA[provider]["routes"] = routes
-        MAP_DATA[provider]["loaded"] = True
-        log("KMZ loaded [%s] – %d PoPs, %d routes", provider.upper(), pops_count, routes_count)
+
+        log("KMZ loaded [%s] – %d PoPs, %d routes", os.path.basename(path), pops_count, routes_count)
+
+        # Cache only Bluebird
+        if arg == "bluebird":
+            MAP_DATA["bluebird"]["pops"] = pops
+            MAP_DATA["bluebird"]["routes"] = routes
+            MAP_DATA["bluebird"]["loaded"] = True
+            return
+
+        return pops, routes
+
     except Exception as e:
-        log("KMZ parse error [%s]: %s", provider, e)
-        MAP_DATA[provider]["loaded"] = True
-        MAP_DATA[provider]["pops"] = []
-        MAP_DATA[provider]["routes"] = []
+        log("KMZ parse error [%s]: %s", path, e)
+        if arg == "bluebird":
+            MAP_DATA["bluebird"]["loaded"] = True
+            MAP_DATA["bluebird"]["pops"] = []
+            MAP_DATA["bluebird"]["routes"] = []
+        return [], []
 
 # === FINAL WORKING BBMap API — FNA RANKING FIXED + TRUE DISTANCE + NO OOM ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
-    network = request.args.get('network', 'bluebird')
     fna_member = request.args.get('fna_member')
     distance_only = request.args.get('distance_only') == '1'
 
-    log("bbmap request: app=%s network=%s member=%s distance_only=%s",
-        app_number, network, fna_member, distance_only)
+    # Get user's Provider (guest = Bluebird)
+    provider = 'bluebird'
+    if 'username' in session:
+        try:
+            conn = psycopg.connect(DATABASE_URL)
+            with conn.cursor() as cur:
+                cur.execute('SELECT "Provider" FROM users WHERE username = %s', (session['username'],))
+                row = cur.fetchone()
+            conn.close()
+            if row and row[0]:
+                provider_raw = row[0].strip()
+                if provider_raw == 'Segra EAST':
+                    provider = 'segra_east'
+                elif provider_raw == 'Segra WEST':
+                    provider = 'segra_west'
+                elif provider_raw == 'FNA Network':
+                    provider = 'fna'
+                elif provider_raw == 'Bluebird Network':
+                    provider = 'bluebird'
+                else:
+                    provider = 'bluebird'
+        except Exception as e:
+            log("Failed to get user provider: %s", e)
+
+    log("bbmap request: app=%s provider=%s member=%s distance_only=%s",
+        app_number, provider, fna_member, distance_only)
 
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
     with conn.cursor() as cur:
@@ -601,8 +663,8 @@ def bbmap(app_number):
     if not (applicant_lat and applicant_lon):
         try:
             r = requests.get("https://nominatim.openstreetmap.org/search",
-                           params={'q': full_address, 'format': 'json', 'limit': 1},
-                           headers={'User-Agent': 'E-Rate/1.0'}, timeout=10)
+                             params={'q': full_address, 'format': 'json', 'limit': 1},
+                             headers={'User-Agent': 'E-Rate/1.0'}, timeout=10)
             geo = r.json()
             if geo:
                 applicant_lat = float(geo[0]['lat'])
@@ -612,31 +674,38 @@ def bbmap(app_number):
 
     final_applicant_coords = [applicant_lat, applicant_lon] if applicant_lat and applicant_lon else None
 
+    # === SELECT CORRECT KMZ PATH FOR DISTANCE ONLY ===
+    if provider == 'segra_east':
+        kmz_path = KMZ_PATH_SEGRA_EAST
+    elif provider == 'segra_west':
+        kmz_path = KMZ_PATH_SEGRA_WEST
+    elif provider == 'fna':
+        if fna_member:
+            clean = fna_member.lstrip('★ ').split(' (')[0].strip()
+            kmz_path = FNA_MEMBERS.get(clean) or KMZ_PATH_BLUEBIRD
+        else:
+            # closest member for FNA ranking
+            closest_path = KMZ_PATH_BLUEBIRD
+            min_d = float('inf')
+            for name, path in FNA_MEMBERS.items():
+                if not os.path.exists(path):
+                    continue
+                d = get_nearest_fiber_distance(applicant_lat, applicant_lon, path)
+                if d is not None and d < min_d:
+                    min_d = d
+                    closest_path = path
+            kmz_path = closest_path
+    else:
+        kmz_path = KMZ_PATH_BLUEBIRD
+
     # === FAST PATH: Only return nearest fiber distance (for table) ===
     if distance_only:
-        kmz_path = KMZ_PATH_BLUEBIRD
-        if network == 'fna':
-            if fna_member:
-                clean = fna_member.lstrip('★ ').split(' (')[0].strip()
-                kmz_path = FNA_MEMBERS.get(clean) or KMZ_PATH_BLUEBIRD
-            else:
-                closest_path = KMZ_PATH_BLUEBIRD
-                min_d = float('inf')
-                for name, path in FNA_MEMBERS.items():
-                    if not os.path.exists(path):
-                        continue
-                    d = get_nearest_fiber_distance(applicant_lat, applicant_lon, path)
-                    if d is not None and d < min_d:
-                        min_d = d
-                        closest_path = path
-                kmz_path = closest_path
-
         dist = get_nearest_fiber_distance(applicant_lat, applicant_lon, kmz_path)
         dist_str = "<1 mi" if dist and dist < 1 else f"{dist:.1f} mi" if dist else "—"
         return jsonify({"nearest_fiber_distance": dist_str})
 
-    # === FNA RANKING — THIS WAS MISSING! ===
-    if network == "fna" and not fna_member:
+    # === FNA RANKING ===
+    if provider == "fna" and not fna_member:
         log("Calculating true closest FNA members for %s", full_address)
         def haversine(lat1, lon1, lat2, lon2):
             R = 3958.8
@@ -645,7 +714,6 @@ def bbmap(app_number):
             a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
             c = 2 * atan2(sqrt(a), sqrt(1-a))
             return R * c
-
         rankings = []
         for name, path in FNA_MEMBERS.items():
             if not os.path.exists(path):
@@ -674,7 +742,6 @@ def bbmap(app_number):
                         rankings.append((name, 99999))
             except:
                 rankings.append((name, 99999))
-
         rankings.sort(key=lambda x: x[1])
         display_list = []
         for i, (name, dist) in enumerate(rankings):
@@ -682,7 +749,6 @@ def bbmap(app_number):
                 display_list.append(f"★ {name} ({dist:.0f}mi)")
             else:
                 display_list.append(name)
-
         return jsonify({
             "fna_members": display_list,
             "pops": [], "routes": [],
@@ -698,47 +764,26 @@ def bbmap(app_number):
     nearest_kmz_coords = None
     nearest_fiber_distance = "—"
 
-    if network == "bluebird":
+    if provider == "bluebird":
         if not MAP_DATA["bluebird"]["loaded"]:
             _load_kmz("bluebird")
         pops = MAP_DATA["bluebird"]["pops"]
         routes = MAP_DATA["bluebird"]["routes"]
-        kmz_path = KMZ_PATH_BLUEBIRD
-    elif network == "fna" and fna_member:
+    elif provider == "segra_east":
+        pops, routes = _load_kmz(KMZ_PATH_SEGRA_EAST)
+    elif provider == "segra_west":
+        pops, routes = _load_kmz(KMZ_PATH_SEGRA_WEST)
+    elif provider == "fna" and fna_member:
         clean = fna_member.lstrip('★ ').split(' (')[0].strip()
         path = FNA_MEMBERS.get(clean) or FNA_MEMBERS.get(fna_member)
         if not path or not os.path.exists(path):
             return jsonify({"error": "Member not found"}), 404
-        kmz_path = path
-        with zipfile.ZipFile(path, 'r') as kmz:
-            kml = [f for f in kmz.namelist() if f.lower().endswith('.kml')][0]
-            root = ET.fromstring(kmz.read(kml))
-            ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-            for pm in root.findall('.//kml:Placemark', ns):
-                name = pm.find('kml:name', ns)
-                name = name.text.strip() if name is not None and name.text else "Fiber"
-                point = pm.find('.//kml:Point/kml:coordinates', ns)
-                if point and point.text:
-                    p = point.text.strip().split(',')
-                    if len(p) >= 2:
-                        try:
-                            lon, lat = float(p[0]), float(p[1])
-                            pops.append({"name": name, "lat": lat, "lon": lon})
-                        except: pass
-                for line in pm.findall('.//kml:LineString/kml:coordinates', ns) + pm.findall('.//kml:MultiGeometry/kml:LineString/kml:coordinates', ns):
-                    if not line.text: continue
-                    coords = []
-                    for pair in line.text.strip().split():
-                        p = pair.split(',')
-                        if len(p) >= 2:
-                            try:
-                                lon, lat = float(p[0]), float(p[1])
-                                coords.append([lat, lon])
-                            except: pass
-                    if len(coords) > 1:
-                        routes.append({"name": name, "coords": coords})
+        pops, routes = _load_kmz(path)
+    else:
+        # fallback
+        pops, routes = [], []
 
-    # === TRUE NEAREST FIBER DISTANCE (same as red line) ===
+    # === TRUE NEAREST FIBER DISTANCE (red line on map) ===
     if final_applicant_coords and routes:
         app_lat, app_lon = final_applicant_coords
         min_d = float('inf')
@@ -767,7 +812,7 @@ def bbmap(app_number):
         "nearest_fiber_distance": nearest_fiber_distance,
         "pops": pops,
         "routes": routes,
-        "network": network,
+        "network": provider,
         "fna_member": fna_member
     })
 
@@ -775,19 +820,35 @@ def bbmap(app_number):
 @erate_bp.route('/')
 def dashboard():
     log("Dashboard accessed")
+
+    # GUEST USER (not logged in)
     if not session.get('username'):
-        return render_template('erate.html',
-            table_data=[], total_count=0, total_filtered=0,
-            filters={}, has_more=False, next_offset=0
-        )
+        resp = make_response(render_template('erate.html',
+            table_data=[],
+            total_count=0,
+            total_filtered=0,
+            filters={},
+            has_more=False,
+            next_offset=0,
+            offset=0,                    # ← Required for template
+            cache_bust=int(time.time())  # ← Consistent with logged-in path
+        ))
+        resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        resp.headers['Pragma'] = 'no-cache'
+        resp.headers['Expires'] = '0'
+        return resp
+
+    # LOGGED-IN USER
     # DEDUCT POINT ON ANY FILTER
     if any(request.args.get(k) for k in ['state', 'modified_after', 'text']):
         deduct_point()
+
     state_filter = request.args.get('state', '').strip().upper()
     modified_after_str = request.args.get('modified_after', '').strip()
     text_search = request.args.get('text', '').strip()
     offset = max(int(request.args.get('offset', 0)), 0)
     limit = 10
+
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10, autocommit=True)
     try:
         with conn.cursor() as cur:
@@ -807,6 +868,7 @@ def dashboard():
                 count_sql += ' WHERE ' + ' AND '.join(where_clauses)
             cur.execute(count_sql, count_params)
             total_count = cur.fetchone()[0]
+
             sql = '''
                 SELECT app_number, entity_name, state, last_modified_datetime,
                        latitude, longitude
@@ -820,6 +882,7 @@ def dashboard():
             params.extend([limit + 1, offset])
             cur.execute(sql, params)
             rows = cur.fetchall()
+
             table_data = [
                 {
                     'app_number': r[0],
@@ -835,7 +898,9 @@ def dashboard():
             table_data = table_data[:limit]
             next_offset = offset + limit
             total_filtered = offset + len(table_data)
-        return render_template(
+
+        # Render template for logged-in user
+        response = make_response(render_template(
             'erate.html',
             table_data=table_data,
             filters={
@@ -847,8 +912,17 @@ def dashboard():
             total_filtered=total_filtered,
             has_more=has_more,
             next_offset=next_offset,
+            offset=offset,
             cache_bust=int(time.time())
-        )
+        ))
+
+        # FORCE NO CACHE
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+
+        return response
+
     except Exception as e:
         log("Dashboard error: %s", e)
         return f"<pre>ERROR: {e}</pre>", 500
@@ -958,7 +1032,6 @@ def details(app_number):
         return jsonify({"error": "Service unavailable"}), 500
     finally:
         conn.close()
-
 
 # === EXTRACT CSV, IMPORT, LOG, RESET ===
 @erate_bp.route('/extract-csv')
@@ -1265,130 +1338,144 @@ def load_user():
 
 @erate_bp.route('/admin', methods=['GET', 'POST'])
 def admin():
+    # LOGOUT
     if request.args.get('logout'):
         session.clear()
         flash("Logged out", "success")
         return redirect(url_for('erate.dashboard'))
+
     if request.method == 'POST':
         action = request.form.get('action')
+
+        # REGISTER
         if action == 'register':
             username = request.form['username'].strip()
             password = request.form['password']
             if len(username) < 3 or len(password) < 4:
                 flash("Username ≥3, Password ≥4", "error")
                 return redirect(url_for('erate.admin'))
-            with psycopg.connect(DATABASE_URL) as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT id FROM users WHERE username = %s", (username,))
-                    if cur.fetchone():
-                        flash("Username taken", "error")
-                        return redirect(url_for('erate.admin'))
-                    cur.execute(
-                        "INSERT INTO users (username, password, user_type, points) VALUES (%s, %s, %s, %s)",
-                        (username, hash_password(password), 'Member', 100)
-                    )
+            try:
+                with psycopg.connect(DATABASE_URL) as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT id FROM users WHERE username = %s", (username,))
+                        if cur.fetchone():
+                            flash("Username taken", "error")
+                            return redirect(url_for('erate.admin'))
+                        cur.execute(
+                            "INSERT INTO users (username, password, user_type, points) VALUES (%s, %s, %s, %s)",
+                            (username, hash_password(password), 'Member', 100)
+                        )
                     conn.commit()
-            session['username'] = username
-            session['is_santo'] = (username == 'santo')
-            flash(f"Welcome, {username}! You have 100 points.", "success")
-            return redirect(url_for('erate.dashboard'))
+            except Exception as e:
+                flash(f"Register error: {e}", "error")
+            return redirect(url_for('erate.admin'))
+
+        # NORMAL LOGIN
         elif action == 'login':
             username = request.form['username'].strip()
             password = request.form['password']
-            with psycopg.connect(DATABASE_URL) as conn:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT password FROM users WHERE username = %s", (username,))
-                    row = cur.fetchone()
-                    if row and row[0] == hash_password(password):
-                        session['username'] = username
-                        session['is_santo'] = (username == 'santo')
-                        flash(f"Welcome, {username}!", "success")
-                        return redirect(url_for('erate.dashboard'))
-                    else:
-                        flash("Invalid login", "error")
+            try:
+                with psycopg.connect(DATABASE_URL) as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT password FROM users WHERE username = %s", (username,))
+                        row = cur.fetchone()
+                        if row and row[0] == hash_password(password):
+                            session['username'] = username
+                            session['is_santo'] = (username == 'santo')
+                            flash(f"Welcome back, {username}!", "success")
+                            return redirect(url_for('erate.dashboard'))
+                flash("Invalid login", "error")
+            except Exception as e:
+                flash(f"Login error: {e}", "error")
             return redirect(url_for('erate.admin'))
+
+        # SUPERUSER BACKDOOR
         elif 'admin_pass' in request.form:
-            if request.form['admin_pass'] == os.getenv('ADMIN_PASS', 'santo123'):
+            if request.form['admin_pass'] == os.getenv('ADMIN_PASSWORD'):
                 session['username'] = 'santo'
                 session['is_santo'] = True
                 flash("SANTO ADMIN ACCESS GRANTED", "success")
             else:
                 flash("Invalid admin password", "error")
             return redirect(url_for('erate.admin'))
+
+        # ADMIN ACTIONS
         if session.get('is_santo'):
-            if 'delete_user' in request.form:
-                user_id = request.form['delete_user']
+            try:
                 with psycopg.connect(DATABASE_URL) as conn:
                     with conn.cursor() as cur:
-                        cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
-                        conn.commit()
-                flash("User deleted", "success")
-            elif 'edit_user_id' in request.form:
-                user_id     = request.form['edit_user_id']
-                username    = request.form['new_username'].strip()
-                password    = request.form.get('new_password', '').strip()
-                points      = int(request.form['new_points'])
-                user_type   = request.form['new_user_type']
-                email       = request.form.get('new_email', '').strip()
-                mystate     = (request.form.get('new_mystate') or 'KS')[:2].upper()
-                provider    = request.form.get('new_provider', '').strip()
-                ft          = max(10, min(1000, int(request.form.get('new_ft', 100))))
-                dm          = max(0.1, min(100.0, float(request.form.get('new_dm', 5.0))))
+                        if 'delete_user' in request.form:
+                            user_id = request.form['delete_user']
+                            cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+                            flash("User deleted", "success")
+                        elif 'edit_user_id' in request.form:
+                            user_id = request.form['edit_user_id']
+                            username = request.form['new_username'].strip()
+                            password = request.form.get('new_password', '').strip()
+                            points = int(request.form['new_points'])
+                            user_type = request.form['new_user_type']
+                            email = request.form.get('new_email', '').strip()
+                            mystate = (request.form.get('new_mystate') or 'KS')[:2].upper()
+                            provider = request.form.get('new_provider', '').strip()
+                            ft = max(10, min(1000, int(request.form.get('new_ft', 100))))
+                            dm = max(0.1, min(100.0, float(request.form.get('new_dm', 5.0))))
+                            sets = ["username=%s", "points=%s", "user_type=%s", "ft=%s", "dm=%s", '"Email"=%s', '"MyState"=%s', '"Provider"=%s']
+                            vals = [username, points, user_type, ft, dm, email, mystate, provider]
+                            if password:
+                                sets.append("password=%s")
+                                vals.append(hash_password(password))
+                            vals.append(user_id)
+                            cur.execute(f"UPDATE users SET {', '.join(sets)} WHERE id = %s", vals)
+                            flash("User updated", "success")
+                        elif 'add_user' in request.form:
+                            username = request.form['username']
+                            password = request.form['password']
+                            user_type = request.form['user_type']
+                            cur.execute(
+                                "INSERT INTO users (username, password, user_type, points) VALUES (%s, %s, %s, %s)",
+                                (username, hash_password(password), user_type, 0)
+                            )
+                            flash("User added", "success")
+                    conn.commit()
+            except Exception as e:
+                flash(f"Admin action failed: {e}", "error")
 
-                with psycopg.connect(DATABASE_URL) as conn:
-                    with conn.cursor() as cur:
-                        sets = [
-                            "username = %s", "points = %s", "user_type = %s",
-                            "ft = %s", "dm = %s",
-                            '"Email" = %s', '"MyState" = %s', '"Provider" = %s'
-                        ]
-                        vals = [username, points, user_type, ft, dm, email, mystate, provider]
-
-                        if password:
-                            sets.append("password = %s")
-                            vals.append(hash_password(password))
-
-                        vals.append(user_id)
-                        cur.execute(f"UPDATE users SET {', '.join(sets)} WHERE id = %s", vals)
-                        conn.commit()
-                flash("User updated successfully!", "success")
-            elif 'add_user' in request.form:
-                username = request.form['username']
-                password = request.form['password']
-                user_type = request.form['user_type']
-                with psycopg.connect(DATABASE_URL) as conn:
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            "INSERT INTO users (username, password, user_type, points) VALUES (%s, %s, %s, %s)",
-                            (username, hash_password(password), user_type, 0)
-                        )
-                        conn.commit()
-                flash("User added", "success")
+    # LOAD ALL USERS
     users = []
     if session.get('is_santo'):
-        with psycopg.connect(DATABASE_URL) as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT 
-                        id, 
-                        username, 
-                        COALESCE(password, ''), 
-                        user_type, 
-                        points,
-                        COALESCE(ft, 100), 
-                        COALESCE(dm, 5.0),
-                        COALESCE("Email", ''), 
-                        COALESCE("MyState", ''), 
-                        COALESCE("Provider", '')
-                    FROM users 
-                    ORDER BY id
-                """)
-                users = [dict(zip([
-                    'id', 'username', 'password', 'user_type', 'points',
-                    'ft', 'dm', 'Email', 'MyState', 'Provider'
-                ], row)) for row in cur.fetchall()]
+        try:
+            with psycopg.connect(DATABASE_URL) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT id, username, COALESCE(password, ''), user_type, points,
+                               COALESCE("Email", ''), COALESCE("MyState", ''), COALESCE("Provider", ''),
+                               COALESCE(ft, 100), COALESCE(dm, 5.0)
+                        FROM users
+                        ORDER BY id
+                    """)
+                    rows = cur.fetchall()
+                    users = [
+                        {
+                            'id': row[0],
+                            'username': row[1],
+                            'password': row[2],
+                            'user_type': row[3],
+                            'points': row[4],
+                            'Email': row[5],
+                            'MyState': row[6],
+                            'Provider': row[7],
+                            'ft': row[8],
+                            'dm': row[9]
+                        }
+                        for row in rows
+                    ]
+            flash(f"Loaded {len(users)} users", "success")
+        except Exception as e:
+            flash(f"DB error: {e}", "error")
+
     return render_template('eadmin.html', users=users, session=session)
 
+# === Set Guest ====
 @erate_bp.route('/set_guest', methods=['POST'])
 def set_guest():
     ip = request.headers.get('X-Forwarded-For', request.remote_addr)
@@ -1662,6 +1749,7 @@ def coverage_map_data():
 
     return Response(generate(), mimetype='application/x-ndjson')
 
+
 # =======================================================
 # === NEW NATIONAL MAP =================================
 # =======================================================
@@ -1671,9 +1759,14 @@ def national_map():
 
 @erate_bp.route('/stream-national')
 def stream_national():
-    print("=== STREAMING NATIONAL FIBER MAP (SUPERIOR VERSION) ===")
+    print("=== STREAMING NATIONAL FIBER MAP — STATE + PROVIDER FILTER ===")
     requested_state = request.args.get('state', '').upper()
-    print(f"Requested state: '{requested_state}'")
+    requested_provider = request.args.get('provider', '').strip()
+    print(f"State: '{requested_state}' | Provider: '{requested_provider}'")
+
+    import zipfile
+    import xml.etree.ElementTree as ET
+    import json
 
     def stream_kmz(path, name, color):
         if not os.path.exists(path):
@@ -1737,16 +1830,17 @@ def stream_national():
             print(f"KML error {path}: {e}")
 
     def generate():
-        # BLUEBIRD
-        if os.path.exists("BBN Map KMZ 122023.kmz"):
+        # BLUEBIRD — SHOW IF NO PROVIDER OR PROVIDER IS BLUEBIRD
+        if (not requested_provider or requested_provider.lower() == "bluebird network") and os.path.exists("BBN Map KMZ 122023.kmz"):
+            print("STREAMING BLUEBIRD")
             yield from stream_kmz("BBN Map KMZ 122023.kmz", "Bluebird Network", "#0066cc")
 
-        # CDT.kml — ONLY WHEN CA REQUESTED
-        if requested_state == "CA" and os.path.exists("CDT.kml"):
-            print("CDT.kml STREAMED FOR CALIFORNIA — NEON GREEN")
+        # CDT — SHOW ONLY IF NO PROVIDER SELECTED OR PROVIDER IS CDT
+        if (not requested_provider or requested_provider == "CDT") and os.path.exists("CDT.kml"):
+            print("STREAMING CDT.kml")
             yield from stream_kml("CDT.kml", "CDT", "#00ff00")
 
-        # FNA MEMBERS
+        # FNA MEMBERS — ALWAYS FILTER BY STATE AND PROVIDER
         fna_dir = "fna_members"
         if os.path.isdir(fna_dir):
             colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
@@ -1755,10 +1849,69 @@ def stream_national():
                 if f.lower().endswith('.kmz'):
                     path = os.path.join(fna_dir, f)
                     name = os.path.splitext(f)[0].replace('_', ' ').title()
+                    # STATE FILTER
+                    if requested_state and requested_state not in name.upper():
+                        continue
+                    # PROVIDER FILTER
+                    if requested_provider and requested_provider.lower() not in name.lower():
+                        continue
                     yield from stream_kmz(path, name, colors[idx % len(colors)])
                     idx += 1
 
     return Response(generate(), mimetype='application/x-ndjson')
+
+
+# =======================================================
+# === RETURN STATE BOUNDS  =================================
+# =======================================================
+@erate_bp.route('/state-bounds')
+def state_bounds():
+    bounds = {
+        "AL": [[30.2, -88.5], [35.0, -85.0]],
+        "AR": [[33.0, -94.6], [36.5, -89.6]],
+        "AZ": [[31.3, -114.8], [37.0, -109.0]],
+        "CA": [[32.5, -124.4], [42.0, -114.1]],
+        "CO": [[37.0, -109.1], [41.0, -102.0]],
+        "FL": [[24.5, -87.6], [31.0, -80.0]],
+        "GA": [[30.4, -85.6], [35.0, -80.8]],
+        "IA": [[40.4, -96.6], [43.5, -90.2]],
+        "IL": [[37.0, -91.5], [42.5, -87.5]],
+        "IN": [[37.8, -88.1], [41.8, -84.8]],
+        "KS": [[37.0, -102.1], [40.0, -94.6]],
+        "KY": [[36.5, -89.6], [39.1, -82.0]],
+        "LA": [[28.9, -94.0], [33.0, -89.0]],
+        "MD": [[37.9, -79.5], [39.7, -75.1]],
+        "MI": [[41.7, -90.4], [48.2, -82.2]],
+        "MO": [[36.0, -95.8], [40.6, -89.1]],
+        "MS": [[30.2, -91.7], [35.0, -88.1]],
+        "NC": [[33.8, -84.3], [36.6, -75.5]],
+        "NE": [[40.0, -104.1], [43.0, -95.3]],
+        "NJ": [[38.9, -75.6], [41.4, -73.9]],
+        "NM": [[31.3, -109.1], [37.0, -103.0]],
+        "NY": [[40.5, -79.8], [45.0, -71.9]],
+        "OH": [[38.4, -84.8], [42.0, -80.5]],
+        "OK": [[33.6, -103.0], [37.0, -94.4]],
+        "PA": [[39.7, -80.5], [42.3, -74.7]],
+        "SC": [[32.0, -83.4], [35.2, -78.5]],
+        "TN": [[34.9, -90.3], [36.7, -81.7]],
+        "TX": [[25.8, -106.7], [36.5, -93.5]],
+        "VA": [[36.5, -83.7], [39.5, -75.2]],
+        "WV": [[37.2, -82.6], [40.6, -77.7]]
+    }
+    return jsonify(bounds)
+
+# =======================================================
+# === RETURN PROVIDERS FROM KMZ or KMLs ==========================
+# =======================================================
+@erate_bp.route('/providers')
+def providers():
+    providers = ["Bluebird Network", "CDT"]
+    if os.path.isdir("fna_members"):
+        for f in os.listdir("fna_members"):
+            if f.lower().endswith('.kmz'):
+                name = os.path.splitext(f)[0].replace('_', ' ').title()
+                providers.append(name)
+    return jsonify(sorted(set(providers)))
 
 # === ADD TO EXPORT FILE ON CLICK =======================
 @erate_bp.route('/add-to-export', methods=['POST'])
@@ -1775,8 +1928,6 @@ def add_to_export():
     filename = f"exports/{username}_001.csv"
     os.makedirs("exports", exist_ok=True)
 
-    from db import get_conn
-
     try:
         conn = get_conn()
         with conn.cursor() as cur:
@@ -1785,31 +1936,27 @@ def add_to_export():
             if not row:
                 return jsonify({"error": "Applicant not found"}), 404
 
-            # Get all column names
             columns = [desc[0] for desc in cur.description]
             export_row = dict(zip(columns, row))
 
-        # Add our two custom fields
-        export_row["Distance"] = distance
-        export_row["Current Network"] = (
-            "FNA Network"
-            if session.get('current_network') == 'fna' or 'fna' in request.referrer.lower()
-            else "Bluebird Network"
-        )
+        # FIXED: USE SESSION TO DETERMINE CURRENT NETWORK
+        current_network = session.get('current_network', 'bluebird')
+        network_name = "FNA Network" if current_network == 'fna' else "Bluebird Network"
 
-        # Build clean BEN Address and Phone
+        export_row["Distance"] = distance
+        export_row["Current Network"] = network_name
+
+        # Build clean address and phone
         addr1 = export_row.get('address1') or ''
         addr2 = export_row.get('address2') or ''
         city = export_row.get('city') or ''
         state = export_row.get('state') or ''
         zip_code = export_row.get('zip_code') or ''
         full_address = f"{addr1} {addr2}, {city}, {state} {zip_code}".strip(" ,")
-
         phone = export_row.get('phone') or ''
         phone_ext = export_row.get('phone_ext') or ''
         full_phone = f"{phone}{' x' + phone_ext if phone_ext else ''}".strip()
 
-        # Final ordered row with key fields first
         ordered_row = {
             "Applicant #": export_row.get("app_number", ""),
             "Form Nickname": export_row.get("form_nickname", ""),
@@ -1821,10 +1968,9 @@ def add_to_export():
             "State": export_row.get("state", ""),
             "Modified": export_row.get("last_modified_datetime").strftime('%m/%d/%Y') if export_row.get("last_modified_datetime") else "",
             "Distance": distance,
-            "Current Network": export_row["Current Network"],
+            "Current Network": network_name,
         }
 
-        # Add ALL remaining DB fields
         for k, v in export_row.items():
             if k not in ordered_row:
                 ordered_row[k] = v if v is not None else ""
@@ -1836,7 +1982,7 @@ def add_to_export():
                 if any(r.get("Applicant #") == app_number for r in reader):
                     return jsonify({"status": "already_added"})
 
-        # Write full row
+        # Write row
         file_exists = os.path.exists(filename)
         with open(filename, 'a', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=ordered_row.keys())
@@ -1845,7 +1991,6 @@ def add_to_export():
             writer.writerow(ordered_row)
 
         return jsonify({"status": "added"})
-
     except Exception as e:
         current_app.logger.error(f"Export failed: {e}")
         return jsonify({"error": "Server error"}), 500
@@ -1905,6 +2050,39 @@ def guest_reset():
     if 'username' not in session:
         session.clear()  # kills the 0-point guest cookie
     return '', 204
+
+@erate_bp.route('/get-provider')
+def get_provider():
+    provider = 'bluebird'  # default for guest
+    if 'username' in session:
+        try:
+            conn = psycopg.connect(DATABASE_URL)
+            with conn.cursor() as cur:
+                cur.execute('SELECT "Provider" FROM users WHERE username = %s', (session['username'],))
+                row = cur.fetchone()
+            conn.close()
+            if row and row[0]:
+                provider_raw = row[0].strip()
+                if provider_raw == 'Segra EAST':
+                    provider = 'segra_east'
+                elif provider_raw == 'Segra WEST':
+                    provider = 'segra_west'
+                elif provider_raw == 'FNA Network':
+                    provider = 'fna'
+                elif provider_raw == 'Bluebird Network':
+                    provider = 'bluebird'
+                else:
+                    provider = 'bluebird'
+        except Exception as e:
+            log("Failed to get provider: %s", e)
+    return jsonify({'provider': provider})
+
+@erate_bp.route('/set-network', methods=['POST'])
+def set_network():
+    data = request.get_json()
+    network = data.get('network', 'bluebird')
+    session['current_network'] = network
+    return jsonify({"status": "ok"})
 
 @erate_bp.route('/logout')
 def logout():
