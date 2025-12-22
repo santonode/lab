@@ -1906,11 +1906,21 @@ def state_bounds():
 @erate_bp.route('/providers')
 def providers():
     providers = ["Bluebird Network", "CDT"]
+
+    # FNA Members (from fna_members directory)
     if os.path.isdir("fna_members"):
         for f in os.listdir("fna_members"):
             if f.lower().endswith('.kmz'):
                 name = os.path.splitext(f)[0].replace('_', ' ').title()
                 providers.append(name)
+
+    # Segra East and Segra West (files in root /src)
+    if os.path.exists("SEGRA_EAST.kmz"):
+        providers.append("Segra East")
+    if os.path.exists("SEGRA_WEST.kmz"):
+        providers.append("Segra West")
+
+    # Remove duplicates and sort alphabetically
     return jsonify(sorted(set(providers)))
 
 # === ADD TO EXPORT FILE ON CLICK =======================
