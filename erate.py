@@ -1761,7 +1761,7 @@ def national_map():
 def stream_national():
     print("=== STREAMING NATIONAL FIBER MAP — STATE + PROVIDER FILTER ===")
     requested_state = request.args.get('state', '').upper()
-    requested_provider = request.args.get('provider', '').strip()
+    requested_provider = request.args.get('provider', '').strip().lower()  # normalize to lowercase for comparison
     print(f"State: '{requested_state}' | Provider: '{requested_provider}'")
 
     import zipfile
@@ -1830,17 +1830,31 @@ def stream_national():
             print(f"KML error {path}: {e}")
 
     def generate():
-        # BLUEBIRD — SHOW IF NO PROVIDER OR PROVIDER IS BLUEBIRD
-        if (not requested_provider or requested_provider.lower() == "bluebird network") and os.path.exists("BBN Map KMZ 122023.kmz"):
-            print("STREAMING BLUEBIRD")
-            yield from stream_kmz("BBN Map KMZ 122023.kmz", "Bluebird Network", "#0066cc")
+        # BLUEBIRD — show if no provider or Bluebird selected
+        if not requested_provider or "bluebird" in requested_provider:
+            if os.path.exists("BBN Map KMZ 122023.kmz"):
+                print("STREAMING BLUEBIRD")
+                yield from stream_kmz("BBN Map KMZ 122023.kmz", "Bluebird Network", "#0066cc")
 
-        # CDT — SHOW ONLY IF NO PROVIDER SELECTED OR PROVIDER IS CDT
-        if (not requested_provider or requested_provider == "CDT") and os.path.exists("CDT.kml"):
-            print("STREAMING CDT.kml")
-            yield from stream_kml("CDT.kml", "CDT", "#00ff00")
+        # SEGRA EAST — show if no provider or Segra East selected
+        if not requested_provider or "segra east" in requested_provider:
+            if os.path.exists("SEGRA_EAST.kmz"):
+                print("STREAMING SEGRA EAST")
+                yield from stream_kmz("SEGRA_EAST.kmz", "Segra East", "#ff6600")  # Orange
 
-        # FNA MEMBERS — ALWAYS FILTER BY STATE AND PROVIDER
+        # SEGRA WEST — show if no provider or Segra West selected
+        if not requested_provider or "segra west" in requested_provider:
+            if os.path.exists("SEGRA_WEST.kmz"):
+                print("STREAMING SEGRA WEST")
+                yield from stream_kmz("SEGRA_WEST.kmz", "Segra West", "#ffaa00")  # Lighter orange
+
+        # CDT — show only if no provider or CDT selected
+        if not requested_provider or requested_provider == "cdt":
+            if os.path.exists("CDT.kml"):
+                print("STREAMING CDT.kml")
+                yield from stream_kml("CDT.kml", "CDT", "#00ff00")
+
+        # FNA MEMBERS — filter by state and provider
         fna_dir = "fna_members"
         if os.path.isdir(fna_dir):
             colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
@@ -1853,13 +1867,12 @@ def stream_national():
                     if requested_state and requested_state not in name.upper():
                         continue
                     # PROVIDER FILTER
-                    if requested_provider and requested_provider.lower() not in name.lower():
+                    if requested_provider and requested_provider not in name.lower():
                         continue
                     yield from stream_kmz(path, name, colors[idx % len(colors)])
                     idx += 1
 
     return Response(generate(), mimetype='application/x-ndjson')
-
 
 # =======================================================
 # === RETURN STATE BOUNDS  =================================
