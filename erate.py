@@ -3,8 +3,8 @@
 # + NEW: FNA dropdown shows top 3 closest members first with star
 
 # === LOCAL DEV ONLY LOAD .env AND USE PRODUCTION DB ===
-from dotenv import load_dotenv
-load_dotenv()  # reads your .env with DATABASE_URL
+# from dotenv import load_dotenv
+# load_dotenv()  # reads your .env with DATABASE_URL
 
 # Optional: nicer debug prints
 import logging
