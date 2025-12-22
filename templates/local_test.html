@@ -75,9 +75,9 @@
 
     <script>
         const map = L.map('map').setView([39.8, -98.5], 5);
-        L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', {
-            attribution: '© Stadia Maps | <strong>Map4.net</strong>',
-            maxZoom: 20
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors | <strong>Map4.net</strong>',
+            maxZoom: 19
         }).addTo(map);
 
         const lines = L.layerGroup().addTo(map);
@@ -158,4 +158,5 @@
         // MAP STARTS EMPTY — USER MUST CLICK GO
     </script>
 </body>
+
 </html>
