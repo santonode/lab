@@ -1510,42 +1510,51 @@ async function loadDistancesIfNeeded() {
     // Get user settings
     const settings = await fetch('/erate/user_settings').then(r => r.json()).catch(() => ({}));
     const userFT = parseInt(settings.ft) || 100;
+
     // Get current total from summary text — ALWAYS accurate
+    const summaryEl = document.querySelector('.summary');
+    if (!summaryEl) {
+        console.warn("Summary element not found");
+        isLoadingDistances = false;
+        document.body.style.cursor = 'default';
+        return;
+    }
     const summaryMatch = summaryEl.textContent.match(/of (\d+)/);
     const totalFiltered = summaryMatch ? parseInt(summaryMatch[1]) : 999;
+
     // RESPECT FILTER THRESHOLD — ONLY SHOW & CALCULATE DISTANCES IF ≤ FT
     const showDistanceColumn = totalFiltered > 0 && totalFiltered <= userFT;
     document.querySelectorAll('th.distance-header, td.distance-cell').forEach(el => {
         el.style.display = showDistanceColumn ? '' : 'none';
     });
+
     if (!showDistanceColumn) {
         console.log("loadDistancesIfNeeded early return - results > FT");
         isLoadingDistances = false;
         document.body.style.cursor = 'default';
         return;
     }
-    // DEBUG
+
     console.log("loadDistancesIfNeeded called - totalFiltered:", totalFiltered, "userFT:", userFT);
-    if (totalFiltered > userFT) {
-        console.log("Skipping distance calculation - results > FT");
-        isLoadingDistances = false;
-        document.body.style.cursor = 'default';
-        return;
-    }
+
     // Only calculate when ≤ FT
     isLoadingDistances = true;
     document.body.style.cursor = 'wait';
     document.querySelectorAll('.distance-cell').forEach(c => c.innerHTML = '<span style="color:#999;">...</span>');
+
     const rows = Array.from(document.querySelectorAll('tbody tr'));
     if (rows.length === 0) {
         isLoadingDistances = false;
         document.body.style.cursor = 'default';
         return;
     }
+
+    // Calculate distances
     for (const row of rows) {
         const appNumber = row.querySelector('.app-number')?.textContent.trim();
         const cell = row.querySelector('.distance-cell');
         if (!appNumber || appNumber === '—' || !cell) continue;
+
         try {
             const data = await fetch(`/erate/bbmap/${appNumber}?network=${currentNetwork}&distance_only=1`)
                 .then(r => r.json());
@@ -1566,14 +1575,27 @@ async function loadDistancesIfNeeded() {
             `;
         }
     }
-    // RE-ATTACH EXPORT CLICK HANDLERS (SAFE VERSION - NO CLONING)
+
+    // === SAFE EXPORT HANDLER ATTACHMENT — PREVENT DUPLICATES ===
+    // First: strip any old listeners by cloning the links
+    document.querySelectorAll('.add-to-export').forEach(link => {
+        const cleanLink = link.cloneNode(true);
+        link.parentNode.replaceChild(cleanLink, link);
+    });
+
+    // Then: attach fresh handlers
     document.querySelectorAll('.add-to-export').forEach(link => {
         link.addEventListener('click', async function(e) {
             e.preventDefault();
+
             const appNum = this.dataset.appnum;
             const originalText = this.textContent.trim();
+
+            console.log(`Export clicked: ${appNum} | Distance: "${originalText}"`);
+
             this.textContent = 'Adding...';
             this.style.color = '#999';
+
             try {
                 const resp = await fetch('/erate/add-to-export', {
                     method: 'POST',
@@ -1583,29 +1605,39 @@ async function loadDistancesIfNeeded() {
                         distance: originalText
                     })
                 });
+
                 const data = await resp.json();
+                console.log('Backend response:', data);
+
                 if (data.status === "added") {
-                    this.style.color = '#27ae60';
+                    console.log('→ New applicant added');
+                    this.style.color = '#27ae60'; // Green
                     this.textContent = 'Added!';
                     setTimeout(() => {
                         this.style.color = '#dc3545';
                         this.textContent = originalText;
                     }, 2000);
                 } else if (data.status === "already_added") {
-                    this.style.color = '#999';
+                    console.log('→ Already in export file');
+                    this.style.color = '#999'; // Grey
                     this.textContent = 'Already added';
                     setTimeout(() => {
                         this.style.color = '#dc3545';
                         this.textContent = originalText;
-                    }, 2000);
+                    }, 3000); // Longer visibility
+                } else {
+                    console.warn('Unexpected response:', data);
+                    this.textContent = 'Error';
+                    this.style.color = '#dc3545';
                 }
             } catch (err) {
-                console.error("EXPORT FAILED:", appNum, err);
+                console.error("Export request failed:", err);
                 this.textContent = 'Error';
                 this.style.color = '#dc3545';
             }
         });
     });
+
     console.log("loadDistancesIfNeeded completed");
     isLoadingDistances = false;
     document.body.style.cursor = 'default';
@@ -1624,6 +1656,7 @@ document.getElementById('filter-form')?.addEventListener('submit', e => {
         alert('Please wait — calculating distances…');
     }
 });
+
 
         // === USER SETTINGS MODAL – FINAL BEAUTIFUL 2025 VERSION (FIXED FOR MOBILE) ===
         document.addEventListener('DOMContentLoaded', () => {
