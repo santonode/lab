@@ -379,8 +379,8 @@
         #settings-modal .modal-dialog       { max-width:520px; border-radius:1px solid var(--border); }
         #settings-modal .modal-content      { padding:2rem 2rem 1.5rem; position:relative; }
         #settings-modal .modal-close-btn    { position:absolute; top:1rem; right:1.25rem; background:none; border:none; font-size:2rem; color:#999; cursor:pointer; }
-        #settings-modal .modal-title        { margin:0 0 1.5rem 0; font-size:1.6rem; color:var(--primary); font-weight:600; }
-        #settings-modal label               { display:block; margin:1.2rem 0 0.4rem; font-weight:600; color:var(--primary); }
+        #settings-modal .modal-title        { margin:0 0 1.5rem 0; font-size:1.6rem; color:black; font-weight:600; }
+        #settings-modal label               { display:block; margin:1.2rem 0 0.4rem; font-weight:600; color:black; }
         #settings-modal label small         { font-weight:normal; color:#666; font-size:0.85rem; }
         #settings-modal input,
         #settings-modal select              { width:100%; padding:0.85rem; border:1px solid var(--border); border-radius:8px; font-size:1rem; }
@@ -493,26 +493,18 @@
             </div>
         </div>
     </div>
-    <!-- REGISTER MODAL – NOW WITH EMAIL (SAFE UPDATE) -->
+    <!-- REGISTER MODAL -->
     <div class="modal" id="registerModal" style="display:none;">
         <div class="modal-content">
             <div class="modal-header">
                 <div class="modal-title">Register</div>
-                <button class="modal-close" onclick="closeModal('register')">×</button>
+                <button class="modal-close" onclick="closeModal('register')">x</button>
             </div>
             <div class="modal-body">
                 <form method="POST" action="{{ url_for('erate.admin') }}">
                     <input type="hidden" name="action" value="register">
-                    
-                    <input type="text" name="username" placeholder="Username" required minlength="3" 
-                           style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
-                    
-                    <input type="email" name="email" placeholder="Email" required 
-                           style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
-                    
-                    <input type="password" name="password" placeholder="Password" required minlength="4" 
-                           style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
-                    
+                    <input type="text" name="username" placeholder="Username" required minlength="3" style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
+                    <input type="password" name="password" placeholder="Password" required minlength="4" style="width:100%;padding:10px;margin:8px 0;border:1px solid #ccc;border-radius:6px;">
                     <button type="submit" class="btn btn-primary">Register</button>
                 </form>
             </div>
@@ -625,53 +617,57 @@
                 {% endif %}
             </tbody>
         </table>
-        <!-- FINAL: PREV + EXPORT + NEXT BUTTONS -->
-        {% if has_more or next_offset|default(10) > 10 %}
-        <div style="text-align:center; margin:40px 0;">
-            <div style="display:inline-flex; gap:12px; flex-wrap:nowrap; justify-content:center; align-items:center;">
-                
-                <!-- PREV BUTTON -->
-                {% if next_offset|default(10) > 10 %}
-                    <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset - 20 }}&deduct=1"
-                       class="btn btn-primary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px;">
-                        Prev
-                    </a>
-                {% else %}
-                    <span class="btn btn-secondary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px; opacity:0.5; cursor:not-allowed;">
-                        Prev
-                    </span>
-                {% endif %}
 
-                <!-- DEBUG: total_count={{ total_count }}, user_ft={{ user_ft }}, user={{ user.username if user else 'guest' }} -->
-                <!-- EXPORT BUTTON — USES REAL USER FT (santo = 500, guest = 100) -->
-                {% set user_ft = (user.ft | int) if user and user.ft else 100 %}
-                {% if total_count <= user_ft and total_count > 0 %}
-                    <a href="/erate/download-export"
-                       class="btn btn-danger btn-sm"
-                       style="min-width:160px; padding:10px 20px; font-weight:600; color:white; background:#dc3545; border-color:#dc3545;">
-                        Export
-                    </a>
-                {% else %}
-                    <span class="btn btn-secondary btn-sm"
-                          style="min-width:160px; padding:10px 20px; opacity:0.6; cursor:not-allowed;">
-                        Export
-                    </span>
-                {% endif %}
+<!-- ULTIMATE FIXED PAGINATION - CLONED BUTTONS TO STRIP ALL LISTENERS -->
+{% set current_offset = offset | int %}
 
-                <!-- NEXT BUTTON -->
-                {% if has_more %}
-                    <a href="?state={{ filters.state|default('') }}&modified_after={{ filters.modified_after|default('') }}&text={{ filters.text|default('') }}&offset={{ next_offset|default(10) }}&deduct=1"
-                       class="btn btn-primary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px;">
-                        Next
-                    </a>
-                {% else %}
-                    <span class="btn btn-secondary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px; opacity:0.5; cursor:not-allowed;">
-                        Next
-                    </span>
-                {% endif %}
-            </div>
-        </div>
+{% if has_more or current_offset > 0 %}
+<div style="text-align:center; margin:40px 0;">
+    <div style="display:inline-flex; gap:12px; flex-wrap:nowrap; justify-content:center; align-items:center;">
+
+        <!-- PREV BUTTON -->
+        {% if current_offset > 0 %}
+            <a href="/erate/?state={{ filters.state|urlencode }}&modified_after={{ filters.modified_after|urlencode }}&text={{ filters.text|urlencode }}&offset={{ current_offset - 10 }}&deduct=1&cache_bust={{ cache_bust }}"
+               class="btn btn-primary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px;" id="prev-btn">
+                Prev
+            </a>
+        {% else %}
+            <span class="btn btn-secondary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px; opacity:0.5; cursor:not-allowed;">
+                Prev
+            </span>
         {% endif %}
+
+        <!-- EXPORT BUTTON -->
+        {% set user_ft = (user.ft | int) if user and user.ft else 100 %}
+        {% if total_count <= user_ft and total_count > 0 %}
+            <a href="/erate/download-export"
+               class="btn btn-danger btn-sm"
+               style="min-width:160px; padding:10px 20px; font-weight:600; color:white; background:#dc3545; border-color:#dc3545;">
+                Export
+            </a>
+        {% else %}
+            <span class="btn btn-secondary btn-sm"
+                  style="min-width:160px; padding:10px 20px; opacity:0.6; cursor:not-allowed;">
+                Export
+            </span>
+        {% endif %}
+
+        <!-- NEXT BUTTON -->
+        {% if has_more %}
+            <a href="/erate/?state={{ filters.state|urlencode }}&modified_after={{ filters.modified_after|urlencode }}&text={{ filters.text|urlencode }}&offset={{ current_offset + 10 }}&deduct=1&cache_bust={{ cache_bust }}"
+               class="btn btn-primary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px;" id="next-btn">
+                Next
+            </a>
+        {% else %}
+            <span class="btn btn-secondary btn-sm" style="padding:6px 12px; font-size:0.8rem; min-width:68px; opacity:0.5; cursor:not-allowed;">
+                Next
+            </span>
+        {% endif %}
+
+    </div>
+</div>
+{% endif %}
+
     </div>
     
     <!-- FOOTER LINKS + DYNAMIC COVERAGE REPORT -->
@@ -679,9 +675,7 @@
         <a href="https://santoelectronics.com/usersguide">Users Guide</a>
         <a href="mailto:sales@santoelectronics.com">sales@santoelectronics.com</a>
         <a href="https://santoelectronics.com/toser">Terms of Service</a>
-        <a href="#" id="coverage-link">
-            Our Fiber Networks
-        </a>
+	<a href="{{ url_for('erate.national_map') }}">Map4.net</a>
     </div>
 
     <!-- COVERAGE REPORT MODAL – NOW WITH THREE TABS -->
@@ -831,33 +825,103 @@
         }
 
         // === OPEN NATIONAL MAP FROM FOOTER + RE-ENABLE TABS ===
-        document.getElementById('coverage-link').addEventListener('click', function(e) {
-                e.preventDefault();
-                document.getElementById('coverage-modal').classList.add('show');
+        document.addEventListener('DOMContentLoaded', () => {
+            const coverageLink = document.getElementById('coverage-link');
+            if (coverageLink) {
+                coverageLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const modal = document.getElementById('coverage-modal');
+                    if (modal) modal.classList.add('show');
 
-                // RE-ATTACH TAB BUTTON LISTENERS (they don't exist until modal opens!)
-                document.querySelectorAll('.tab-btn').forEach(btn => {
-                        // Remove any old listener first
-                        btn.onclick = null;
+                    // RE-ATTACH TAB BUTTON LISTENERS
+                    document.querySelectorAll('.tab-btn').forEach(btn => {
+                        btn.onclick = null; // remove old listeners
                         btn.addEventListener('click', () => {
-                                const view = btn.id === 'btn-provider' ? 'by_provider' :
-                                             btn.id === 'btn-state'     ? 'by_state'     : 'map';
-                                switchCoverageView(view);
+                            const view = btn.id === 'btn-provider' ? 'by_provider' :
+                                         btn.id === 'btn-state' ? 'by_state' : 'map';
+                            switchCoverageView(view);
                         });
-                });
+                    });
 
-                // Optional: start on Provider list instead of map
-                switchCoverageView('by_provider');  // ← change to 'map' if you prefer
+                    // Start on Provider tab
+                    switchCoverageView('by_provider');
+                });
+            }
         });
 
-        // RE-ENABLE "BY PROVIDER" AND "BY STATE" TABS
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                        const view = btn.id === 'btn-provider' ? 'by_provider' :
-                                     btn.id === 'btn-state'     ? 'by_state'     : 'map';
-                        switchCoverageView(view);
-                });
+        // === SHOW CURRENT PROVIDER ON DASHBOARD ON LOAD ===
+        window.addEventListener('load', () => {
+            const providerNames = {
+                'bluebird': 'Bluebird Network',
+                'fna': 'FNA Network',
+                'segra_east': 'Segra East',
+                'segra_west': 'Segra West'
+            };
+            const display = document.getElementById('current-network-display');
+            if (display && currentNetwork) {
+                display.textContent = providerNames[currentNetwork] || 'Bluebird Network';
+            }
         });
+
+// DEBUG: Log what happens when pagination buttons are clicked
+document.addEventListener('click', function(e) {
+    const link = e.target.closest('a');
+    if (link && link.textContent.trim() === 'Next' || link.textContent.trim() === 'Prev') {
+        console.log('=== PAGINATION BUTTON CLICKED ===');
+        console.log('Button text:', link.textContent.trim());
+        console.log('Generated href:', link.href);
+        console.log('Current page URL:', window.location.href);
+        console.log('Are URLs identical?', link.href === window.location.href);
+        console.log('Link classes:', link.className);
+        console.log('Link parent:', link.parentElement);
+        console.log('Event default prevented?', e.defaultPrevented);
+        
+        // Extra: check if any ancestor has preventDefault
+        let ancestor = e.target;
+        while (ancestor) {
+            if (ancestor.onclick || ancestor.dataset.onclick) {
+                console.log('Ancestor with onclick:', ancestor);
+            }
+            ancestor = ancestor.parentElement;
+        }
+    }
+});
+
+// FINAL CLEANUP: Strip all listeners from pagination buttons by cloning them
+window.addEventListener('load', () => {
+    const cleanButton = (id) => {
+        const btn = document.getElementById(id);
+        if (btn) {
+            const newBtn = btn.cloneNode(true);
+            btn.parentNode.replaceChild(newBtn, btn);
+            console.log(`Cleaned button: ${id}`);
+        }
+    };
+    cleanButton('next-btn');
+    cleanButton('prev-btn');
+    console.log("Pagination buttons cloned — all listeners stripped");
+});
+
+// ULTIMATE FIX: Remove ANY possible click listeners from pagination buttons
+window.addEventListener('load', () => {
+    const stripAllListeners = (el) => {
+        if (!el) return;
+        const newEl = el.cloneNode(true);
+        newEl.onclick = null;
+        newEl.removeAttribute('onclick');
+        el.parentNode.replaceChild(newEl, el);
+        console.log("Stripped all listeners from:", newEl.id || newEl.textContent);
+    };
+
+    stripAllListeners(document.getElementById('next-btn'));
+    stripAllListeners(document.getElementById('prev-btn'));
+
+    // Also strip from any .btn-primary.btn-sm in pagination (backup)
+    document.querySelectorAll('.pagination .btn-primary.btn-sm').forEach(btn => {
+        stripAllListeners(btn);
+    });
+});
+
         
     </script>
     
@@ -908,10 +972,6 @@
             <div class="modal-header">
                 <div class="modal-title" id="map-title">Network + Applicant</div>
                 <div style="margin-left: auto; display: flex; gap: 8px; align-items: center;">
-                    <select id="network-select" class="btn btn-secondary" style="padding: 6px; font-size: 0.8rem;">
-                        <option value="bluebird">Bluebird Network</option>
-                        <option value="fna">FNA Network</option>
-                    </select>
                     <select id="fna-member-select" style="display:none; padding:6px; font-size:0.8rem;" disabled>
                         <option>Loading members...</option>
                     </select>
@@ -1050,41 +1110,32 @@
             document.querySelectorAll('.app-number').forEach(el => {
                 el.onclick = () => showDetails(el.textContent.trim());
             });
-            // BLUE MAP BUTTON — AUTO-SELECTS NETWORK + DEDUCTS 1 POINT
-            document.querySelectorAll('.btn-sm').forEach(btn => {
-                btn.onclick = function () {
-                    const row = this.closest('tr');
-                    const appNumber = row.querySelector('.app-number').textContent.trim();
-                    const lat = row.dataset.lat ? parseFloat(row.dataset.lat) : null;
-                    const lon = row.dataset.lon ? parseFloat(row.dataset.lon) : null;
 
-                    // AUTO DETECT NETWORK FROM CURRENT STATE FILTER
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const state = urlParams.get('state')?.toUpperCase() || '';
-                    const bluebirdStates = ['IA','KS','IL','MO','OK'];
-                    const fnaStates = ['MI','OH','PA','FL','GA','NC','SC','LA','TN','KY','VA','WV','MD','DE','NJ','AL'];
-                    let network = localStorage.getItem('preferredNetwork') || 'bluebird';
-                    if (fnaStates.includes(state)) {
-                        network = 'fna';
-                    } else if (bluebirdStates.includes(state)) {
-                        network = 'bluebird';
-                    }
+	    // BLUE MAP BUTTON — DEDUCTS 1 POINT + OPENS MAP (Provider-driven)
+	    // Only target .btn-sm inside table rows (not pagination)
+	    document.querySelectorAll('tr .btn-sm').forEach(btn => {
+	        btn.onclick = function (e) {
+	            e.preventDefault();
+	            const row = this.closest('tr');
+	            if (!row) return;
+	            const appNumber = row.querySelector('.app-number')?.textContent.trim();
+	            if (!appNumber || appNumber === '—') {
+	                alert("No applicant number");
+	                return;
+	            }
+	            const lat = row.dataset.lat ? parseFloat(row.dataset.lat) : null;
+	            const lon = row.dataset.lon ? parseFloat(row.dataset.lon) : null;
+	            currentAppNumber = appNumber;
+	            fetch(`/erate/bbmap/${appNumber}?deduct=1`, { method: 'HEAD' })
+	                .catch(() => {});
+	            openMapModal(appNumber, lat, lon);
+	        };
+	    });
 
-                    // Pre-select the correct network in the dropdown
-                    const select = document.getElementById('network-select');
-                    if (select) {
-                        select.value = network;
-                        select.dispatchEvent(new Event('change'));
-                    }
-
-                    // DEDUCT 1 POINT FOR MAP CLICK
-                    fetch(`/erate/bbmap/${appNumber}?deduct=1`, { method: 'HEAD' })
-                        .catch(() => {}); // Silent — we don't care about response
-
-                    openMapModal(appNumber, lat, lon);
-                };
-            });
+	    // IMPORTANT: Run distance calculation
+    	    setTimeout(loadDistancesIfNeeded, 800);
         });
+
         document.addEventListener('click', updatePoints);
         document.addEventListener('submit', updatePoints);
 
@@ -1097,82 +1148,88 @@
         const detailBody = document.getElementById('detail-body');
         const bbmapBody = document.getElementById('bbmap-body');
         let currentAppNumber = null;
-        let currentNetwork = localStorage.getItem('preferredNetwork') || 'bluebird';
+	let currentNetwork = 'bluebird';  // default, will be updated from backend
         let currentFnaMember = null;
 
-        // === openMapModal() — FINAL WORKING VERSION ===
+        // === openMapModal() — FINAL WORKING VERSION (ONE MAP LOAD) ===
         async function openMapModal(appNumber, dbLat, dbLon) {
             updatePoints();
             currentAppNumber = appNumber;
+
             body.classList.add('loading');
             overlay.classList.add('show');
             mapModal.classList.add('show');
 
             const mapDiv = document.getElementById('map-container');
+
+            // FULL CLEANUP
             if (mapDiv._leaflet_map) {
                 mapDiv._leaflet_map.remove();
-                delete mapDiv._leaflet_map;
+                mapDiv._leaflet_map = null;
             }
             mapDiv.innerHTML = '';
+            delete mapDiv._leaflet_id;
 
-            document.getElementById('network-select').value = currentNetwork;
-            document.getElementById('network-select').dispatchEvent(new Event('change'));
+            // EXPLICIT HEIGHT
+            mapDiv.style.height = '500px';
+            mapDiv.style.width = '100%';
 
-            document.getElementById('map-title').textContent = 
-                currentNetwork === 'fna' ? 'FNA Network + Applicant' : 'Bluebird Network + Applicant';
-
-            body.classList.remove('loading');
-            overlay.classList.remove('show');
-        }
-
-        // === NETWORK SWITCHER + FNA — FINAL WORKING VERSION ===
-        document.getElementById('network-select')?.addEventListener('change', async (e) => {
-            const network = e.target.value;
-            currentNetwork = network;
-            localStorage.setItem('preferredNetwork', network);
+            // SET CORRECT TITLE
+            const titleNames = {
+                'bluebird': 'Bluebird Network + Applicant',
+                'fna': 'FNA Network + Applicant',
+                'segra_east': 'Segra East + Applicant',
+                'segra_west': 'Segra West + Applicant'
+            };
+            document.getElementById('map-title').textContent = titleNames[currentNetwork] || 'Network + Applicant';
 
             const memberSelect = document.getElementById('fna-member-select');
 
-            document.getElementById('map-title').textContent = 
-                network === 'fna' ? 'FNA Network + Applicant' : 'Bluebird Network + Applicant';
-
+            // SHOW LOADING
             document.getElementById('map-loading').style.display = 'flex';
-            document.body.style.cursor = 'wait';
 
             try {
-                if (network === 'fna') {
+                if (currentNetwork === 'fna') {
                     memberSelect.style.display = 'block';
                     memberSelect.disabled = true;
                     memberSelect.innerHTML = '<option>Loading members...</option>';
 
-                    const resp = await fetch(`/erate/bbmap/${currentAppNumber}?network=fna`);
-                    const data = await resp.json();
+                    if (currentAppNumber) {
+                        const resp = await fetch(`/erate/bbmap/${currentAppNumber}?network=fna`);
+                        const data = await resp.json();
 
-                    if (data.fna_members?.length > 0) {
-                        memberSelect.innerHTML = '<option value="">— Select Member —</option>';
-                        data.fna_members.forEach(text => {
-                            const clean = text.replace(/^★\s*/, '').split(' (')[0].trim();
-                            const opt = new Option(text, clean);
-                            memberSelect.appendChild(opt);
-                        });
-                        memberSelect.disabled = false;
-                        currentFnaMember = memberSelect.options[1].value;
-                        memberSelect.value = currentFnaMember;
+                        if (data.fna_members?.length > 0) {
+                            memberSelect.innerHTML = '<option value="">— Select Member —</option>';
+                            data.fna_members.forEach(text => {
+                                const clean = text.replace(/^★\s*/, '').split(' (')[0].trim();
+                                const opt = new Option(text, clean);
+                                memberSelect.appendChild(opt);
+                            });
+                            memberSelect.disabled = false;
+                            currentFnaMember = memberSelect.options[1]?.value || '';
+                            memberSelect.value = currentFnaMember;
+                        } else {
+                            memberSelect.innerHTML = '<option>No members found</option>';
+                            memberSelect.disabled = true;
+                        }
+
+                        await loadMap(currentAppNumber, 'fna', currentFnaMember);
                     }
                 } else {
                     memberSelect.style.display = 'none';
                     currentFnaMember = null;
+
+                    await loadMap(currentAppNumber, currentNetwork, null);
                 }
-
-                await loadMap(currentAppNumber, network, currentFnaMember);
-
             } catch (err) {
-                console.error("FNA load failed:", err);
+                console.error("Map load or FNA member load failed:", err);
+                mapDiv.innerHTML = '<div style="padding:60px; text-align:center; color:#dc3545;">Failed to load map</div>';
             } finally {
                 document.getElementById('map-loading').style.display = 'none';
-                document.body.style.cursor = 'default';
+                body.classList.remove('loading');
+                overlay.classList.remove('show');
             }
-        });
+        }
 
         // === FNA MEMBER CHANGE ===
         document.getElementById('fna-member-select')?.addEventListener('change', async (e) => {
@@ -1209,7 +1266,10 @@
             mapDiv._leaflet_map = map;
 
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap | ' + (network === 'fna' ? `FNA - ${fna_member || ''}` : 'Bluebird Fiber')
+                attribution: '&copy; OpenStreetMap | ' + (network === 'fna' ? 'FNA Network' :
+                    network === 'segra_east' ? 'Segra East' :
+                    network === 'segra_west' ? 'Segra West' :
+                    'Bluebird Network')
             }).addTo(map);
 
             // Routes
@@ -1445,141 +1505,125 @@
             applyDistanceFilter();  // Only re-filters when toggled
         });
 
-        // === FINAL: RESPECT FT + CLICK RED DISTANCE TO ADD TO EXPORT CSV ===
-        async function loadDistancesIfNeeded() {
-            // Get user settings
-            const settings = await fetch('/erate/user_settings').then(r => r.json()).catch(() => ({}));
-            const userFT = parseInt(settings.ft) || 100;
-
-            // Get current total from summary text — ALWAYS accurate
-            const summaryMatch = summaryEl.textContent.match(/of (\d+)/);
-            const totalFiltered = summaryMatch ? parseInt(summaryMatch[1]) : 999;
-
-            // RESPECT FILTER THRESHOLD — ONLY SHOW & CALCULATE DISTANCES IF ≤ FT
-            const showDistanceColumn = totalFiltered > 0 && totalFiltered <= userFT;
-
-            document.querySelectorAll('th.distance-header, td.distance-cell').forEach(el => {
-                el.style.display = showDistanceColumn ? '' : 'none';
-            });
-
-            if (!showDistanceColumn) {
-                isLoadingDistances = false;
-                document.body.style.cursor = 'default';
-                return;
-            }
-
-            // Only calculate when ≤ FT
-            isLoadingDistances = true;
-            document.body.style.cursor = 'wait';
-            document.querySelectorAll('.distance-cell').forEach(c => c.innerHTML = '<span style="color:#999;">...</span>');
-
-            // AUTO DETECT NETWORK
-            const urlParams = new URLSearchParams(window.location.search);
-            const state = urlParams.get('state')?.toUpperCase() || '';
-            const bluebirdStates = ['IA','KS','IL','MO','OK'];
-            const fnaStates = ['MI','OH','PA','FL','GA','NC','SC','LA','TN','KY','VA','WV','MD','DE','NJ','AL'];
-            let currentNetwork = localStorage.getItem('preferredNetwork') || 'bluebird';
-            if (fnaStates.includes(state)) currentNetwork = 'fna';
-            else if (bluebirdStates.includes(state)) currentNetwork = 'bluebird';
-
-            document.getElementById('current-network-display').textContent =
-                currentNetwork === 'fna' ? 'FNA Network' : 'Bluebird Network';
-
-            const rows = Array.from(document.querySelectorAll('tbody tr'));
-
-            for (const row of rows) {
-                const appNumber = row.querySelector('.app-number')?.textContent.trim();
-                const cell = row.querySelector('.distance-cell');
-                if (!appNumber || appNumber === '—' || !cell) continue;
-
-                try {
-                    const data = await fetch(`/erate/bbmap/${appNumber}?network=${currentNetwork}&distance_only=1`)
-                        .then(r => r.json());
-                    const distText = data.nearest_fiber_distance || '—';
-
-                    cell.innerHTML = `
-                        <a href="#" class="add-to-export" data-appnum="${appNumber}"
-                           style="color:#dc3545; font-weight:600; text-decoration:none; cursor:pointer;">
-                            ${distText}
-                        </a>
-                    `;
-                } catch {
-                    cell.innerHTML = `
-                        <a href="#" class="add-to-export" data-appnum="${appNumber}"
-                           style="color:#dc3545; font-weight:600; text-decoration:none; cursor:pointer;">
-                            —
-                        </a>
-                    `;
-                }
-            }
-
-            // ATTACH CLICK HANDLER — ONLY ONCE PER LINK
-            document.querySelectorAll('.add-to-export').forEach(link => {
-                if (link.dataset.bound === 'true') return;
-                link.dataset.bound = 'true';
-
-                link.addEventListener('click', async function(e) {
-                    e.preventDefault();
-                    const appNum = this.dataset.appnum;
-                    const originalText = this.textContent.trim();
-
-                    console.log(`EXPORT CLICKED: ${appNum}`);
-
-                    this.textContent = 'Adding...';
-                    this.style.color = '#999';
-
-                    try {
-                        const resp = await fetch('/erate/add-to-export', {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({
-                                app_number: appNum,
-                                distance: originalText  // ← THIS IS THE MISSING PIECE
-                            })
-                        });
-                        const data = await resp.json();
-
-                        if (data.status === "added") {
-                            console.log(`EXPORT SUCCESS: ${appNum}`);
-                            this.style.color = '#27ae60';
-                            this.textContent = 'Added!';
-                            setTimeout(() => {
-                                this.style.color = '#dc3545';
-                                this.textContent = originalText;
-                            }, 2000);
-                        } else if (data.status === "already_added") {
-                            console.log(`EXPORT DUPLICATE: ${appNum}`);
-                            this.style.color = '#999';
-                            this.textContent = 'Already added';
-                            setTimeout(() => {
-                                this.style.color = '#dc3545';
-                                this.textContent = originalText;
-                            }, 2000);
-                        }
-                    } catch (err) {
-                        console.error("EXPORT FAILED:", appNum, err);
-                        this.textContent = 'Error';
-                        this.style.color = '#dc3545';
-                    }
-                });
-            });
-
-            isLoadingDistances = false;
-            document.body.style.cursor = 'default';
+// === FINAL: RESPECT FT + CLICK RED DISTANCE TO ADD TO EXPORT CSV (Provider-driven) ===
+async function loadDistancesIfNeeded() {
+    // Get user settings
+    const settings = await fetch('/erate/user_settings').then(r => r.json()).catch(() => ({}));
+    const userFT = parseInt(settings.ft) || 100;
+    // Get current total from summary text — ALWAYS accurate
+    const summaryMatch = summaryEl.textContent.match(/of (\d+)/);
+    const totalFiltered = summaryMatch ? parseInt(summaryMatch[1]) : 999;
+    // RESPECT FILTER THRESHOLD — ONLY SHOW & CALCULATE DISTANCES IF ≤ FT
+    const showDistanceColumn = totalFiltered > 0 && totalFiltered <= userFT;
+    document.querySelectorAll('th.distance-header, td.distance-cell').forEach(el => {
+        el.style.display = showDistanceColumn ? '' : 'none';
+    });
+    if (!showDistanceColumn) {
+        console.log("loadDistancesIfNeeded early return - results > FT");
+        isLoadingDistances = false;
+        document.body.style.cursor = 'default';
+        return;
+    }
+    // DEBUG
+    console.log("loadDistancesIfNeeded called - totalFiltered:", totalFiltered, "userFT:", userFT);
+    if (totalFiltered > userFT) {
+        console.log("Skipping distance calculation - results > FT");
+        isLoadingDistances = false;
+        document.body.style.cursor = 'default';
+        return;
+    }
+    // Only calculate when ≤ FT
+    isLoadingDistances = true;
+    document.body.style.cursor = 'wait';
+    document.querySelectorAll('.distance-cell').forEach(c => c.innerHTML = '<span style="color:#999;">...</span>');
+    const rows = Array.from(document.querySelectorAll('tbody tr'));
+    if (rows.length === 0) {
+        isLoadingDistances = false;
+        document.body.style.cursor = 'default';
+        return;
+    }
+    for (const row of rows) {
+        const appNumber = row.querySelector('.app-number')?.textContent.trim();
+        const cell = row.querySelector('.distance-cell');
+        if (!appNumber || appNumber === '—' || !cell) continue;
+        try {
+            const data = await fetch(`/erate/bbmap/${appNumber}?network=${currentNetwork}&distance_only=1`)
+                .then(r => r.json());
+            const distText = data.nearest_fiber_distance || '—';
+            cell.innerHTML = `
+                <a href="#" class="add-to-export" data-appnum="${appNumber}"
+                   style="color:#dc3545; font-weight:600; text-decoration:none; cursor:pointer;">
+                    ${distText}
+                </a>
+            `;
+        } catch (err) {
+            console.error("Distance fetch failed for " + appNumber, err);
+            cell.innerHTML = `
+                <a href="#" class="add-to-export" data-appnum="${appNumber}"
+                   style="color:#dc3545; font-weight:600; text-decoration:none; cursor:pointer;">
+                    —
+                </a>
+            `;
         }
-
-        // Run on load
-        window.addEventListener('load', () => {
-            setTimeout(loadDistancesIfNeeded, 800);
-        });
-
-        // Prevent form submit during loading
-        document.getElementById('filter-form')?.addEventListener('submit', e => {
-            if (isLoadingDistances) {
-                e.preventDefault();
-                alert('Please wait — calculating distances…');
+    }
+    // RE-ATTACH EXPORT CLICK HANDLERS (SAFE VERSION - NO CLONING)
+    document.querySelectorAll('.add-to-export').forEach(link => {
+        link.addEventListener('click', async function(e) {
+            e.preventDefault();
+            const appNum = this.dataset.appnum;
+            const originalText = this.textContent.trim();
+            this.textContent = 'Adding...';
+            this.style.color = '#999';
+            try {
+                const resp = await fetch('/erate/add-to-export', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        app_number: appNum,
+                        distance: originalText
+                    })
+                });
+                const data = await resp.json();
+                if (data.status === "added") {
+                    this.style.color = '#27ae60';
+                    this.textContent = 'Added!';
+                    setTimeout(() => {
+                        this.style.color = '#dc3545';
+                        this.textContent = originalText;
+                    }, 2000);
+                } else if (data.status === "already_added") {
+                    this.style.color = '#999';
+                    this.textContent = 'Already added';
+                    setTimeout(() => {
+                        this.style.color = '#dc3545';
+                        this.textContent = originalText;
+                    }, 2000);
+                }
+            } catch (err) {
+                console.error("EXPORT FAILED:", appNum, err);
+                this.textContent = 'Error';
+                this.style.color = '#dc3545';
             }
         });
+    });
+    console.log("loadDistancesIfNeeded completed");
+    isLoadingDistances = false;
+    document.body.style.cursor = 'default';
+}
+
+// Run on load
+window.addEventListener('load', () => {
+    document.body.style.cursor = 'default'; // Safety reset
+    setTimeout(loadDistancesIfNeeded, 800);
+});
+
+// Prevent form submit during loading
+document.getElementById('filter-form')?.addEventListener('submit', e => {
+    if (isLoadingDistances) {
+        e.preventDefault();
+        alert('Please wait — calculating distances…');
+    }
+});
 
         // === USER SETTINGS MODAL – FINAL BEAUTIFUL 2025 VERSION (FIXED FOR MOBILE) ===
         document.addEventListener('DOMContentLoaded', () => {
@@ -1660,19 +1704,6 @@
             });
         });
 
-        // === SYNC NETWORK DISPLAY WITH MAP SWITCHER ===
-        document.getElementById('network-select')?.addEventListener('change', function() {
-            const network = this.value;
-            const display = document.getElementById('current-network-display');
-            if (display) {
-                display.textContent = network === 'fna' ? 'FNA Network' : 'Bluebird Network';
-            }
-            // Also re-run distance calculation if toggle is ON
-            if (distanceFilterEnabled) {
-                applyDistanceFilter();
-            }
-        });
-
         // === MEMORY CLEANUP – RUNS WHEN USER CLOSES THE MODAL ===
         document.getElementById('coverage-modal').addEventListener('click', function(e) {
             if (e.target === this || e.target.classList.contains('modal-close')) {
@@ -1690,13 +1721,35 @@
             }
         });
 
-        // Also update on page load if user has a saved preference
-        window.addEventListener('load', () => {
-            const saved = localStorage.getItem('preferredNetwork') || 'bluebird';
-            const display = document.getElementById('current-network-display');
-            if (display) {
-                display.textContent = saved === 'fna' ? 'FNA Network' : 'Bluebird Network';
+        // === FETCH USER PROVIDER ON LOAD AND SET currentNetwork ===
+        window.addEventListener('load', async () => {
+            try {
+                const resp = await fetch('/erate/get-provider');
+                const data = await resp.json();
+                if (data.provider) {
+                    currentNetwork = data.provider;
+
+                    // Update dashboard display
+                    const display = document.getElementById('current-network-display');
+                    if (display) {
+                        const providerNames = {
+                            'bluebird': 'Bluebird Network',
+                            'fna': 'FNA Network',
+                            'segra_east': 'Segra East',
+                            'segra_west': 'Segra West'
+                        };
+                        display.textContent = providerNames[currentNetwork] || 'Bluebird Network';
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to get provider:", err);
             }
+        });
+
+        // DEBUG: Log on page load to see pagination behavior
+        window.addEventListener('load', () => {
+            console.log("Page loaded - URL:", window.location.href);
+            console.log("totalFiltered from summary:", document.querySelector('.summary')?.textContent || 'no summary');
         });
         
     </script>
