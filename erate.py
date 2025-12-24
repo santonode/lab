@@ -820,7 +820,6 @@ def bbmap(app_number):
 @erate_bp.route('/')
 def dashboard():
     log("Dashboard accessed")
-
     # GUEST USER (not logged in)
     if not session.get('username'):
         resp = make_response(render_template('erate.html',
@@ -830,8 +829,8 @@ def dashboard():
             filters={},
             has_more=False,
             next_offset=0,
-            offset=0,                    # ← Required for template
-            cache_bust=int(time.time())  # ← Consistent with logged-in path
+            offset=0,
+            cache_bust=int(time.time())
         ))
         resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         resp.headers['Pragma'] = 'no-cache'
@@ -894,12 +893,43 @@ def dashboard():
                 }
                 for r in rows
             ]
+
+            # === ADD C1/C2 SUFFIX TO ENTITY NAME (WITH DEBUG LOGS) ===
+            app_numbers = [row['app_number'] for row in table_data if row['app_number']]
+            log("C1/C2 debug: app_numbers on this page: %s", app_numbers)
+            category_map = {}
+            if app_numbers:
+                try:
+                    cur.execute("""
+                        SELECT app_number, cat1_desc, cat2_desc
+                        FROM erate
+                        WHERE app_number = ANY(%s)
+                    """, (app_numbers,))
+                    raw_results = cur.fetchall()
+                    log("C1/C2 debug: raw query results (app, cat1, cat2): %s", raw_results)
+
+                    for app_num, cat1, cat2 in raw_results:
+                        if cat2 and str(cat2).strip():
+                            category_map[app_num] = 'C2'
+                        elif cat1 and str(cat1).strip():
+                            category_map[app_num] = 'C1'
+
+                    log("C1/C2 debug: final category_map: %s", category_map)
+                except Exception as e:
+                    log("C1/C2 category query failed (safe fallback): %s", e)
+                    category_map = {}
+
+            for row in table_data:
+                cat = category_map.get(row['app_number'])
+                row['entity_name_display'] = f"{row['entity_name']}{' - ' + cat if cat else ''}"
+                log("C1/C2 debug: row %s → display name: %s", row['app_number'], row['entity_name_display'])
+
             has_more = len(table_data) > limit
             table_data = table_data[:limit]
             next_offset = offset + limit
             total_filtered = offset + len(table_data)
 
-        # Render template for logged-in user
+        # Render template
         response = make_response(render_template(
             'erate.html',
             table_data=table_data,
@@ -928,6 +958,7 @@ def dashboard():
         return f"<pre>ERROR: {e}</pre>", 500
     finally:
         conn.close()
+
 
 # === APPLICANT DETAILS API – FINAL FIXED (NO MORE FORCED /SL/) ===
 @erate_bp.route('/details/<app_number>')
