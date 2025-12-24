@@ -601,7 +601,7 @@
                     {% for row in table_data %}
                     <tr {% if row.latitude %}data-lat="{{ row.latitude }}"{% endif %} {% if row.longitude %}data-lon="{{ row.longitude }}"{% endif %}>
                         <td><span class="app-number">{{ row.app_number|default('—') }}</span></td>
-                        <td><span class="entity-name">{{ row.entity_name|default('—') }}</span></td>
+                        <td><span class="entity-name">{{ row.entity_name_display|default(row.entity_name|default('—')) }}</span></td>
                         <td>{{ row.state|default('—') }}</td>
                         <td class="modified">{{ row.last_modified_datetime|strftime('%m/%d/%Y') if row.last_modified_datetime else '—' }}</td>
                         <td class="distance-cell" style="display:none; color:#dc3545; font-weight:600;">—</td>
