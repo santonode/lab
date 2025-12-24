@@ -906,7 +906,7 @@ def dashboard():
                         WHERE app_number = ANY(%s)
                     """, (app_numbers,))
                     raw_results = cur.fetchall()
-                    log("C1/C2 debug: raw query results (app, cat1, cat2): %s", raw_results)
+                    # log("C1/C2 debug: raw query results (app, cat1, cat2): %s", raw_results)
 
                     for app_num, cat1, cat2 in raw_results:
                         if cat2 and str(cat2).strip():
@@ -914,15 +914,15 @@ def dashboard():
                         elif cat1 and str(cat1).strip():
                             category_map[app_num] = 'C1'
 
-                    log("C1/C2 debug: final category_map: %s", category_map)
+                    # log("C1/C2 debug: final category_map: %s", category_map)
                 except Exception as e:
-                    log("C1/C2 category query failed (safe fallback): %s", e)
+                    # log("C1/C2 category query failed (safe fallback): %s", e)
                     category_map = {}
 
             for row in table_data:
                 cat = category_map.get(row['app_number'])
                 row['entity_name_display'] = f"{row['entity_name']}{' - ' + cat if cat else ''}"
-                log("C1/C2 debug: row %s → display name: %s", row['app_number'], row['entity_name_display'])
+                # log("C1/C2 debug: row %s → display name: %s", row['app_number'], row['entity_name_display'])
 
             has_more = len(table_data) > limit
             table_data = table_data[:limit]
