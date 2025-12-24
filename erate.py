@@ -849,28 +849,35 @@ def dashboard():
                 for r in rows
             ]
 
-            # === ADD C1/C2 SUFFIX TO ENTITY NAME ===
+            # === ADD C1/C2 SUFFIX TO ENTITY NAME (WITH DEBUG LOGS) ===
             app_numbers = [row['app_number'] for row in table_data if row['app_number']]
+            log("C1/C2 debug: app_numbers on this page: %s", app_numbers)
             category_map = {}
             if app_numbers:
-                cur.execute("""
-                    SELECT app_number,
-                           CASE
-                               WHEN cat2_desc IS NOT NULL AND TRIM(cat2_desc) != '' THEN 'C2'
-                               WHEN cat1_desc IS NOT NULL AND TRIM(cat1_desc) != '' THEN 'C1'
-                               ELSE NULL
-                           END AS category
-                    FROM erate
-                    WHERE app_number = ANY(%s)
-                """, (app_numbers,))
-                category_map = dict(cur.fetchall())
+                try:
+                    cur.execute("""
+                        SELECT app_number, cat1_desc, cat2_desc
+                        FROM erate
+                        WHERE app_number = ANY(%s)
+                    """, (app_numbers,))
+                    raw_results = cur.fetchall()
+                    log("C1/C2 debug: raw query results (app, cat1, cat2): %s", raw_results)
+
+                    for app_num, cat1, cat2 in raw_results:
+                        if cat2 and str(cat2).strip():
+                            category_map[app_num] = 'C2'
+                        elif cat1 and str(cat1).strip():
+                            category_map[app_num] = 'C1'
+
+                    log("C1/C2 debug: final category_map: %s", category_map)
+                except Exception as e:
+                    log("C1/C2 category query failed (safe fallback): %s", e)
+                    category_map = {}
 
             for row in table_data:
                 cat = category_map.get(row['app_number'])
-                if cat:
-                    row['entity_name_display'] = f"{row['entity_name']} - {cat}"
-                else:
-                    row['entity_name_display'] = row['entity_name']
+                row['entity_name_display'] = f"{row['entity_name']}{' - ' + cat if cat else ''}"
+                log("C1/C2 debug: row %s → display name: %s", row['app_number'], row['entity_name_display'])
 
             has_more = len(table_data) > limit
             table_data = table_data[:limit]
@@ -906,6 +913,7 @@ def dashboard():
         return f"<pre>ERROR: {e}</pre>", 500
     finally:
         conn.close()
+
 
 # === APPLICANT DETAILS API – FINAL FIXED (NO MORE FORCED /SL/) ===
 @erate_bp.route('/details/<app_number>')
