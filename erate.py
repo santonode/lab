@@ -775,19 +775,34 @@ def bbmap(app_number):
 @erate_bp.route('/')
 def dashboard():
     log("Dashboard accessed")
+    # GUEST USER (not logged in)
     if not session.get('username'):
-        return render_template('erate.html',
-            table_data=[], total_count=0, total_filtered=0,
-            filters={}, has_more=False, next_offset=0
-        )
+        resp = make_response(render_template('erate.html',
+            table_data=[],
+            total_count=0,
+            total_filtered=0,
+            filters={},
+            has_more=False,
+            next_offset=0,
+            offset=0,
+            cache_bust=int(time.time())
+        ))
+        resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        resp.headers['Pragma'] = 'no-cache'
+        resp.headers['Expires'] = '0'
+        return resp
+
+    # LOGGED-IN USER
     # DEDUCT POINT ON ANY FILTER
     if any(request.args.get(k) for k in ['state', 'modified_after', 'text']):
         deduct_point()
+
     state_filter = request.args.get('state', '').strip().upper()
     modified_after_str = request.args.get('modified_after', '').strip()
     text_search = request.args.get('text', '').strip()
     offset = max(int(request.args.get('offset', 0)), 0)
     limit = 10
+
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10, autocommit=True)
     try:
         with conn.cursor() as cur:
@@ -807,6 +822,7 @@ def dashboard():
                 count_sql += ' WHERE ' + ' AND '.join(where_clauses)
             cur.execute(count_sql, count_params)
             total_count = cur.fetchone()[0]
+
             sql = '''
                 SELECT app_number, entity_name, state, last_modified_datetime,
                        latitude, longitude
@@ -820,6 +836,7 @@ def dashboard():
             params.extend([limit + 1, offset])
             cur.execute(sql, params)
             rows = cur.fetchall()
+
             table_data = [
                 {
                     'app_number': r[0],
@@ -831,11 +848,37 @@ def dashboard():
                 }
                 for r in rows
             ]
+
+            # === ADD C1/C2 SUFFIX TO ENTITY NAME ===
+            app_numbers = [row['app_number'] for row in table_data if row['app_number']]
+            category_map = {}
+            if app_numbers:
+                cur.execute("""
+                    SELECT app_number,
+                           CASE
+                               WHEN cat2_desc IS NOT NULL AND TRIM(cat2_desc) != '' THEN 'C2'
+                               WHEN cat1_desc IS NOT NULL AND TRIM(cat1_desc) != '' THEN 'C1'
+                               ELSE NULL
+                           END AS category
+                    FROM erate
+                    WHERE app_number = ANY(%s)
+                """, (app_numbers,))
+                category_map = dict(cur.fetchall())
+
+            for row in table_data:
+                cat = category_map.get(row['app_number'])
+                if cat:
+                    row['entity_name_display'] = f"{row['entity_name']} - {cat}"
+                else:
+                    row['entity_name_display'] = row['entity_name']
+
             has_more = len(table_data) > limit
             table_data = table_data[:limit]
             next_offset = offset + limit
             total_filtered = offset + len(table_data)
-        return render_template(
+
+        # Render template
+        response = make_response(render_template(
             'erate.html',
             table_data=table_data,
             filters={
@@ -847,8 +890,17 @@ def dashboard():
             total_filtered=total_filtered,
             has_more=has_more,
             next_offset=next_offset,
+            offset=offset,
             cache_bust=int(time.time())
-        )
+        ))
+
+        # FORCE NO CACHE
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+
+        return response
+
     except Exception as e:
         log("Dashboard error: %s", e)
         return f"<pre>ERROR: {e}</pre>", 500
