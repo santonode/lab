@@ -1460,12 +1460,12 @@ def _import471_all_background(app):
                 imported += 1
 
                 if len(batch) >= 1000:
-                    _process_471_batch(cur, conn, app, batch)
+                    _process_471_batch(cur, conn, app, batch, total)
                     batch = []
 
             # Final batch
             if batch:
-                _process_471_batch(cur, conn, app, batch)
+                _process_471_batch(cur, conn, app, batch, total)
 
         log("471 Bulk import complete: %s imported", app.config['import471_success'])
     except Exception as e:
@@ -1480,7 +1480,7 @@ def _import471_all_background(app):
             app.config['IMPORT471_IN_PROGRESS'] = False
         log("471 Import thread finished")
 
-def _process_471_batch(cur, conn, app, batch):
+def _process_471_batch(cur, conn, app, batch, total):
     # Check existing
     cur.execute(
         "SELECT application_number FROM erate2 WHERE application_number = ANY(%s)",
@@ -1553,31 +1553,9 @@ def _process_471_batch(cur, conn, app, batch):
             ))
 
         cur.executemany("""
-            INSERT INTO erate2 (
-                application_number, form_pdf, funding_year, billed_entity_state, form_version,
-                window_status, nickname, status, categories_of_service, organization_name,
-                billed_entity_address1, billed_entity_address2, billed_entity_city,
-                billed_entity_zip_code, billed_entity_zip_code_ext, billed_entity_phone,
-                billed_entity_phone_ext, billed_entity_email, billed_entity_number,
-                fcc_registration_number, applicant_type, contact_first_name,
-                contact_middle_initial, contact_last_name, contact_email,
-                contact_phone_number, contact_phone_ext, authorized_first_name,
-                authorized_middle_name, authorized_last_name, authorized_title,
-                authorized_employer, authorized_address_line_1, authorized_address_line_2,
-                authorized_city, authorized_state, authorized_zip_code,
-                authorized_zip_code_ext, authorized_phone, authorized_phone_extension,
-                authorized_email, certified_datetime, fulltime_enrollment, nslp_count,
-                nslp_percentage, urban_rural_status, category_one_discount_rate,
-                category_two_discount_rate, voice_discount_rate,
-                total_funding_year_pre_discount_eligible_amount,
-                total_funding_commitment_request_amount, total_applicant_non_discount_share,
-                funds_from_service_provider, service_provider_filed_by_billed_entity,
-                last_updated_datetime, latitude, longitude
-            ) VALUES (
-                %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
-            )
+            INSERT INTO erate2 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                                      %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                                      %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (application_number) DO NOTHING
         """, values)
         conn.commit()
