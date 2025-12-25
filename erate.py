@@ -1355,6 +1355,250 @@ def import_hash_start():
     flash("Smart Import started in background — check Render logs for live progress", "success")
     return redirect(url_for('erate.dashboard'))
 
+# =====================================================
+# === 471 IMPORT — USES erate2 TABLE (IL DATA) ===
+# =====================================================
+
+# Path to the 471 CSV (in /src)
+CSV_FILE_471 = os.path.join(os.path.dirname(__file__), "471schema-IL.csv")
+
+@erate_bp.route('/import471-interactive', methods=['GET', 'POST'])
+def import471_interactive():
+    log("471 Import interactive page accessed")
+    if not os.path.exists(CSV_FILE_471):
+        log("471 CSV not found: %s", CSV_FILE_471)
+        return "<h2>471 CSV not found: 471schema-IL.csv</h2>", 404
+
+    with open(CSV_FILE_471, 'r', encoding='utf-8-sig', newline='') as f:
+        total = sum(1 for _ in csv.reader(f)) - 1  # exclude header
+    log("471 CSV has %s rows (excluding header)", total)
+
+    # Use separate config keys for 471 import
+    if 'import471_total' not in current_app.config:
+        current_app.config['import471_total'] = total
+        current_app.config['import471_index'] = 1
+        current_app.config['import471_success'] = 0
+        current_app.config['import471_error'] = 0
+    elif current_app.config['import471_total'] != total:
+        log("471 CSV changed, resetting progress")
+        current_app.config.update({
+            'import471_total': total,
+            'import471_index': 1,
+            'import471_success': 0,
+            'import471_error': 0
+        })
+
+    progress = {
+        'index': current_app.config['import471_index'],
+        'total': current_app.config['import471_total'],
+        'success': current_app.config['import471_success'],
+        'error': current_app.config['import471_error']
+    }
+
+    is_importing = current_app.config.get('IMPORT471_IN_PROGRESS', False)
+
+    if is_importing or progress['index'] > progress['total']:
+        return render_template('erate2_import_complete.html', progress=progress)
+
+    if request.method == 'POST' and request.form.get('action') == 'import_all':
+        if is_importing:
+            flash("471 Import already running.", "info")
+            return redirect(url_for('erate.import471_interactive'))
+
+        current_app.config.update({
+            'IMPORT471_IN_PROGRESS': True,
+            'import471_index': 1,
+            'import471_success': 0,
+            'import471_error': 0
+        })
+
+        thread = threading.Thread(target=_import471_all_background, args=(current_app._get_current_object(),))
+        thread.daemon = True
+        current_app.config['IMPORT471_THREAD'] = thread
+        thread.start()
+
+        flash("471 Bulk import started. Check /erate/view-log for progress", "success")
+        return redirect(url_for('erate.import471_interactive'))
+
+    return render_template('erate2_import.html', progress=progress, is_importing=is_importing)
+
+def _import471_all_background(app):
+    log("=== 471 BULK IMPORT STARTED ===")
+    try:
+        with app.app_context():
+            total = app.config['import471_total']
+            start_index = app.config['import471_index']
+
+        conn = psycopg.connect(DATABASE_URL, autocommit=False, connect_timeout=10)
+        cur = conn.cursor()
+
+        with open(CSV_FILE_471, 'r', encoding='utf-8-sig', newline='') as f:
+            reader = csv.DictReader(f)
+            log("471 CSV reader created")
+
+            # Skip to start_index
+            for _ in range(start_index - 1):
+                try:
+                    next(reader)
+                except StopIteration:
+                    break
+
+            batch = []
+            imported = 0
+            last_heartbeat = time.time()
+
+            for row in reader:
+                if time.time() - last_heartbeat > 5:
+                    log("471 HEARTBEAT: %s rows processed", imported)
+                    last_heartbeat = time.time()
+
+                app_number = row.get('Application Number', '').strip()
+                if not app_number:
+                    continue
+
+                batch.append(row)
+                imported += 1
+
+                if len(batch) >= 1000:
+                    _process_471_batch(cur, conn, app, batch)
+                    batch = []
+
+            # Final batch
+            if batch:
+                _process_471_batch(cur, conn, app, batch)
+
+        log("471 Bulk import complete: %s imported", app.config['import471_success'])
+    except Exception as e:
+        log("471 IMPORT thread CRASHED: %s", e)
+        log("Traceback: %s", traceback.format_exc())
+    finally:
+        try:
+            conn.close()
+        except:
+            pass
+        with app.app_context():
+            app.config['IMPORT471_IN_PROGRESS'] = False
+        log("471 Import thread finished")
+
+def _process_471_batch(cur, conn, app, batch):
+    # Check existing
+    cur.execute(
+        "SELECT application_number FROM erate2 WHERE application_number = ANY(%s)",
+        ([r['Application Number'] for r in batch],)
+    )
+    existing = {r[0] for r in cur.fetchall()}
+    filtered_batch = [r for r in batch if r['Application Number'] not in existing]
+
+    if filtered_batch:
+        values = []
+        for r in filtered_batch:
+            values.append((
+                r.get('Application Number', ''),
+                r.get('Form PDF', None) or None,
+                r.get('Funding Year', ''),
+                r.get('Billed Entity State', ''),
+                r.get('Form Version', ''),
+                r.get('Window Status', ''),
+                r.get('Nickname', ''),
+                r.get('Status', ''),
+                r.get('Categories of Service', ''),
+                r.get("Applicant's Organization Name", ''),
+                r.get('Billed Entity Address1', ''),
+                r.get('Billed Entity Address2', ''),
+                r.get('Billed Entity City', ''),
+                r.get('Billed Entity Zip Code', ''),
+                r.get('Billed Entity Zip Code Ext', ''),
+                r.get('Billed Entity Phone', ''),
+                r.get('Billed Entity Phone Ext', ''),
+                r.get('Billed Entity Email', ''),
+                r.get('Billed Entity Number', ''),
+                r.get('FCC Registration Number', ''),
+                r.get('Applicant Type', ''),
+                r.get('Contact First Name', ''),
+                r.get('Contact Middle Initial', ''),
+                r.get('Contact Last Name', ''),
+                r.get('Contact Email', ''),
+                r.get('Contact Phone Number', ''),
+                r.get('Contact Phone Ext', ''),
+                r.get('Authorized First Name', ''),
+                r.get('Authorized Middle Name', ''),
+                r.get('Authorized Last Name', ''),
+                r.get('Authorized Title', ''),
+                r.get('Authorized Employer', ''),
+                r.get('Authorized Address Line 1', ''),
+                r.get('Authorized Address Line 2', ''),
+                r.get('Authorized City', ''),
+                r.get('Authorized State', ''),
+                r.get('Authorized Zip Code', ''),
+                r.get('Authorized Zip Code Ext', ''),
+                r.get('Authorized Phone', ''),
+                r.get('Authorized Phone Extension', ''),
+                r.get('Authorized Email', ''),
+                None,  # certified_datetime
+                None,  # fulltime_enrollment
+                None,  # nslp_count
+                None,  # nslp_percentage
+                r.get('Urban/ Rural Status', ''),
+                None,  # category_one_discount_rate
+                None,  # category_two_discount_rate
+                None,  # voice_discount_rate
+                None,  # pre_discount
+                None,  # commitment_request
+                None,  # non_discount_share
+                r.get('Funds from Service Provider', ''),
+                r.get('Service Provider Filed by Billed Entity', ''),
+                None,  # last_updated
+                None,  # latitude
+                None   # longitude
+            ))
+
+        cur.executemany("""
+            INSERT INTO erate2 (
+                application_number, form_pdf, funding_year, billed_entity_state, form_version,
+                window_status, nickname, status, categories_of_service, organization_name,
+                billed_entity_address1, billed_entity_address2, billed_entity_city,
+                billed_entity_zip_code, billed_entity_zip_code_ext, billed_entity_phone,
+                billed_entity_phone_ext, billed_entity_email, billed_entity_number,
+                fcc_registration_number, applicant_type, contact_first_name,
+                contact_middle_initial, contact_last_name, contact_email,
+                contact_phone_number, contact_phone_ext, authorized_first_name,
+                authorized_middle_name, authorized_last_name, authorized_title,
+                authorized_employer, authorized_address_line_1, authorized_address_line_2,
+                authorized_city, authorized_state, authorized_zip_code,
+                authorized_zip_code_ext, authorized_phone, authorized_phone_extension,
+                authorized_email, certified_datetime, fulltime_enrollment, nslp_count,
+                nslp_percentage, urban_rural_status, category_one_discount_rate,
+                category_two_discount_rate, voice_discount_rate,
+                total_funding_year_pre_discount_eligible_amount,
+                total_funding_commitment_request_amount, total_applicant_non_discount_share,
+                funds_from_service_provider, service_provider_filed_by_billed_entity,
+                last_updated_datetime, latitude, longitude
+            ) VALUES (
+                %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+            )
+            ON CONFLICT (application_number) DO NOTHING
+        """, values)
+        conn.commit()
+        log("471 COMMITTED BATCH OF %s", len(values))
+
+    with app.app_context():
+        app.config['import471_index'] += len(batch)
+        app.config['import471_success'] += len(filtered_batch)
+        log("471 Progress: %s / %s", app.config['import471_index'], total)
+
+@erate_bp.route('/reset-import471', methods=['POST'])
+def reset_import471():
+    log("471 Import reset requested")
+    current_app.config.update({
+        'import471_index': 1,
+        'import471_success': 0,
+        'import471_error': 0
+    })
+    flash("471 Import reset.", "success")
+    return redirect(url_for('erate.import471_interactive'))
+
 # ================================================
 # === AUTH SYSTEM + GUEST → DASHBOARD + LOGOUT ===
 # ================================================
