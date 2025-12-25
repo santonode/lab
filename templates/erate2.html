@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>E-Rate 471 Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root {
+            --primary: #1a5d57;
+            --accent: #007bff;
+            --bg: #f4f7f9;
+            --card: white;
+            --border: #ddd;
+        }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: auto; background: var(--card); padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: var(--primary); }
+        .filters { text-align: center; margin: 20px 0; }
+        .filters input { padding: 10px; width: 200px; border: 1px solid var(--border); border-radius: 6px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid var(--border); padding: 12px; text-align: left; }
+        th { background: #6c757d; color: white; }
+        tr:nth-child(even) { background: #f9f9f9; }
+        .app-number { color: var(--accent); cursor: pointer; text-decoration: underline; }
+        .pagination { text-align: center; margin: 30px 0; }
+        .btn { padding: 10px 20px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; z-index: 1000; }
+        .modal.show { display: flex; }
+        .modal-content { background: white; padding: 30px; border-radius: 12px; max-width: 800px; width: 90%; max-height: 90vh; overflow-y: auto; }
+        .modal-close { float: right; font-size: 1.5rem; cursor: pointer; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>E-Rate 471 Dashboard (Form 471 Applications)</h1>
+
+    <div class="filters">
+        <form method="get">
+            <label>BEN #: <input type="text" name="ben" value="{{ filters.ben|default('') }}" placeholder="e.g. 16034746"></label>
+            <button type="submit" class="btn">Search</button>
+            <a href="{{ url_for('erate.dashboard471') }}" class="btn" style="background:#6c757d;">Clear</a>
+        </form>
+    </div>
+
+    <p style="text-align:center;">Showing {{ total_filtered }} of {{ total_count }} records</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Application #</th>
+                <th>Funding Year</th>
+                <th>Organization</th>
+                <th>BEN</th>
+                <th>Status</th>
+                <th>Category</th>
+                <th>Commitment Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if table_data %}
+                {% for row in table_data %}
+                <tr>
+                    <td><span class="app-number" onclick="show471Details('{{ row.application_number }}')">{{ row.application_number }}</span></td>
+                    <td>{{ row.funding_year }}</td>
+                    <td>{{ row.organization_name }}</td>
+                    <td>{{ row.billed_entity_number }}</td>
+                    <td>{{ row.status }}</td>
+                    <td>{{ row.categories_of_service }}</td>
+                    <td>${{ "%.2f"|format(row.commitment_amount) }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr><td colspan="7" style="text-align:center; padding:40px; color:#999;">No 471 records found. Try a different BEN#.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    <!-- Pagination -->
+    {% if has_more or offset > 0 %}
+    <div class="pagination">
+        {% if offset > 0 %}
+            <a href="?ben={{ filters.ben|default('') }}&offset={{ offset - 20 }}" class="btn">Previous</a>
+        {% endif %}
+        {% if has_more %}
+            <a href="?ben={{ filters.ben|default('') }}&offset={{ offset + 20 }}" class="btn">Next</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div style="text-align:center; margin-top:40px;">
+        <a href="{{ url_for('erate.dashboard') }}" class="btn" style="background:#6c757d;">Back to 470 Dashboard</a>
+    </div>
+</div>
+
+<!-- 471 Details Modal -->
+<div class="modal" id="detail471-modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="document.getElementById('detail471-modal').classList.remove('show')">×</span>
+        <h2>Form 471 Details</h2>
+        <div id="detail471-body">Loading...</div>
+    </div>
+</div>
+
+<script>
+async function show471Details(appNumber) {
+    const modal = document.getElementById('detail471-modal');
+    const body = document.getElementById('detail471-body');
+    modal.classList.add('show');
+    body.innerHTML = 'Loading...';
+    try {
+        const resp = await fetch(`/erate471/details/${appNumber}`);
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error);
+
+        body.innerHTML = `
+            <p><strong>Application #:</strong> ${data.application_number}</p>
+            <p><strong>Funding Year:</strong> ${data.funding_year}</p>
+            <p><strong>Organization:</strong> ${data.organization_name}</p>
+            <p><strong>Status:</strong> ${data.status}</p>
+            <p><strong>Category:</strong> ${data.categories_of_service}</p>
+            <p><strong>BEN:</strong> ${data.billed_entity_number}</p>
+            <p><strong>Pre-Discount Amount:</strong> ${data.pre_discount_amount}</p>
+            <p><strong>Commitment Amount:</strong> ${data.commitment_amount}</p>
+            <p><strong>Non-Discount Share:</strong> ${data.non_discount_share}</p>
+            <p><strong>C1 Discount:</strong> ${data.discount_rate_c1}</p>
+            <p><strong>C2 Discount:</strong> ${data.discount_rate_c2}</p>
+            <p><strong>Nickname:</strong> ${data.nickname}</p>
+            <p><strong>Certified:</strong> ${data.certified_datetime}</p>
+            <p><strong>Last Updated:</strong> ${data.last_updated_datetime}</p>
+            <p><strong>Enrollment:</strong> ${data.fulltime_enrollment}</p>
+            <p><strong>NSLP %:</strong> ${data.nslp_percentage}</p>
+            <p><strong>Urban/Rural:</strong> ${data.urban_rural_status}</p>
+            <p><strong>Contact:</strong> ${data.contact_name} — ${data.contact_email} — ${data.contact_phone}</p>
+            <p><strong>Authorized:</strong> ${data.authorized_name} — ${data.authorized_email} — ${data.authorized_phone}</p>
+            ${data.form_pdf ? `<p><a href="${data.form_pdf}" target="_blank">View Original Form 471 PDF</a></p>` : ''}
+        `;
+    } catch (err) {
+        body.innerHTML = `<p style="color:red;">Error loading details: ${err.message}</p>`;
+    }
+}
+</script>
+</body>
+</html>
