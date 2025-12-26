@@ -1115,6 +1115,7 @@ window.addEventListener('load', () => {
 	    // Only target .btn-sm inside table rows (not pagination)
 	    document.querySelectorAll('tr .btn-sm').forEach(btn => {
 	        btn.onclick = function (e) {
+		    console.log("Map button clicked - single trigger check");
 	            e.preventDefault();
 	            const row = this.closest('tr');
 	            if (!row) return;
@@ -1355,7 +1356,10 @@ window.addEventListener('load', () => {
                 `;
             } else if (section === 'billed') {
                 html = `
-                    <strong>Billed Entity #:</strong> ${data.ben || ''}<br>
+        	    <strong>Billed Entity #:</strong> 
+        		    <a href="/erate/erate471?ben=${data.ben}" target="_blank" style="color: #007bff; text-decoration: underline;">
+            			${data.ben || '—'}
+        		    </a> 471 history<br>
                     <strong>Entity Name:</strong> ${data.entity_name || ''}<br>
                     <strong># of Eligible Entities:</strong> ${data.num_eligible || ''}<br>
                     <strong>Org Status:</strong> ${data.org_status || ''}<br>
@@ -1611,7 +1615,7 @@ async function loadDistancesIfNeeded() {
 
                 if (data.status === "added") {
                     console.log('→ New applicant added');
-                    this.style.color = '#27ae60'; // Green
+                    this.style.color = '#27ae60';  // Green
                     this.textContent = 'Added!';
                     setTimeout(() => {
                         this.style.color = '#dc3545';
@@ -1619,7 +1623,7 @@ async function loadDistancesIfNeeded() {
                     }, 2000);
                 } else if (data.status === "already_added") {
                     console.log('→ Already in export file');
-                    this.style.color = '#999'; // Grey
+                    this.style.color = '#999';     // Grey
                     this.textContent = 'Already added';
                     setTimeout(() => {
                         this.style.color = '#dc3545';
@@ -1656,7 +1660,6 @@ document.getElementById('filter-form')?.addEventListener('submit', e => {
         alert('Please wait — calculating distances…');
     }
 });
-
 
         // === USER SETTINGS MODAL – FINAL BEAUTIFUL 2025 VERSION (FIXED FOR MOBILE) ===
         document.addEventListener('DOMContentLoaded', () => {
