@@ -513,54 +513,65 @@ _load_fna_members()
 # === GLOBAL MAP DATA (LAZY LOADED) ===
 MAP_DATA = {
     "bluebird": {"pops": None, "routes": None, "loaded": False},
+    "segra_east": {"pops": None, "routes": None, "loaded": False},
+    "segra_west": {"pops": None, "routes": None, "loaded": False},
 }
 
-# === GENERALIZED KMZ LOADER — Bluebird cached, Segra/FNA fresh ===
+# === GENERALIZED KMZ LOADER — Bluebird + Segra cached, FNA fresh ===
 def _load_kmz(arg):
     """
     arg can be:
     - "bluebird" (use cached MAP_DATA)
-    - direct path string (e.g. "SEGRA_EAST.kmz" or FNA member path)
+    - "segra_east" or "segra_west" (use cached)
+    - direct path string (e.g. FNA member path — no cache)
     """
+    # Check if it's a cachable provider
+    cache_key = None
+    if arg in ["bluebird", "segra_east", "segra_west"]:
+        cache_key = arg
+
+    # Use cache if available
+    if cache_key and MAP_DATA[cache_key]["loaded"]:
+        log(f"Returning cached data for {cache_key}")
+        return MAP_DATA[cache_key]["pops"], MAP_DATA[cache_key]["routes"]
+
+    # Determine path
     if arg == "bluebird":
-        if MAP_DATA["bluebird"]["loaded"]:
-            return
         path = KMZ_PATH_BLUEBIRD
+    elif arg == "segra_east":
+        path = KMZ_PATH_SEGRA_EAST
+    elif arg == "segra_west":
+        path = KMZ_PATH_SEGRA_WEST
     else:
-        path = arg  # direct path for Segra or FNA member
+        path = arg  # direct path for FNA members — no cache
 
     if not os.path.exists(path):
         log("KMZ not found: %s", path)
-        if arg == "bluebird":
-            MAP_DATA["bluebird"]["loaded"] = True
-            MAP_DATA["bluebird"]["pops"] = []
-            MAP_DATA["bluebird"]["routes"] = []
+        if cache_key:
+            MAP_DATA[cache_key]["loaded"] = True
+            MAP_DATA[cache_key]["pops"] = []
+            MAP_DATA[cache_key]["routes"] = []
         return [], []
 
     pops = []
     routes = []
     pops_count = 0
     routes_count = 0
-
     try:
         log("Loading KMZ: %s", path)
         with zipfile.ZipFile(path, 'r') as kmz:
             kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
             if not kml_files:
                 log("No .kml in %s", path)
-                if arg == "bluebird":
-                    MAP_DATA["bluebird"]["loaded"] = True
+                if cache_key:
+                    MAP_DATA[cache_key]["loaded"] = True
                 return [], []
-
             kml_data = kmz.read(kml_files[0])
-
         root = ET.fromstring(kml_data)
         ns = {'kml': 'http://www.opengis.net/kml/2.2'}
-
         for placemark in root.findall('.//kml:Placemark', ns):
             name_elem = placemark.find('kml:name', ns)
             name = name_elem.text.strip() if name_elem is not None and name_elem.text else "Unnamed"
-
             # POINT (PoP)
             point = placemark.find('.//kml:Point/kml:coordinates', ns)
             if point is not None and point.text:
@@ -572,12 +583,10 @@ def _load_kmz(arg):
                         pops_count += 1
                     except ValueError:
                         pass
-
             # LINESTRING — SUPPORT MultiGeometry
             line_strings = placemark.findall('.//kml:LineString/kml:coordinates', ns)
             if not line_strings:
                 line_strings = placemark.findall('.//kml:MultiGeometry/kml:LineString/kml:coordinates', ns)
-
             for line in line_strings:
                 if line.text:
                     coords = []
@@ -592,24 +601,19 @@ def _load_kmz(arg):
                     if len(coords) > 1:
                         routes.append({"name": name, "coords": coords})
                         routes_count += 1
-
         log("KMZ loaded [%s] – %d PoPs, %d routes", os.path.basename(path), pops_count, routes_count)
-
-        # Cache only Bluebird
-        if arg == "bluebird":
-            MAP_DATA["bluebird"]["pops"] = pops
-            MAP_DATA["bluebird"]["routes"] = routes
-            MAP_DATA["bluebird"]["loaded"] = True
-            return
-
+        # Cache if it's a cachable provider
+        if cache_key:
+            MAP_DATA[cache_key]["pops"] = pops
+            MAP_DATA[cache_key]["routes"] = routes
+            MAP_DATA[cache_key]["loaded"] = True
         return pops, routes
-
     except Exception as e:
         log("KMZ parse error [%s]: %s", path, e)
-        if arg == "bluebird":
-            MAP_DATA["bluebird"]["loaded"] = True
-            MAP_DATA["bluebird"]["pops"] = []
-            MAP_DATA["bluebird"]["routes"] = []
+        if cache_key:
+            MAP_DATA[cache_key]["loaded"] = True
+            MAP_DATA[cache_key]["pops"] = []
+            MAP_DATA[cache_key]["routes"] = []
         return [], []
 
 # === FINAL WORKING BBMap API — FNA RANKING FIXED + TRUE DISTANCE + NO OOM ===
@@ -641,6 +645,9 @@ def bbmap(app_number):
                     provider = 'bluebird'
         except Exception as e:
             log("Failed to get user provider: %s", e)
+
+    # DEBUG
+    log("bbmap called — unique request ID: %s", request.args.get('request_id', 'no_id'))
 
     log("bbmap request: app=%s provider=%s member=%s distance_only=%s",
         app_number, provider, fna_member, distance_only)
@@ -896,7 +903,7 @@ def dashboard():
 
             # === ADD C1/C2 SUFFIX TO ENTITY NAME (WITH DEBUG LOGS) ===
             app_numbers = [row['app_number'] for row in table_data if row['app_number']]
-            log("C1/C2 debug: app_numbers on this page: %s", app_numbers)
+            # log("C1/C2 debug: app_numbers on this page: %s", app_numbers)
             category_map = {}
             if app_numbers:
                 try:
@@ -959,6 +966,85 @@ def dashboard():
     finally:
         conn.close()
 
+# === 471 DASHBOARD — USES erate2 TABLE ===
+@erate_bp.route('/erate471')
+def dashboard471():
+    log("471 Dashboard accessed")
+
+    # GUEST USER (not logged in)
+    if not session.get('username'):
+        return redirect(url_for('erate.dashboard'))
+
+    # Simple BEN filter
+    ben_filter = request.args.get('ben', '').strip()
+
+    limit = 20  # 20 rows per page for 471
+    offset = max(int(request.args.get('offset', 0)), 0)
+
+    conn = psycopg.connect(DATABASE_URL, connect_timeout=10, autocommit=True)
+    try:
+        with conn.cursor() as cur:
+            # Count total
+            count_sql = 'SELECT COUNT(*) FROM erate2'
+            params = []
+            where = []
+            if ben_filter:
+                where.append("billed_entity_number = %s")
+                params.append(ben_filter)
+            if where:
+                count_sql += ' WHERE ' + ' AND '.join(where)
+            cur.execute(count_sql, params)
+            total_count = cur.fetchone()[0]
+
+            # Fetch page
+            sql = '''
+                SELECT application_number, funding_year, organization_name,
+                       status, categories_of_service, billed_entity_number,
+                       total_funding_commitment_request_amount
+                FROM erate2
+            '''
+            if where:
+                sql += ' WHERE ' + ' AND '.join(where)
+            sql += ' ORDER BY funding_year DESC, application_number DESC LIMIT %s OFFSET %s'
+            params.extend([limit + 1, offset])
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+
+            table_data = [
+                {
+                    'application_number': r[0],
+                    'funding_year': r[1],
+                    'organization_name': r[2],
+                    'status': r[3],
+                    'categories_of_service': r[4],
+                    'billed_entity_number': r[5],
+                    'commitment_amount': float(r[6]) if r[6] is not None else 0.0
+                }
+                for r in rows
+            ]
+
+            has_more = len(table_data) > limit
+            table_data = table_data[:limit]
+            next_offset = offset + limit
+            total_filtered = offset + len(table_data)
+
+        return render_template(
+            'erate2.html',
+            table_data=table_data,
+            filters={'ben': ben_filter},
+            total_count=total_count,
+            total_filtered=total_filtered,
+            has_more=has_more,
+            next_offset=next_offset,
+            offset=offset,
+            cache_bust=int(time.time())
+        )
+
+    except Exception as e:
+        log("471 Dashboard error: %s", e)
+        return f"<pre>ERROR: {e}</pre>", 500
+    finally:
+        conn.close()
 
 # === APPLICANT DETAILS API – FINAL FIXED (NO MORE FORCED /SL/) ===
 @erate_bp.route('/details/<app_number>')
@@ -1060,6 +1146,125 @@ def details(app_number):
 
     except Exception as e:
         log("Details API error: %s", e)
+        return jsonify({"error": "Service unavailable"}), 500
+    finally:
+        conn.close()
+
+# =================================
+# === 471 APPLICANT DETAILS API (ALL 57 FIELDS) ===
+# =================================
+@erate_bp.route('/erate471/details/<app_number>')
+def details471(app_number):
+    log("471 Details requested for app: %s", app_number)
+    conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM erate2 WHERE application_number = %s", (app_number,))
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"error": "471 Application not found"}), 404
+
+            columns = [desc[0] for desc in cur.description]
+            data = dict(zip(columns, row))
+
+            # Safe formatters
+            def fmt_money(val):
+                if val is None:
+                    return "$0.00"
+                try:
+                    return f"${float(val):,.2f}"
+                except:
+                    return "$0.00"
+
+            def fmt_date(dt):
+                if dt is None:
+                    return '—'
+                try:
+                    return dt.strftime('%m/%d/%Y %I:%M %p')
+                except:
+                    return '—'
+
+            def fmt(val, default='—'):
+                return val if val is not None and str(val).strip() != '' else default
+
+            return jsonify({
+                # Basic Info
+                "application_number": fmt(data.get('application_number')),
+                "form_pdf": data.get('form_pdf') or '',
+                "funding_year": fmt(data.get('funding_year')),
+                "billed_entity_state": fmt(data.get('billed_entity_state')),
+                "form_version": fmt(data.get('form_version')),
+                "window_status": fmt(data.get('window_status')),
+                "nickname": fmt(data.get('nickname')),
+                "status": fmt(data.get('status')),
+                "categories_of_service": fmt(data.get('categories_of_service')),
+
+                # Organization
+                "organization_name": fmt(data.get('organization_name')),
+                "billed_entity_address1": fmt(data.get('billed_entity_address1')),
+                "billed_entity_address2": fmt(data.get('billed_entity_address2')),
+                "billed_entity_city": fmt(data.get('billed_entity_city')),
+                "billed_entity_zip_code": fmt(data.get('billed_entity_zip_code')),
+                "billed_entity_zip_code_ext": fmt(data.get('billed_entity_zip_code_ext')),
+                "billed_entity_phone": fmt(data.get('billed_entity_phone')),
+                "billed_entity_phone_ext": fmt(data.get('billed_entity_phone_ext')),
+                "billed_entity_email": fmt(data.get('billed_entity_email')),
+                "billed_entity_number": fmt(data.get('billed_entity_number')),
+                "fcc_registration_number": fmt(data.get('fcc_registration_number')),
+                "applicant_type": fmt(data.get('applicant_type')),
+
+                # Contact Person
+                "contact_first_name": fmt(data.get('contact_first_name')),
+                "contact_middle_initial": fmt(data.get('contact_middle_initial')),
+                "contact_last_name": fmt(data.get('contact_last_name')),
+                "contact_email": fmt(data.get('contact_email')),
+                "contact_phone_number": fmt(data.get('contact_phone_number')),
+                "contact_phone_ext": fmt(data.get('contact_phone_ext')),
+
+                # Authorized Person
+                "authorized_first_name": fmt(data.get('authorized_first_name')),
+                "authorized_middle_name": fmt(data.get('authorized_middle_name')),
+                "authorized_last_name": fmt(data.get('authorized_last_name')),
+                "authorized_title": fmt(data.get('authorized_title')),
+                "authorized_employer": fmt(data.get('authorized_employer')),
+                "authorized_address_line_1": fmt(data.get('authorized_address_line_1')),
+                "authorized_address_line_2": fmt(data.get('authorized_address_line_2')),
+                "authorized_city": fmt(data.get('authorized_city')),
+                "authorized_state": fmt(data.get('authorized_state')),
+                "authorized_zip_code": fmt(data.get('authorized_zip_code')),
+                "authorized_zip_code_ext": fmt(data.get('authorized_zip_code_ext')),
+                "authorized_phone": fmt(data.get('authorized_phone')),
+                "authorized_phone_extension": fmt(data.get('authorized_phone_extension')),
+                "authorized_email": fmt(data.get('authorized_email')),
+
+                # Certification & Enrollment
+                "certified_datetime": fmt_date(data.get('certified_datetime')),
+                "fulltime_enrollment": fmt(data.get('fulltime_enrollment')),
+                "nslp_count": fmt(data.get('nslp_count')),
+                "nslp_percentage": f"{float(data.get('nslp_percentage') or 0):.0%}",
+                "urban_rural_status": fmt(data.get('urban_rural_status')),
+
+                # Discount Rates
+                "category_one_discount_rate": f"{float(data.get('category_one_discount_rate') or 0):.0%}",
+                "category_two_discount_rate": f"{float(data.get('category_two_discount_rate') or 0):.0%}",
+                "voice_discount_rate": f"{float(data.get('voice_discount_rate') or 0):.0%}",
+
+                # Funding Amounts
+                "pre_discount_amount": fmt_money(data.get('total_funding_year_pre_discount_eligible_amount')),
+                "commitment_amount": fmt_money(data.get('total_funding_commitment_request_amount')),
+                "non_discount_share": fmt_money(data.get('total_applicant_non_discount_share')),
+
+                # Flags
+                "funds_from_service_provider": fmt(data.get('funds_from_service_provider')),
+                "service_provider_filed_by_billed_entity": fmt(data.get('service_provider_filed_by_billed_entity')),
+
+                # Last Updated & Location
+                "last_updated_datetime": fmt_date(data.get('last_updated_datetime')),
+                "latitude": data.get('latitude'),
+                "longitude": data.get('longitude')
+            })
+    except Exception as e:
+        log("471 Details API error: %s", e)
         return jsonify({"error": "Service unavailable"}), 500
     finally:
         conn.close()
@@ -1356,7 +1561,7 @@ def import_hash_start():
     return redirect(url_for('erate.dashboard'))
 
 # =====================================================
-# === 471 IMPORT — USES erate2 TABLE (IL DATA) ===
+# === 471 IMPORT — USES erate2 TABLE (IL DATA) — NO DEDUPLICATION + MAX DEBUG ===
 # =====================================================
 
 # Path to the 471 CSV (in /src)
@@ -1417,13 +1622,13 @@ def import471_interactive():
         current_app.config['IMPORT471_THREAD'] = thread
         thread.start()
 
-        flash("471 Bulk import started. Check /erate/view-log for progress", "success")
+        flash("471 Bulk import started with MAX DEBUG. Check /erate/view-log", "success")
         return redirect(url_for('erate.import471_interactive'))
 
     return render_template('erate2_import.html', progress=progress, is_importing=is_importing)
 
 def _import471_all_background(app):
-    log("=== 471 BULK IMPORT STARTED ===")
+    log("=== 471 BULK IMPORT STARTED (MAX DEBUG) ===")
     try:
         with app.app_context():
             total = app.config['import471_total']
@@ -1434,7 +1639,7 @@ def _import471_all_background(app):
 
         with open(CSV_FILE_471, 'r', encoding='utf-8-sig', newline='') as f:
             reader = csv.DictReader(f)
-            log("471 CSV reader created")
+            log("471 CSV headers: %s", list(reader.fieldnames))
 
             # Skip to start_index
             for _ in range(start_index - 1):
@@ -1447,14 +1652,23 @@ def _import471_all_background(app):
             imported = 0
             last_heartbeat = time.time()
 
-            for row in reader:
+            for row_num, row in enumerate(reader, start=start_index):
                 if time.time() - last_heartbeat > 5:
                     log("471 HEARTBEAT: %s rows processed", imported)
                     last_heartbeat = time.time()
 
                 app_number = row.get('Application Number', '').strip()
                 if not app_number:
+                    log("471 Skipping row %s: missing Application Number", row_num)
                     continue
+
+                # DEBUG: Log key funding fields for first 10 rows
+                if row_num < start_index + 10:
+                    log("471 Row %s - App: %s | Pre-Discount: %s | Commitment: %s | Non-Discount: %s",
+                        row_num, app_number,
+                        row.get('Total Funding Year Pre-Discount Eligible Amount'),
+                        row.get('Total Funding Commitment Request Amount'),
+                        row.get('Total Applicant Non-Discount Share'))
 
                 batch.append(row)
                 imported += 1
@@ -1467,7 +1681,7 @@ def _import471_all_background(app):
             if batch:
                 _process_471_batch(cur, conn, app, batch, total)
 
-        log("471 Bulk import complete: %s imported", app.config['import471_success'])
+        log("471 Bulk import complete: %s rows inserted", app.config['import471_success'])
     except Exception as e:
         log("471 IMPORT thread CRASHED: %s", e)
         log("Traceback: %s", traceback.format_exc())
@@ -1481,89 +1695,113 @@ def _import471_all_background(app):
         log("471 Import thread finished")
 
 def _process_471_batch(cur, conn, app, batch, total):
-    # Check existing
-    cur.execute(
-        "SELECT application_number FROM erate2 WHERE application_number = ANY(%s)",
-        ([r['Application Number'] for r in batch],)
-    )
-    existing = {r[0] for r in cur.fetchall()}
-    filtered_batch = [r for r in batch if r['Application Number'] not in existing]
+    # Safe numeric conversion
+    def get_numeric(key):
+        val = r.get(key, '').strip().replace('$', '').replace(',', '')
+        try:
+            return float(val) if val else None
+        except:
+            return None
 
-    if filtered_batch:
-        values = []
-        for r in filtered_batch:
-            values.append((
-                r.get('Application Number', ''),
-                r.get('Form PDF', None) or None,
-                r.get('Funding Year', ''),
-                r.get('Billed Entity State', ''),
-                r.get('Form Version', ''),
-                r.get('Window Status', ''),
-                r.get('Nickname', ''),
-                r.get('Status', ''),
-                r.get('Categories of Service', ''),
-                r.get("Applicant's Organization Name", ''),
-                r.get('Billed Entity Address1', ''),
-                r.get('Billed Entity Address2', ''),
-                r.get('Billed Entity City', ''),
-                r.get('Billed Entity Zip Code', ''),
-                r.get('Billed Entity Zip Code Ext', ''),
-                r.get('Billed Entity Phone', ''),
-                r.get('Billed Entity Phone Ext', ''),
-                r.get('Billed Entity Email', ''),
-                r.get('Billed Entity Number', ''),
-                r.get('FCC Registration Number', ''),
-                r.get('Applicant Type', ''),
-                r.get('Contact First Name', ''),
-                r.get('Contact Middle Initial', ''),
-                r.get('Contact Last Name', ''),
-                r.get('Contact Email', ''),
-                r.get('Contact Phone Number', ''),
-                r.get('Contact Phone Ext', ''),
-                r.get('Authorized First Name', ''),
-                r.get('Authorized Middle Name', ''),
-                r.get('Authorized Last Name', ''),
-                r.get('Authorized Title', ''),
-                r.get('Authorized Employer', ''),
-                r.get('Authorized Address Line 1', ''),
-                r.get('Authorized Address Line 2', ''),
-                r.get('Authorized City', ''),
-                r.get('Authorized State', ''),
-                r.get('Authorized Zip Code', ''),
-                r.get('Authorized Zip Code Ext', ''),
-                r.get('Authorized Phone', ''),
-                r.get('Authorized Phone Extension', ''),
-                r.get('Authorized Email', ''),
-                None,  # certified_datetime
-                None,  # fulltime_enrollment
-                None,  # nslp_count
-                None,  # nslp_percentage
-                r.get('Urban/ Rural Status', ''),
-                None,  # category_one_discount_rate
-                None,  # category_two_discount_rate
-                None,  # voice_discount_rate
-                None,  # pre_discount
-                None,  # commitment_request
-                None,  # non_discount_share
-                r.get('Funds from Service Provider', ''),
-                r.get('Service Provider Filed by Billed Entity', ''),
-                None,  # last_updated
-                None,  # latitude
-                None   # longitude
-            ))
+    values = []
+    for r in batch:
+        values.append((
+            r.get('Application Number', ''),
+            r.get('Form PDF', None) or None,
+            r.get('Funding Year', ''),
+            r.get('Billed Entity State', ''),
+            r.get('Form Version', ''),
+            r.get('Window Status', ''),
+            r.get('Nickname', ''),
+            r.get('Status', ''),
+            r.get('Categories of Service', ''),
+            r.get("Applicant's Organization Name", ''),
+            r.get('Billed Entity Address1', ''),
+            r.get('Billed Entity Address2', ''),
+            r.get('Billed Entity City', ''),
+            r.get('Billed Entity Zip Code', ''),
+            r.get('Billed Entity Zip Code Ext', ''),
+            r.get('Billed Entity Phone', ''),
+            r.get('Billed Entity Phone Ext', ''),
+            r.get('Billed Entity Email', ''),
+            r.get('Billed Entity Number', ''),
+            r.get('FCC Registration Number', ''),
+            r.get('Applicant Type', ''),
+            r.get('Contact First Name', ''),
+            r.get('Contact Middle Initial', ''),
+            r.get('Contact Last Name', ''),
+            r.get('Contact Email', ''),
+            r.get('Contact Phone Number', ''),
+            r.get('Contact Phone Ext', ''),
+            r.get('Authorized First Name', ''),
+            r.get('Authorized Middle Name', ''),
+            r.get('Authorized Last Name', ''),
+            r.get('Authorized Title', ''),
+            r.get('Authorized Employer', ''),
+            r.get('Authorized Address Line 1', ''),
+            r.get('Authorized Address Line 2', ''),
+            r.get('Authorized City', ''),
+            r.get('Authorized State', ''),
+            r.get('Authorized Zip Code', ''),
+            r.get('Authorized Zip Code Ext', ''),
+            r.get('Authorized Phone', ''),
+            r.get('Authorized Phone Extension', ''),
+            r.get('Authorized Email', ''),
+            r.get('Certified Date/Time'),  # string — Postgres casts
+            get_numeric('Fulltime Enrollment'),
+            get_numeric('NSLP Count'),
+            get_numeric('NSLP Percentage'),
+            r.get('Urban/ Rural Status', ''),
+            get_numeric('Category One Discount Rate'),
+            get_numeric('Category Two Discount Rate'),
+            get_numeric('Voice Discount Rate'),
+            get_numeric('Total Funding Year Pre-Discount Eligible Amount'),
+            get_numeric('Total Funding Commitment Request Amount'),
+            get_numeric('Total Applicant Non-Discount Share'),
+            r.get('Funds from Service Provider', ''),
+            r.get('Service Provider Filed by Billed Entity', ''),
+            r.get('Last Updated Date/Time'),
+            get_numeric('Latitude'),
+            get_numeric('Longitude')
+        ))
+
+    if values:
+        log("471 Sample insert values (first row): %s", values[0] if values else "empty")
 
         cur.executemany("""
-            INSERT INTO erate2 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                                      %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                                      %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-            ON CONFLICT (application_number) DO NOTHING
+            INSERT INTO erate2 (
+                application_number, form_pdf, funding_year, billed_entity_state, form_version,
+                window_status, nickname, status, categories_of_service, organization_name,
+                billed_entity_address1, billed_entity_address2, billed_entity_city,
+                billed_entity_zip_code, billed_entity_zip_code_ext, billed_entity_phone,
+                billed_entity_phone_ext, billed_entity_email, billed_entity_number,
+                fcc_registration_number, applicant_type, contact_first_name,
+                contact_middle_initial, contact_last_name, contact_email,
+                contact_phone_number, contact_phone_ext, authorized_first_name,
+                authorized_middle_name, authorized_last_name, authorized_title,
+                authorized_employer, authorized_address_line_1, authorized_address_line_2,
+                authorized_city, authorized_state, authorized_zip_code,
+                authorized_zip_code_ext, authorized_phone, authorized_phone_extension,
+                authorized_email, certified_datetime, fulltime_enrollment, nslp_count,
+                nslp_percentage, urban_rural_status, category_one_discount_rate,
+                category_two_discount_rate, voice_discount_rate,
+                total_funding_year_pre_discount_eligible_amount,
+                total_funding_commitment_request_amount, total_applicant_non_discount_share,
+                funds_from_service_provider, service_provider_filed_by_billed_entity,
+                last_updated_datetime, latitude, longitude
+            ) VALUES (
+                %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+            )
+            ON CONFLICT DO NOTHING
         """, values)
         conn.commit()
-        log("471 COMMITTED BATCH OF %s", len(values))
+        log("471 COMMITTED BATCH OF %s rows", len(values))
 
     with app.app_context():
         app.config['import471_index'] += len(batch)
-        app.config['import471_success'] += len(filtered_batch)
+        app.config['import471_success'] += len(values)
         log("471 Progress: %s / %s", app.config['import471_index'], total)
 
 @erate_bp.route('/reset-import471', methods=['POST'])
