@@ -88,9 +88,9 @@
         <thead>
             <tr>
                 <th>App#</th>
-                <th>Year</th>
-                <th>Organization</th>
-                <th>Status</th>
+                <th>Yr</th>
+                <th>Org</th>
+                <th>Stat</th>
                 <th>Cat</th>
                 <th>Amount</th>
             </tr>
@@ -100,7 +100,7 @@
                 {% for row in table_data %}
                 <tr>
                     <td><span class="app-number" onclick="show471Details('{{ row.application_number }}')">{{ row.application_number }}</span></td>
-                    <td>{{ row.funding_year }}</td>
+                    <td>{{ row.funding_year[-2:] }}</td> <!-- Shows last 2 digits: 2025 → 25 -->
                     <td>{{ row.organization_name }}</td>
                     <td>
                         {% if row.status == 'Committed' %}Com
