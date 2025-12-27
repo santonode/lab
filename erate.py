@@ -1151,7 +1151,7 @@ def details(app_number):
         conn.close()
 
 # =================================
-# === 471 APPLICANT DETAILS API (ALL 57 FIELDS) ===
+# === 471 APPLICANT DETAILS API (ALL 57 FIELDS + PDF FROM ORIGINAL) ===
 # =================================
 @erate_bp.route('/erate471/details/<app_number>')
 def details471(app_number):
@@ -1159,6 +1159,7 @@ def details471(app_number):
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
     try:
         with conn.cursor() as cur:
+            # Get the requested row (could be Original or Current)
             cur.execute("SELECT * FROM erate2 WHERE application_number = %s", (app_number,))
             row = cur.fetchone()
             if not row:
@@ -1166,6 +1167,18 @@ def details471(app_number):
 
             columns = [desc[0] for desc in cur.description]
             data = dict(zip(columns, row))
+
+            # If current row has no PDF, try to get it from the "Original" version
+            pdf_url = data.get('form_pdf')
+            if not pdf_url or not pdf_url.strip():
+                cur.execute("""
+                    SELECT form_pdf 
+                    FROM erate2 
+                    WHERE application_number = %s AND form_version = 'Original' AND form_pdf IS NOT NULL AND form_pdf != ''
+                """, (app_number,))
+                original_row = cur.fetchone()
+                if original_row:
+                    pdf_url = original_row[0].strip()
 
             # Safe formatters
             def fmt_money(val):
@@ -1190,7 +1203,7 @@ def details471(app_number):
             return jsonify({
                 # Basic Info
                 "application_number": fmt(data.get('application_number')),
-                "form_pdf": data.get('form_pdf') or '',
+                "form_pdf": pdf_url or '',  # Now includes Original PDF if Current is blank
                 "funding_year": fmt(data.get('funding_year')),
                 "billed_entity_state": fmt(data.get('billed_entity_state')),
                 "form_version": fmt(data.get('form_version')),
@@ -1198,7 +1211,6 @@ def details471(app_number):
                 "nickname": fmt(data.get('nickname')),
                 "status": fmt(data.get('status')),
                 "categories_of_service": fmt(data.get('categories_of_service')),
-
                 # Organization
                 "organization_name": fmt(data.get('organization_name')),
                 "billed_entity_address1": fmt(data.get('billed_entity_address1')),
@@ -1212,7 +1224,6 @@ def details471(app_number):
                 "billed_entity_number": fmt(data.get('billed_entity_number')),
                 "fcc_registration_number": fmt(data.get('fcc_registration_number')),
                 "applicant_type": fmt(data.get('applicant_type')),
-
                 # Contact Person
                 "contact_first_name": fmt(data.get('contact_first_name')),
                 "contact_middle_initial": fmt(data.get('contact_middle_initial')),
@@ -1220,7 +1231,6 @@ def details471(app_number):
                 "contact_email": fmt(data.get('contact_email')),
                 "contact_phone_number": fmt(data.get('contact_phone_number')),
                 "contact_phone_ext": fmt(data.get('contact_phone_ext')),
-
                 # Authorized Person
                 "authorized_first_name": fmt(data.get('authorized_first_name')),
                 "authorized_middle_name": fmt(data.get('authorized_middle_name')),
@@ -1236,28 +1246,23 @@ def details471(app_number):
                 "authorized_phone": fmt(data.get('authorized_phone')),
                 "authorized_phone_extension": fmt(data.get('authorized_phone_extension')),
                 "authorized_email": fmt(data.get('authorized_email')),
-
                 # Certification & Enrollment
                 "certified_datetime": fmt_date(data.get('certified_datetime')),
                 "fulltime_enrollment": fmt(data.get('fulltime_enrollment')),
                 "nslp_count": fmt(data.get('nslp_count')),
                 "nslp_percentage": f"{float(data.get('nslp_percentage') or 0):.0%}",
                 "urban_rural_status": fmt(data.get('urban_rural_status')),
-
                 # Discount Rates
                 "category_one_discount_rate": f"{float(data.get('category_one_discount_rate') or 0):.0%}",
                 "category_two_discount_rate": f"{float(data.get('category_two_discount_rate') or 0):.0%}",
                 "voice_discount_rate": f"{float(data.get('voice_discount_rate') or 0):.0%}",
-
                 # Funding Amounts
                 "pre_discount_amount": fmt_money(data.get('total_funding_year_pre_discount_eligible_amount')),
                 "commitment_amount": fmt_money(data.get('total_funding_commitment_request_amount')),
                 "non_discount_share": fmt_money(data.get('total_applicant_non_discount_share')),
-
                 # Flags
                 "funds_from_service_provider": fmt(data.get('funds_from_service_provider')),
                 "service_provider_filed_by_billed_entity": fmt(data.get('service_provider_filed_by_billed_entity')),
-
                 # Last Updated & Location
                 "last_updated_datetime": fmt_date(data.get('last_updated_datetime')),
                 "latitude": data.get('latitude'),
