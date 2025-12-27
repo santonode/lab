@@ -19,8 +19,7 @@
         .filters { text-align: center; margin: 20px 0; }
         .filters label { display: block; margin-bottom: 10px; font-weight: 600; }
         .filters input { padding: 10px; width: 220px; border: 1px solid var(--border); border-radius: 6px; }
-        .filters .btn-group { margin-top: 10px; }
-        .filters .btn { padding: 10px 20px; margin: 0 5px; }
+        .filters .btn-group { margin-top: 10px; display: flex; justify-content: center; gap: 10px; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.95rem; }
         th, td { border: 1px solid var(--border); padding: 6px; text-align: left; }
         th { background: #6c757d; color: white; }
@@ -73,7 +72,7 @@
 
     <div class="filters">
         <form method="get" id="ben-search-form">
-            <label>BEN #: 
+            <label>BEN #:
                 <input type="text" name="ben" value="{{ filters.ben|default('') }}" placeholder="e.g. 16034746">
             </label>
             <div class="btn-group">
@@ -92,7 +91,7 @@
                 <th>Year</th>
                 <th>Organization</th>
                 <th>Status</th>
-                <th>Cat</th> <!-- Changed from Category -->
+                <th>Cat</th>
                 <th>Amount</th>
             </tr>
         </thead>
@@ -107,7 +106,7 @@
                     <td>
                         {% if row.categories_of_service == 'Category1' %}C1
                         {% elif row.categories_of_service == 'Category2' %}C2
-                        {% else %}{{ row.categories_of_service }}{% endif %}
+                        {% else %}{{ row.categories_of_service|default('—') }}{% endif %}
                     </td>
                     <td>${{ "%.2f"|format(row.commitment_amount) }}</td>
                 </tr>
