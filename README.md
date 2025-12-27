@@ -1,4 +1,4 @@
-# Santo E-Rate Query Tool
+# Map4.net E-Rate Query Tool
 
 Fast, mobile-first web application for searching and analyzing live USAC E-Rate 470/471 open data.
 
