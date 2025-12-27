@@ -102,13 +102,28 @@
                     <td><span class="app-number" onclick="show471Details('{{ row.application_number }}')">{{ row.application_number }}</span></td>
                     <td>{{ row.funding_year }}</td>
                     <td>{{ row.organization_name }}</td>
-                    <td>{{ row.status }}</td>
+                    <td>
+                        {% if row.status == 'Committed' %}Com
+                        {% elif row.status == 'Certified' %}Cert
+                        {% else %}{{ row.status }}{% endif %}
+                    </td>
                     <td>
                         {% if row.categories_of_service == 'Category1' %}C1
                         {% elif row.categories_of_service == 'Category2' %}C2
-                        {% else %}{{ row.categories_of_service|default('—') }}{% endif %}
+                        {% else %}{{ row.categories_of_service }}{% endif %}
                     </td>
-                    <td>${{ "%.2f"|format(row.commitment_amount) }}</td>
+                    <td>
+                        {% set amount = row.commitment_amount %}
+                        {% if amount > 0 %}
+                            {% if amount >= 1000 %}
+                                ${{ "%.0f"|format(amount / 1000) }}k
+                            {% else %}
+                                ${{ "%.1f"|format(amount / 1000) }}k
+                            {% endif %}
+                        {% else %}
+                            $0
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             {% else %}
