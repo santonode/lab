@@ -115,6 +115,21 @@ async function show471Details(appNumber) {
         const data = await resp.json();
         if (data.error) throw new Error(data.error);
 
+        // PDF handling — show link + raw URL if present
+        const pdfDisplay = data.form_pdf && data.form_pdf.trim() !== ''
+            ? `
+                <p><strong>Form PDF:</strong></p>
+                <p>
+                    <a href="${data.form_pdf}" target="_blank" rel="noopener" style="font-weight:600; color:#007bff; text-decoration:underline;">
+                        Open Original Form 471 PDF
+                    </a>
+                </p>
+                <p style="word-break:break-all; font-family:monospace; font-size:0.9em; color:#666;">
+                    <strong>URL:</strong> ${data.form_pdf}
+                </p>
+            `
+            : '<p><strong>Form PDF:</strong> Not available</p>';
+
         body.innerHTML = `
             <h3>Basic Information</h3>
             <p><strong>Application #:</strong> ${data.application_number || '—'}</p>
@@ -124,7 +139,7 @@ async function show471Details(appNumber) {
             <p><strong>Nickname:</strong> ${data.nickname || '—'}</p>
             <p><strong>Status:</strong> ${data.status || '—'}</p>
             <p><strong>Category:</strong> ${data.categories_of_service || '—'}</p>
-            ${data.form_pdf ? `<p><a href="${data.form_pdf}" target="_blank" rel="noopener">View Original Form 471 PDF</a></p>` : ''}
+            ${pdfDisplay}
 
             <h3>Billed Entity / Organization</h3>
             <p><strong>Name:</strong> ${data.organization_name || '—'}</p>
@@ -198,6 +213,7 @@ document.getElementById('detail471-modal').addEventListener('click', function(e)
         this.classList.remove('show');
     }
 });
+
 
 </script>
 </body>
