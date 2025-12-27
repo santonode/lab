@@ -15,11 +15,14 @@
         }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 20px; }
         .container { max-width: 1200px; margin: auto; background: var(--card); padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
-        h1 { text-align: center; color: var(--primary); }
+        h1 { text-align: center; color: var(--primary); margin-bottom: 30px; }
         .filters { text-align: center; margin: 20px 0; }
-        .filters input { padding: 10px; width: 200px; border: 1px solid var(--border); border-radius: 6px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid var(--border); padding: 12px; text-align: left; }
+        .filters label { display: block; margin-bottom: 10px; font-weight: 600; }
+        .filters input { padding: 10px; width: 220px; border: 1px solid var(--border); border-radius: 6px; }
+        .filters .btn-group { margin-top: 10px; }
+        .filters .btn { padding: 10px 20px; margin: 0 5px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.95rem; }
+        th, td { border: 1px solid var(--border); padding: 6px; text-align: left; }
         th { background: #6c757d; color: white; }
         tr:nth-child(even) { background: #f9f9f9; }
         .app-number { color: var(--accent); cursor: pointer; text-decoration: underline; }
@@ -30,20 +33,20 @@
         .modal-content { background: white; padding: 30px; border-radius: 12px; max-width: 800px; width: 90%; max-height: 90vh; overflow-y: auto; }
         .modal-close { float: right; font-size: 1.5rem; cursor: pointer; }
 
-        /* Full-screen loading overlay — visible on mobile and desktop */
-        #loading-overlay {
-            display: flex;
+        /* Full-screen loading overlay */
+        #page-loading-overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255, 255, 255, 0.95);
+            background: white;
+            display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
-            flex-direction: column;
             z-index: 9999;
             font-size: 1.4rem;
             color: var(--primary);
         }
-        #loading-overlay .spinner {
+        #page-loading-overlay .spinner {
             border: 10px solid #f3f3f3;
             border-top: 10px solid var(--accent);
             border-radius: 50%;
@@ -59,20 +62,24 @@
     </style>
 </head>
 <body>
-<!-- Loading Overlay — shown on load and search -->
-<div id="loading-overlay">
+<!-- Loading overlay -->
+<div id="page-loading-overlay">
     <div class="spinner"></div>
-    <div>Loading 471 data...</div>
+    <div>Loading 471 data... Please wait</div>
 </div>
 
 <div class="container">
-    <h1>E-Rate 471 Dashboard (Form 471 Applications)</h1>
+    <h1>E-Rate 471 Dashboard</h1>
 
     <div class="filters">
         <form method="get" id="ben-search-form">
-            <label>BEN #: <input type="text" name="ben" value="{{ filters.ben|default('') }}" placeholder="e.g. 16034746"></label>
-            <button type="submit" class="btn">Search</button>
-            <a href="{{ url_for('erate.dashboard471') }}" class="btn" style="background:#6c757d;">Clear</a>
+            <label>BEN #: 
+                <input type="text" name="ben" value="{{ filters.ben|default('') }}" placeholder="e.g. 16034746">
+            </label>
+            <div class="btn-group">
+                <button type="submit" class="btn">Search</button>
+                <a href="{{ url_for('erate.dashboard471') }}" class="btn" style="background:#6c757d;">Clear</a>
+            </div>
         </form>
     </div>
 
@@ -81,13 +88,12 @@
     <table>
         <thead>
             <tr>
-                <th>Application #</th>
-                <th>Funding Year</th>
+                <th>App#</th>
+                <th>Year</th>
                 <th>Organization</th>
-                <th>BEN</th>
                 <th>Status</th>
-                <th>Category</th>
-                <th>Commitment Amount</th>
+                <th>Cat</th> <!-- Changed from Category -->
+                <th>Amount</th>
             </tr>
         </thead>
         <tbody>
@@ -97,14 +103,17 @@
                     <td><span class="app-number" onclick="show471Details('{{ row.application_number }}')">{{ row.application_number }}</span></td>
                     <td>{{ row.funding_year }}</td>
                     <td>{{ row.organization_name }}</td>
-                    <td>{{ row.billed_entity_number }}</td>
                     <td>{{ row.status }}</td>
-                    <td>{{ row.categories_of_service }}</td>
+                    <td>
+                        {% if row.categories_of_service == 'Category1' %}C1
+                        {% elif row.categories_of_service == 'Category2' %}C2
+                        {% else %}{{ row.categories_of_service }}{% endif %}
+                    </td>
                     <td>${{ "%.2f"|format(row.commitment_amount) }}</td>
                 </tr>
                 {% endfor %}
             {% else %}
-                <tr><td colspan="7" style="text-align:center; padding:40px; color:#999;">No 471 records found. Try a different BEN#.</td></tr>
+                <tr><td colspan="6" style="text-align:center; padding:40px; color:#999;">No 471 records found. Try a different BEN#.</td></tr>
             {% endif %}
         </tbody>
     </table>
@@ -136,16 +145,14 @@
 </div>
 
 <script>
-    const loadingOverlay = document.getElementById('loading-overlay');
-
-    // Show overlay on page load
+    // Hide loading overlay when page is fully loaded
     window.addEventListener('load', () => {
-        loadingOverlay.style.display = 'none';
+        document.getElementById('page-loading-overlay').style.display = 'none';
     });
 
-    // Show overlay when searching
+    // Show overlay again on search submit
     document.getElementById('ben-search-form').addEventListener('submit', () => {
-        loadingOverlay.style.display = 'flex';
+        document.getElementById('page-loading-overlay').style.display = 'flex';
     });
 
     async function show471Details(appNumber) {
@@ -159,7 +166,6 @@
             const data = await resp.json();
             if (data.error) throw new Error(data.error);
 
-            // PDF handling — show link + raw URL if present
             const pdfDisplay = data.form_pdf && data.form_pdf.trim() !== ''
                 ? `
                     <p><strong>Form PDF:</strong></p>
