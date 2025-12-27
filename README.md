@@ -5,7 +5,7 @@ Fast, mobile-first web application for searching and analyzing live USAC E-Rate 
 Live at: https://lab.santoelectronics.com/erate
 
 ## Features
-- Real-time search of all active FCC Form 470 Applications from USAC open data
+- Real-time search of all active FCC Form 470/471 Applications from USAC open data
 - Geographic mapping with Bluebird Network, Segra and FNA fiber overlay (60+ KMZ files parsed live)
 - Distance-to-fiber calculation (Bluebird or FNA member-specific)
 - Guest mode + pay-as-you-go points system (deducts 1 point per map/distance click)
