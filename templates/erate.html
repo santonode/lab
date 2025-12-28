@@ -974,11 +974,13 @@
                             fetch('/erate/out-of-points')
                                 .then(r => r.json())
                                 .then(msg => {
-                                    document.getElementById('out-of-points-message').textContent = msg.message;
+                                    document.getElementById('out-of-points-message').innerHTML = 
+                                        'You have run out of points. Buy More <a href="https://www.map4.net/services-store" target="_blank" rel="noopener" style="color:#007bff; text-decoration:underline; font-weight:600;">Here</a>.';
                                     document.getElementById('outOfPointsModal').classList.add('show');
                                 })
                                 .catch(() => {
-                                    document.getElementById('out-of-points-message').textContent = "You have run out of points.";
+                                    document.getElementById('out-of-points-message').innerHTML = 
+                                        'You have run out of points. Buy More <a href="https://www.map4.net/services-store" target="_blank" rel="noopener" style="color:#007bff; text-decoration:underline; font-weight:600;">Here</a>.';
                                     document.getElementById('outOfPointsModal').classList.add('show');
                                 });
                         }
