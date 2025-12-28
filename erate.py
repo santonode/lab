@@ -181,11 +181,14 @@ def points():
 def out_of_points():
     if not session.get('username'):
         return jsonify({"message": "Session expired."})
-    username = session['username']
-    if username == 'guest':
-        return jsonify({"message": "You have run out of click points and your guest account has been removed."})
-    else:
-        return jsonify({"message": "You have run out of click points. Email sales@santoelectronics.com to top up your account."})
+    
+    # Same message for everyone (including guests)
+    message = (
+        "You have run out of click points. "
+        "Buy More <a href='https://www.map4.net/services-store' target='_blank' "
+        "style='color:#007bff; text-decoration:underline; font-weight:600;'>Here</a>."
+    )
+    return jsonify({"message": message})
 
 # === SQL INSERT (70 columns) ===
 INSERT_SQL = '''
