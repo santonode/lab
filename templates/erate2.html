@@ -19,7 +19,8 @@
         .filters { text-align: center; margin: 20px 0; }
         .filters label { display: block; margin-bottom: 10px; font-weight: 600; }
         .filters input { padding: 10px; width: 220px; border: 1px solid var(--border); border-radius: 6px; }
-        .filters .btn-group { margin-top: 10px; display: flex; justify-content: center; gap: 10px; }
+        .filters .btn-group { margin-top: 10px; }
+        .filters .btn { padding: 10px 20px; margin: 0 5px; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.95rem; }
         th, td { border: 1px solid var(--border); padding: 6px; text-align: left; }
         th { background: #6c757d; color: white; }
@@ -72,7 +73,7 @@
 
     <div class="filters">
         <form method="get" id="ben-search-form">
-            <label>BEN #:
+            <label>BEN #: 
                 <input type="text" name="ben" value="{{ filters.ben|default('') }}" placeholder="e.g. 16034746">
             </label>
             <div class="btn-group">
@@ -88,11 +89,11 @@
         <thead>
             <tr>
                 <th>App#</th>
-                <th>Yr</th>
-                <th>Org</th>
-                <th>Stat</th>
-                <th>Cat</th>
-                <th>Amt</th>
+                <th>Year</th>
+                <th>Organization</th>
+                <th>Status</th>
+                <th>Cat</th> <!-- Changed from Category -->
+                <th>Amount</th>
             </tr>
         </thead>
         <tbody>
@@ -100,30 +101,15 @@
                 {% for row in table_data %}
                 <tr>
                     <td><span class="app-number" onclick="show471Details('{{ row.application_number }}')">{{ row.application_number }}</span></td>
-                    <td>{{ row.funding_year[-2:] }}</td> <!-- Shows last 2 digits: 2025 → 25 -->
+                    <td>{{ row.funding_year }}</td>
                     <td>{{ row.organization_name }}</td>
-                    <td>
-                        {% if row.status == 'Committed' %}Com
-                        {% elif row.status == 'Certified' %}Cert
-                        {% else %}{{ row.status }}{% endif %}
-                    </td>
+                    <td>{{ row.status }}</td>
                     <td>
                         {% if row.categories_of_service == 'Category1' %}C1
                         {% elif row.categories_of_service == 'Category2' %}C2
                         {% else %}{{ row.categories_of_service }}{% endif %}
                     </td>
-                    <td>
-                        {% set amount = row.commitment_amount %}
-                        {% if amount > 0 %}
-                            {% if amount >= 1000 %}
-                                ${{ "%.0f"|format(amount / 1000) }}k
-                            {% else %}
-                                ${{ "%.1f"|format(amount / 1000) }}k
-                            {% endif %}
-                        {% else %}
-                            $0
-                        {% endif %}
-                    </td>
+                    <td>${{ "%.2f"|format(row.commitment_amount) }}</td>
                 </tr>
                 {% endfor %}
             {% else %}
@@ -159,11 +145,11 @@
 </div>
 
 <script>
+
     // Hide loading overlay when page is fully loaded
     window.addEventListener('load', () => {
         document.getElementById('page-loading-overlay').style.display = 'none';
     });
-
     // Show overlay again on search submit
     document.getElementById('ben-search-form').addEventListener('submit', () => {
         document.getElementById('page-loading-overlay').style.display = 'flex';
@@ -180,21 +166,35 @@
             const data = await resp.json();
             if (data.error) throw new Error(data.error);
 
+            // Extracted info at the very top
+            const extractedInfo = (data.service_provider || data.services_end_date) ? `
+                <div style="background:#e8f5e8; padding:15px; border-radius:8px; margin-bottom:20px; border-left:4px solid #28a745;">
+                    ${data.service_provider ? `<p><strong>Service Provider:</strong> ${data.service_provider}</p>` : ''}
+                    ${data.services_end_date ? `<p><strong>Services End Date:</strong> ${data.services_end_date}</p>` : ''}
+                </div>
+            ` : '';
+
+            // PDF display
             const pdfDisplay = data.form_pdf && data.form_pdf.trim() !== ''
                 ? `
-                    <p><strong>Form PDF:</strong></p>
-                    <p>
-                        <a href="${data.form_pdf}" target="_blank" rel="noopener" style="font-weight:600; color:#007bff; text-decoration:underline;">
-                            Open Original Form 471 PDF
-                        </a>
-                    </p>
-                    <p style="word-break:break-all; font-family:monospace; font-size:0.9em; color:#666;">
-                        <strong>URL:</strong> ${data.form_pdf}
-                    </p>
+                    <div style="background:#f8f9fa; padding:15px; border-radius:8px; margin-bottom:20px; border-left:4px solid var(--accent);">
+                        <p><strong>Form PDF:</strong></p>
+                        <p>
+                            <a href="${data.form_pdf}" target="_blank" rel="noopener" style="font-weight:600; color:#007bff; text-decoration:underline;">
+                                Open Original Form 471 PDF
+                            </a>
+                        </p>
+                        <p style="word-break:break-all; font-family:monospace; font-size:0.9em; color:#666;">
+                            <strong>URL:</strong> ${data.form_pdf}
+                        </p>
+                    </div>
                 `
                 : '<p><strong>Form PDF:</strong> Not available</p>';
 
             body.innerHTML = `
+                ${extractedInfo}
+                ${pdfDisplay}
+
                 <h3>Basic Information</h3>
                 <p><strong>Application #:</strong> ${data.application_number || '—'}</p>
                 <p><strong>Funding Year:</strong> ${data.funding_year || '—'}</p>
@@ -203,7 +203,7 @@
                 <p><strong>Nickname:</strong> ${data.nickname || '—'}</p>
                 <p><strong>Status:</strong> ${data.status || '—'}</p>
                 <p><strong>Category:</strong> ${data.categories_of_service || '—'}</p>
-                ${pdfDisplay}
+
                 <h3>Billed Entity / Organization</h3>
                 <p><strong>Name:</strong> ${data.organization_name || '—'}</p>
                 <p><strong>BEN:</strong> ${data.billed_entity_number || '—'}</p>
@@ -216,12 +216,14 @@
                 <p><strong>Zip Code:</strong> ${data.billed_entity_zip_code || '—'} ${data.billed_entity_zip_code_ext ? '-' + data.billed_entity_zip_code_ext : ''}</p>
                 <p><strong>Phone:</strong> ${data.billed_entity_phone || '—'} ${data.billed_entity_phone_ext || ''}</p>
                 <p><strong>Email:</strong> ${data.billed_entity_email || '—'}</p>
+
                 <h3>Contact Person</h3>
                 <p><strong>First Name:</strong> ${data.contact_first_name || '—'}</p>
                 <p><strong>Middle Initial:</strong> ${data.contact_middle_initial || '—'}</p>
                 <p><strong>Last Name:</strong> ${data.contact_last_name || '—'}</p>
                 <p><strong>Email:</strong> ${data.contact_email || '—'}</p>
                 <p><strong>Phone:</strong> ${data.contact_phone_number || '—'} ${data.contact_phone_ext || ''}</p>
+
                 <h3>Authorized Person</h3>
                 <p><strong>First Name:</strong> ${data.authorized_first_name || '—'}</p>
                 <p><strong>Middle Name:</strong> ${data.authorized_middle_name || '—'}</p>
@@ -235,23 +237,28 @@
                 <p><strong>Zip Code:</strong> ${data.authorized_zip_code || '—'} ${data.authorized_zip_code_ext ? '-' + data.authorized_zip_code_ext : ''}</p>
                 <p><strong>Phone:</strong> ${data.authorized_phone || '—'} ${data.authorized_phone_extension || ''}</p>
                 <p><strong>Email:</strong> ${data.authorized_email || '—'}</p>
+
                 <h3>Certification & Enrollment</h3>
                 <p><strong>Certified Date/Time:</strong> ${data.certified_datetime || '—'}</p>
                 <p><strong>Fulltime Enrollment:</strong> ${data.fulltime_enrollment || '—'}</p>
                 <p><strong>NSLP Count:</strong> ${data.nslp_count || '—'}</p>
                 <p><strong>NSLP Percentage:</strong> ${data.nslp_percentage || '0%'}</p>
                 <p><strong>Urban/Rural Status:</strong> ${data.urban_rural_status || '—'}</p>
+
                 <h3>Discount Rates</h3>
                 <p><strong>Category One:</strong> ${data.category_one_discount_rate || '0%'}</p>
                 <p><strong>Category Two:</strong> ${data.category_two_discount_rate || '0%'}</p>
                 <p><strong>Voice:</strong> ${data.voice_discount_rate || '0%'}</p>
+
                 <h3>Funding Amounts</h3>
                 <p><strong>Pre-Discount Eligible:</strong> ${data.pre_discount_amount || '$0.00'}</p>
                 <p><strong>Commitment Request:</strong> ${data.commitment_amount || '$0.00'}</p>
                 <p><strong>Non-Discount Share:</strong> ${data.non_discount_share || '$0.00'}</p>
+
                 <h3>Flags</h3>
                 <p><strong>Funds from Service Provider:</strong> ${data.funds_from_service_provider || '—'}</p>
                 <p><strong>Service Provider Filed by Billed Entity:</strong> ${data.service_provider_filed_by_billed_entity || '—'}</p>
+
                 <h3>Dates & Location</h3>
                 <p><strong>Last Updated:</strong> ${data.last_updated_datetime || '—'}</p>
                 <p><strong>Latitude:</strong> ${data.latitude || '—'}</p>
@@ -269,6 +276,7 @@
             this.classList.remove('show');
         }
     });
+
 </script>
 </body>
 </html>
