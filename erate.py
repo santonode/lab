@@ -824,7 +824,7 @@ def bbmap(app_number):
         "fna_member": fna_member
     })
 
-# === DASHBOARD (WITH AUTH CHECK + ADVANCED TEXT FILTER PARSING) ===
+# === DASHBOARD (WITH AUTH CHECK + ADVANCED TEXT FILTER PARSING + DUAL C1/C2 SUFFIX) ===
 @erate_bp.route('/')
 def dashboard():
     log("Dashboard accessed")
@@ -949,7 +949,7 @@ def dashboard():
                 for r in rows
             ]
 
-            # === ADD C1/C2 SUFFIX TO ENTITY NAME ===
+            # === ADD C1/C2 SUFFIX TO ENTITY NAME — SHOW BOTH IF BOTH FIELDS HAVE TEXT ===
             app_numbers = [row['app_number'] for row in table_data if row['app_number']]
             category_map = {}
             if app_numbers:
@@ -960,10 +960,13 @@ def dashboard():
                         WHERE app_number = ANY(%s)
                     """, (app_numbers,))
                     for app_num, cat1, cat2 in cur.fetchall():
+                        cats = []
+                        if cat1 and str(cat1).strip():
+                            cats.append('C1')
                         if cat2 and str(cat2).strip():
-                            category_map[app_num] = 'C2'
-                        elif cat1 and str(cat1).strip():
-                            category_map[app_num] = 'C1'
+                            cats.append('C2')
+                        if cats:
+                            category_map[app_num] = ' '.join(cats)  # e.g., "C1 C2"
                 except Exception as e:
                     log("C1/C2 category query failed: %s", e)
 
@@ -983,7 +986,7 @@ def dashboard():
             filters={
                 'state': state_filter,
                 'modified_after': modified_after_str,
-                'text': raw_text  # keep original input
+                'text': raw_text
             },
             total_count=total_count,
             total_filtered=total_filtered,
@@ -1001,7 +1004,6 @@ def dashboard():
         return f"<pre>ERROR: {e}</pre>", 500
     finally:
         conn.close()
-
 
 # === 471 DASHBOARD — USES erate2 TABLE ===
 @erate_bp.route('/erate471')
