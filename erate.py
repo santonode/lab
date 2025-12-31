@@ -824,7 +824,7 @@ def bbmap(app_number):
         "fna_member": fna_member
     })
 
-# === DASHBOARD (WITH AUTH CHECK + TEXT SEARCH) ===
+# === DASHBOARD (WITH AUTH CHECK + ADVANCED TEXT FILTER PARSING) ===
 @erate_bp.route('/')
 def dashboard():
     log("Dashboard accessed")
@@ -852,39 +852,86 @@ def dashboard():
 
     state_filter = request.args.get('state', '').strip().upper()
     modified_after_str = request.args.get('modified_after', '').strip()
-    text_search = request.args.get('text', '').strip()
+    raw_text = request.args.get('text', '').strip()
     offset = max(int(request.args.get('offset', 0)), 0)
     limit = 10
 
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10, autocommit=True)
     try:
         with conn.cursor() as cur:
-            count_sql = 'SELECT COUNT(*) FROM erate'
-            count_params = []
             where_clauses = []
+            count_params = []
+            params = []
+
             if state_filter:
                 where_clauses.append('state = %s')
                 count_params.append(state_filter)
+                params.append(state_filter)
+
             if modified_after_str:
                 where_clauses.append('last_modified_datetime >= %s')
                 count_params.append(modified_after_str)
-            if text_search:
-                where_clauses.append("to_tsvector('english', cat2_desc) @@ plainto_tsquery('english', %s)")
-                count_params.append(text_search)
+                params.append(modified_after_str)
+
+            # === ADVANCED TEXT FILTER PARSING ===
+            if raw_text:
+                tokens = raw_text.split()
+                c1_terms = [t[3:].strip() for t in tokens if t.lower().startswith('c1:') and len(t) > 3]
+                c2_terms = [t[3:].strip() for t in tokens if t.lower().startswith('c2:') and len(t) > 3]
+                plain_terms = [t.strip() for t in tokens if not t.lower().startswith(('c1:', 'c2:'))]
+
+                has_c1_only = any(t.lower() == 'c1:' for t in tokens)
+                has_c2_only = any(t.lower() == 'c2:' for t in tokens)
+
+                search_clauses = []
+
+                # C1 terms
+                for term in c1_terms:
+                    search_clauses.append("cat1_desc ILIKE %s")
+                    pattern = f"%{term}%"
+                    count_params.append(pattern)
+                    params.append(pattern)
+
+                # C2 terms
+                for term in c2_terms:
+                    search_clauses.append("cat2_desc ILIKE %s")
+                    pattern = f"%{term}%"
+                    count_params.append(pattern)
+                    params.append(pattern)
+
+                # Plain terms — search both
+                if plain_terms:
+                    combined_pattern = '%' + '%'.join(plain_terms) + '%'
+                    search_clauses.append("(cat1_desc ILIKE %s OR cat2_desc ILIKE %s)")
+                    count_params.extend([combined_pattern, combined_pattern])
+                    params.extend([combined_pattern, combined_pattern])
+
+                # C1: or C2: alone — has content
+                if has_c1_only:
+                    search_clauses.append("cat1_desc IS NOT NULL AND cat1_desc != ''")
+
+                if has_c2_only:
+                    search_clauses.append("cat2_desc IS NOT NULL AND cat2_desc != ''")
+
+                if search_clauses:
+                    where_clauses.append('(' + ' AND '.join(search_clauses) + ')')
+
+            # Total count query
+            count_sql = 'SELECT COUNT(*) FROM erate'
             if where_clauses:
                 count_sql += ' WHERE ' + ' AND '.join(where_clauses)
             cur.execute(count_sql, count_params)
             total_count = cur.fetchone()[0]
 
+            # Main data query
             sql = '''
                 SELECT app_number, entity_name, state, last_modified_datetime,
                        latitude, longitude
                 FROM erate
             '''
-            params = []
             if where_clauses:
                 sql += ' WHERE ' + ' AND '.join(where_clauses)
-                params.extend(count_params)
+
             sql += ' ORDER BY last_modified_datetime DESC, app_number LIMIT %s OFFSET %s'
             params.extend([limit + 1, offset])
             cur.execute(sql, params)
@@ -902,9 +949,8 @@ def dashboard():
                 for r in rows
             ]
 
-            # === ADD C1/C2 SUFFIX TO ENTITY NAME (WITH DEBUG LOGS) ===
+            # === ADD C1/C2 SUFFIX TO ENTITY NAME ===
             app_numbers = [row['app_number'] for row in table_data if row['app_number']]
-            # log("C1/C2 debug: app_numbers on this page: %s", app_numbers)
             category_map = {}
             if app_numbers:
                 try:
@@ -913,24 +959,17 @@ def dashboard():
                         FROM erate
                         WHERE app_number = ANY(%s)
                     """, (app_numbers,))
-                    raw_results = cur.fetchall()
-                    # log("C1/C2 debug: raw query results (app, cat1, cat2): %s", raw_results)
-
-                    for app_num, cat1, cat2 in raw_results:
+                    for app_num, cat1, cat2 in cur.fetchall():
                         if cat2 and str(cat2).strip():
                             category_map[app_num] = 'C2'
                         elif cat1 and str(cat1).strip():
                             category_map[app_num] = 'C1'
-
-                    # log("C1/C2 debug: final category_map: %s", category_map)
                 except Exception as e:
-                    # log("C1/C2 category query failed (safe fallback): %s", e)
-                    category_map = {}
+                    log("C1/C2 category query failed: %s", e)
 
             for row in table_data:
                 cat = category_map.get(row['app_number'])
                 row['entity_name_display'] = f"{row['entity_name']}{' - ' + cat if cat else ''}"
-                # log("C1/C2 debug: row %s → display name: %s", row['app_number'], row['entity_name_display'])
 
             has_more = len(table_data) > limit
             table_data = table_data[:limit]
@@ -944,7 +983,7 @@ def dashboard():
             filters={
                 'state': state_filter,
                 'modified_after': modified_after_str,
-                'text': text_search
+                'text': raw_text  # keep original input
             },
             total_count=total_count,
             total_filtered=total_filtered,
@@ -953,19 +992,16 @@ def dashboard():
             offset=offset,
             cache_bust=int(time.time())
         ))
-
-        # FORCE NO CACHE
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
-
         return response
-
     except Exception as e:
         log("Dashboard error: %s", e)
         return f"<pre>ERROR: {e}</pre>", 500
     finally:
         conn.close()
+
 
 # === 471 DASHBOARD — USES erate2 TABLE ===
 @erate_bp.route('/erate471')
