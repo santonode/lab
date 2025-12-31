@@ -33,7 +33,6 @@
         .modal.show { display: flex; }
         .modal-content { background: white; padding: 20px; border-radius: 12px; max-width: 95%; width: 95%; max-height: 90vh; overflow-y: auto; }
         .modal-close { float: right; font-size: 1.5rem; cursor: pointer; }
-
         /* Full-screen loading overlay */
         #page-loading-overlay {
             position: fixed;
@@ -134,14 +133,14 @@
         </tbody>
     </table>
 
-    <!-- Pagination -->
+    <!-- Pagination — now 10 records per page -->
     {% if has_more or offset > 0 %}
     <div class="pagination">
         {% if offset > 0 %}
-            <a href="?ben={{ filters.ben|default('') }}&offset={{ offset - 20 }}" class="btn">Previous</a>
+            <a href="?ben={{ filters.ben|default('') }}&offset={{ offset - 10 }}" class="btn">Previous</a>
         {% endif %}
         {% if has_more %}
-            <a href="?ben={{ filters.ben|default('') }}&offset={{ offset + 20 }}" class="btn">Next</a>
+            <a href="?ben={{ filters.ben|default('') }}&offset={{ offset + 10 }}" class="btn">Next</a>
         {% endif %}
     </div>
     {% endif %}
@@ -161,11 +160,11 @@
 </div>
 
 <script>
-
     // Hide loading overlay when page is fully loaded
     window.addEventListener('load', () => {
         document.getElementById('page-loading-overlay').style.display = 'none';
     });
+
     // Show overlay again on search submit
     document.getElementById('ben-search-form').addEventListener('submit', () => {
         document.getElementById('page-loading-overlay').style.display = 'flex';
@@ -182,7 +181,7 @@
             const data = await resp.json();
             if (data.error) throw new Error(data.error);
 
-            // Extracted info at the very top
+            // Extracted info at the top
             const extractedInfo = (data.service_provider !== "Not found" || data.services_end_date !== "Not found") ? `
                 <div style="background:#e8f5e8; padding:15px; border-radius:8px; margin-bottom:20px; border-left:4px solid #28a745;">
                     ${data.service_provider !== "Not found" ? `<p><strong>Service Provider:</strong> ${data.service_provider}</p>` : ''}
@@ -190,7 +189,6 @@
                 </div>
             ` : '';
 
-            // PDF display
             const pdfDisplay = data.form_pdf && data.form_pdf.trim() !== ''
                 ? `
                     <div style="background:#f8f9fa; padding:15px; border-radius:8px; margin-bottom:20px; border-left:4px solid var(--accent);">
@@ -210,7 +208,6 @@
             body.innerHTML = `
                 ${extractedInfo}
                 ${pdfDisplay}
-
                 <h3>Basic Information</h3>
                 <p><strong>Application #:</strong> ${data.application_number || '—'}</p>
                 <p><strong>Funding Year:</strong> ${data.funding_year || '—'}</p>
@@ -219,7 +216,6 @@
                 <p><strong>Nickname:</strong> ${data.nickname || '—'}</p>
                 <p><strong>Status:</strong> ${data.status || '—'}</p>
                 <p><strong>Category:</strong> ${data.categories_of_service || '—'}</p>
-
                 <h3>Billed Entity / Organization</h3>
                 <p><strong>Name:</strong> ${data.organization_name || '—'}</p>
                 <p><strong>BEN:</strong> ${data.billed_entity_number || '—'}</p>
@@ -232,14 +228,12 @@
                 <p><strong>Zip Code:</strong> ${data.billed_entity_zip_code || '—'} ${data.billed_entity_zip_code_ext ? '-' + data.billed_entity_zip_code_ext : ''}</p>
                 <p><strong>Phone:</strong> ${data.billed_entity_phone || '—'} ${data.billed_entity_phone_ext || ''}</p>
                 <p><strong>Email:</strong> ${data.billed_entity_email || '—'}</p>
-
                 <h3>Contact Person</h3>
                 <p><strong>First Name:</strong> ${data.contact_first_name || '—'}</p>
                 <p><strong>Middle Initial:</strong> ${data.contact_middle_initial || '—'}</p>
                 <p><strong>Last Name:</strong> ${data.contact_last_name || '—'}</p>
                 <p><strong>Email:</strong> ${data.contact_email || '—'}</p>
                 <p><strong>Phone:</strong> ${data.contact_phone_number || '—'} ${data.contact_phone_ext || ''}</p>
-
                 <h3>Authorized Person</h3>
                 <p><strong>First Name:</strong> ${data.authorized_first_name || '—'}</p>
                 <p><strong>Middle Name:</strong> ${data.authorized_middle_name || '—'}</p>
@@ -253,28 +247,23 @@
                 <p><strong>Zip Code:</strong> ${data.authorized_zip_code || '—'} ${data.authorized_zip_code_ext ? '-' + data.authorized_zip_code_ext : ''}</p>
                 <p><strong>Phone:</strong> ${data.authorized_phone || '—'} ${data.authorized_phone_extension || ''}</p>
                 <p><strong>Email:</strong> ${data.authorized_email || '—'}</p>
-
                 <h3>Certification & Enrollment</h3>
                 <p><strong>Certified Date/Time:</strong> ${data.certified_datetime || '—'}</p>
                 <p><strong>Fulltime Enrollment:</strong> ${data.fulltime_enrollment || '—'}</p>
                 <p><strong>NSLP Count:</strong> ${data.nslp_count || '—'}</p>
                 <p><strong>NSLP Percentage:</strong> ${data.nslp_percentage || '0%'}</p>
                 <p><strong>Urban/Rural Status:</strong> ${data.urban_rural_status || '—'}</p>
-
                 <h3>Discount Rates</h3>
                 <p><strong>Category One:</strong> ${data.category_one_discount_rate || '0%'}</p>
                 <p><strong>Category Two:</strong> ${data.category_two_discount_rate || '0%'}</p>
                 <p><strong>Voice:</strong> ${data.voice_discount_rate || '0%'}</p>
-
                 <h3>Funding Amounts</h3>
                 <p><strong>Pre-Discount Eligible:</strong> ${data.pre_discount_amount || '$0.00'}</p>
                 <p><strong>Commitment Request:</strong> ${data.commitment_amount || '$0.00'}</p>
                 <p><strong>Non-Discount Share:</strong> ${data.non_discount_share || '$0.00'}</p>
-
                 <h3>Flags</h3>
                 <p><strong>Funds from Service Provider:</strong> ${data.funds_from_service_provider || '—'}</p>
                 <p><strong>Service Provider Filed by Billed Entity:</strong> ${data.service_provider_filed_by_billed_entity || '—'}</p>
-
                 <h3>Dates & Location</h3>
                 <p><strong>Last Updated:</strong> ${data.last_updated_datetime || '—'}</p>
                 <p><strong>Latitude:</strong> ${data.latitude || '—'}</p>
@@ -292,7 +281,6 @@
             this.classList.remove('show');
         }
     });
-
 </script>
 </body>
 </html>
