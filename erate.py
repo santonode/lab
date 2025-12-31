@@ -979,7 +979,7 @@ def dashboard471():
     # Simple BEN filter
     ben_filter = request.args.get('ben', '').strip()
 
-    limit = 20  # 20 rows per page for 471
+    limit = 10  # 10 rows per page for 471
     offset = max(int(request.args.get('offset', 0)), 0)
 
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10, autocommit=True)
