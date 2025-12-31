@@ -1941,7 +1941,7 @@ def admin():
                         if row and row[0] == hash_password(password):
                             session['username'] = username
                             session['is_santo'] = (username == 'santo')
-                            flash(f"Welcome back, {username}!", "success")
+                            flash(Markup(f"Welcome back, {username}! Buy more Points <a href='https://map4.net/services-store' target='_blank' rel='noopener' style='color:#007bff; text-decoration:underline; font-weight:600;'>here</a>."), "success")
                             return redirect(url_for('erate.dashboard'))
                 flash("Invalid login", "error")
             except Exception as e:
