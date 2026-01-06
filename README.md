@@ -18,7 +18,8 @@ Live at: https://lab.santoelectronics.com/erate
 <pre>
 | Name             | Type  | Owner
 |------------------|-------|----------------
-| erate            | table | wurdle_db_user
+| erate            | table | wurdle_db_user (470)
+| erate2           | table | wurdle_db_user (471)
 | erate_hash       | table | wurdle_db_user  
 | import_hash_log  | table | wurdle_db_user
 | users            | table | wurdle_db_user
@@ -42,6 +43,7 @@ Live at: https://lab.santoelectronics.com/erate
 ├── requirements.txt
 └── /templates
     ├── erate.html            # Main dashboard
+    ├── erate471.html         # Main471 dashboard
     ├── eadmin.html           # Admin/import page
     ├── erate_import.html
     └── erate_import_complete.html
