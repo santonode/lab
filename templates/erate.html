@@ -902,17 +902,18 @@ window.addEventListener('load', () => {
     console.log("Pagination buttons cloned — all listeners stripped");
 });
 
-// ULTIMATE FIX: Remove ANY possible click listeners from pagination buttons
+// ULTIMATE FIX: Safely remove ANY possible click listeners from pagination buttons
 window.addEventListener('load', () => {
     const stripAllListeners = (el) => {
-        if (!el) return;
+        if (!el) return;  // Safety check — skip if element not found
         const newEl = el.cloneNode(true);
         newEl.onclick = null;
         newEl.removeAttribute('onclick');
         el.parentNode.replaceChild(newEl, el);
-        console.log("Stripped all listeners from:", newEl.id || newEl.textContent);
+        console.log("Stripped all listeners from:", newEl.id || newEl.textContent.trim() || 'unnamed button');
     };
 
+    // Strip from specific IDs if they exist
     stripAllListeners(document.getElementById('next-btn'));
     stripAllListeners(document.getElementById('prev-btn'));
 
@@ -921,7 +922,6 @@ window.addEventListener('load', () => {
         stripAllListeners(btn);
     });
 });
-
         
     </script>
     
@@ -1182,7 +1182,8 @@ window.addEventListener('load', () => {
                 'bluebird': 'Bluebird Network + Applicant',
                 'fna': 'FNA Network + Applicant',
                 'segra_east': 'Segra East + Applicant',
-                'segra_west': 'Segra West + Applicant'
+                'segra_west': 'Segra West + Applicant',
+                'fidium': 'Fidium + Applicant',
             };
             document.getElementById('map-title').textContent = titleNames[currentNetwork] || 'Network + Applicant';
 
@@ -1246,81 +1247,135 @@ window.addEventListener('load', () => {
             }
         });
 
-        // === loadMap() — FINAL FIXED VERSION (NO MORE "already initialized") ===
-        async function loadMap(appNumber, network, fna_member = null) {
-            const mapDiv = document.getElementById('map-container');
+// === loadMap() — FINAL: DENSE CAP ONLY FOR FIDIUM NORTHEAST FILE ===
+async function loadMap(appNumber, network, fna_member = null) {
+    const mapDiv = document.getElementById('map-container');
 
-            // DESTROY OLD MAP COMPLETELY — THIS IS THE KEY
-            if (mapDiv._leaflet_map) {
-                mapDiv._leaflet_map.remove();
-                mapDiv._leaflet_map = null;
-            }
-            mapDiv.innerHTML = '';
+    // DESTROY OLD MAP COMPLETELY
+    if (mapDiv._leaflet_map) {
+        mapDiv._leaflet_map.remove();
+        mapDiv._leaflet_map = null;
+    }
+    mapDiv.innerHTML = '';
 
-            let url = `/erate/bbmap/${appNumber}?network=${network}`;
-            if (fna_member) url += `&fna_member=${encodeURIComponent(fna_member)}`;
+    let url = `/erate/bbmap/${appNumber}?network=${network}`;
+    if (fna_member) url += `&fna_member=${encodeURIComponent(fna_member)}`;
 
-            const resp = await fetch(url);
-            const data = await resp.json();
-            if (data.error) throw new Error(data.error);
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
 
-            // CREATE NEW MAP — NOW SAFE
-            const map = L.map('map-container');
-            mapDiv._leaflet_map = map;
+    // CREATE MAP WITH CANVAS RENDERER
+    const map = L.map('map-container', {
+        renderer: L.canvas()
+    });
+    mapDiv._leaflet_map = map;
 
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap | ' + (network === 'fna' ? 'FNA Network' :
-                    network === 'segra_east' ? 'Segra East' :
-                    network === 'segra_west' ? 'Segra West' :
-                    'Bluebird Network')
-            }).addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap | ' + (
+            network === 'fna' ? 'FNA Network' :
+            network === 'segra_east' ? 'Segra East' :
+            network === 'segra_west' ? 'Segra West' :
+            network === 'fidium' ? 'Fidium Network' :
+            'Bluebird Network'
+        )
+    }).addTo(map);
 
-            // Routes
-            data.routes?.forEach(r => {
-                if (r.coords?.length > 1) {
-                    L.polyline(r.coords, {
-                        color: network === 'fna' ? '#dc3545' : '#007bff',
-                        weight: network === 'fna' ? 4 : 3,
-                        opacity: network === 'fna' ? 0.9 : 0.7
-                    }).addTo(map);
-                }
-            });
+    const fiberColor = network === 'fna' ? '#dc3545' : '#9932CC';
+    const fiberWeight = network === 'fna' ? 4 : 2;
+    const fiberOpacity = network === 'fna' ? 0.9 : 0.7;
 
-            // PoPs
-            data.pops?.forEach(p => {
-                L.circleMarker([p.lat, p.lon], {
-                    radius: 6,
-                    color: network === 'fna' ? '#dc3545' : '#28a745',
-                    fillOpacity: 0.8
-                }).bindPopup(`<strong>${p.name}</strong>`).addTo(map);
-            });
+    let routeCount = 0;
 
-            // Applicant
-            if (data.applicant_coords) {
-                const [lat, lng] = data.applicant_coords;
-                const icon = L.divIcon({
-                    className: '',
-                    html: '<div style="background:#007bff;width:16px;height:16px;border-radius:50%;border:3px solid white;"></div>',
-                    iconSize: [16,16]
-                });
-                L.marker([lat, lng], { icon })
-                    .bindPopup(`<strong>${data.entity_name}</strong><br>${data.address}`)
-                    .addTo(map);
-                map.setView([lat, lng], 12);
-            } else {
-                map.setView([39.8, -92.5], 7);
-            }
-
-            // Distance line
-            if (data.nearest_kmz_coords && data.applicant_coords) {
-                const [lat1, lng1] = data.applicant_coords;
-                const [lat2, lng2] = data.nearest_kmz_coords;
-                L.polyline([[lat1, lng1], [lat2, lng2]], {
-                    color: '#dc3545', weight: 4, dashArray: '10, 10', opacity: 0.8
-                }).bindPopup(`<strong>${data.distance}</strong> to ${data.nearest_kmz_pop}`)
-                  .addTo(map);
-            }
+    // === DETECT NORTHEAST BY FILE NAME (MOST RELIABLE) ===
+    let isNortheast = false;
+    if (network === 'fidium') {
+        // Backend logs show file name — but we can't access it directly
+        // Instead, use route count as proxy: NE has ~285k routes, others <50k
+        if (data.routes && data.routes.length > 100000) {
+            isNortheast = true;
+            console.log("Detected dense Northeast file by route count — applying cap");
+        } else {
+            console.log("Non-Northeast Fidium region — loading all routes");
         }
+    }
+
+    const MAX_ROUTES = isNortheast ? 50000 : 100000;
+
+    // === ROUTES ===
+    if (data.routes && data.routes.length > 0) {
+        data.routes.forEach(r => {
+            if (r.coords && r.coords.length > 1) {
+                if (isNortheast && routeCount >= MAX_ROUTES) {
+                    return;
+                }
+
+                L.polyline(r.coords, {
+                    color: fiberColor,
+                    weight: fiberWeight,
+                    opacity: fiberOpacity,
+                    noClip: true,
+                    smoothFactor: 1
+                }).addTo(map);
+
+                routeCount++;
+            }
+        });
+    }
+
+    // === PoPs ===
+    if (data.pops && data.pops.length > 0) {
+        data.pops.forEach(p => {
+            L.circleMarker([p.lat, p.lon], {
+                radius: 6,
+                color: network === 'fna' ? '#dc3545' : '#28a745',
+                fillOpacity: 0.8
+            }).bindPopup(`<strong>${p.name}</strong>`).addTo(map);
+        });
+    }
+
+    // === Applicant Pin & Center Map ===
+    let mapCentered = false;
+    if (data.applicant_coords) {
+        const [lat, lng] = data.applicant_coords;
+        const icon = L.divIcon({
+            className: '',
+            html: '<div style="background:#007bff;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>',
+            iconSize: [16, 16]
+        });
+        L.marker([lat, lng], { icon })
+            .bindPopup(`<strong>${data.entity_name}</strong><br>${data.address}`)
+            .addTo(map)
+            .openPopup();
+
+        map.setView([lat, lng], 12);
+        mapCentered = true;
+    }
+
+    if (!mapCentered) {
+        map.setView([39.8, -92.5], 7);
+    }
+
+    // === Nearest Fiber Distance Line ===
+    if (data.nearest_kmz_coords && data.applicant_coords) {
+        const [lat1, lng1] = data.applicant_coords;
+        const [lat2, lng2] = data.nearest_kmz_coords;
+        L.polyline([[lat1, lng1], [lat2, lng2]], {
+            color: '#dc3545',
+            weight: 4,
+            dashArray: '10, 10',
+            opacity: 0.8
+        }).bindPopup(`<strong>${data.nearest_fiber_distance || data.distance}</strong> to nearest fiber`)
+          .addTo(map);
+    }
+
+    // === Dense Area Message — ONLY FOR NORTHEAST ===
+    if (isNortheast && routeCount >= MAX_ROUTES) {
+        L.marker(map.getCenter()).addTo(map)
+            .bindPopup("<strong>Dense fiber area</strong><br>Showing limited routes for performance<br>Full detail on national map")
+            .openPopup();
+    }
+}
 
         // === closeModal() ===
         function closeModal(type) {
@@ -1766,7 +1821,6 @@ document.getElementById('filter-form')?.addEventListener('submit', e => {
                 const data = await resp.json();
                 if (data.provider) {
                     currentNetwork = data.provider;
-
                     // Update dashboard display
                     const display = document.getElementById('current-network-display');
                     if (display) {
@@ -1774,7 +1828,8 @@ document.getElementById('filter-form')?.addEventListener('submit', e => {
                             'bluebird': 'Bluebird Network',
                             'fna': 'FNA Network',
                             'segra_east': 'Segra East',
-                            'segra_west': 'Segra West'
+                            'segra_west': 'Segra West',
+                            'fidium': 'Fidium Network'  // NEW: Fidium added
                         };
                         display.textContent = providerNames[currentNetwork] || 'Bluebird Network';
                     }
@@ -1843,6 +1898,7 @@ document.getElementById('filter-form')?.addEventListener('submit', e => {
                 <option value="FNA Network">FNA</option>
                 <option value="Segra EAST">Segra EAST</option>
                 <option value="Segra WEST">Segra WEST</option>
+                <option value="Fidium Network">Fidium Network</option>
               </select>
             </div>
           </div>
