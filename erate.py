@@ -2451,9 +2451,8 @@ def coverage_map_data():
     return Response(generate(), mimetype='application/x-ndjson')
 
 # =======================================================
-# === FINAL NATIONAL MAP — FULL SUPPORT FOR 4 REGIONS + BACKBONE ===
+# === FINAL NATIONAL MAP — FULL SUPPORT FOR 5 REGIONS + BACKBONE ===
 # =======================================================
-
 @erate_bp.route('/national-map')
 def national_map():
     return render_template('local_test.html')
@@ -2514,8 +2513,7 @@ def stream_national():
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
                 count = 0
                 coord_split = re.compile(r'\s+')
-                tolerance = 0.001 if "Fidium" in name else 0.001
-
+                tolerance = 0.001  # adjust if needed
                 for coords_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
                     if not coords_elem.text:
                         continue
@@ -2538,7 +2536,7 @@ def stream_national():
                     if len(simplified) >= 2:
                         yield json.dumps({"name": name, "color": color, "coords": simplified}) + "\n"
                         count += 1
-                print(f" → {name}: {count} lines streamed (tolerance={tolerance})")
+                print(f" → {name}: {count} lines streamed")
         except Exception as e:
             print(f"KMZ error {path}: {e}")
 
@@ -2604,45 +2602,41 @@ def stream_national():
                 print("STREAMING SEGRA WEST")
                 yield from stream_kmz(path, "Segra West", "#ffaa00")
 
-        # === FIDUM — 4 REGIONS + BACKBONE (EXACT MATCHING) ===
+        # === FIDIUM — 5 REGIONS + BACKBONE ===
         if os.path.isdir(fidium_dir):
-            # Mapping: expected dropdown value (lowercase) → (filename, display_name, states)
+            # Mapping: dropdown value (lowercase) → (filename, display_name)
             fidium_map = {
-                "fidium network (ne)": ("FidiumNE.kmz", "Fidium Network (NE)", ["ME", "NH", "VT", "NY", "PA", "MA"]),
-                "fidium network (mw)": ("FidiumMW.kmz", "Fidium Network (MW)", ["MN", "KS", "IL", "IA", "CO", "OK"]),
-                "fidium network (so)": ("FidiumSO.kmz", "Fidium Network (SO)", ["TX", "FL", "AL"]),
-                "fidium network (we)": ("FidiumWE.kmz", "Fidium Network (WE)", ["CA"]),
-                "fidium network (backbone)": ("FidiumBackbone.kmz", "Fidium Network (Backbone)", []),  # no state filter
+                "fidium network (ne)": ("FidiumNE.kmz", "Fidium Network (NE)"),
+                "fidium network (ne2)": ("FidiumNE2.kmz", "Fidium Network (NE2)"),
+                "fidium network (mw)": ("FidiumMW.kmz", "Fidium Network (MW)"),
+                "fidium network (so)": ("FidiumSO.kmz", "Fidium Network (SO)"),
+                "fidium network (we)": ("FidiumWE.kmz", "Fidium Network (WE)"),
+                "fidium network (backbone)": ("FidiumBackbone.kmz", "Fidium Network (Backbone)"),
             }
 
             requested_lower = requested_provider.lower() if requested_provider else ""
 
-            # Determine which files to stream
             if not requested_provider or requested_lower not in fidium_map:
-                # All Providers or generic "fidium" → stream everything
-                print("STREAMING ALL FIDUM (regions + backbone)")
+                # No specific Fidium selected → stream all
+                print("STREAMING ALL FIDIUM REGIONS")
                 files_to_stream = list(fidium_map.values())
             else:
-                # Exact match → only the selected one
                 selected = fidium_map.get(requested_lower)
                 if selected:
-                    print(f"STREAMING FIDUM: only {selected[1]}")
+                    print(f"STREAMING FIDIUM: only {selected[1]}")
                     files_to_stream = [selected]
                 else:
                     files_to_stream = []
 
             streamed_any = False
-            for filename, display_name, states in files_to_stream:
+            for filename, display_name in files_to_stream:
                 path = os.path.join(fidium_dir, filename)
                 if not os.path.exists(path):
                     print(f"Missing expected Fidium file: {path}")
                     continue
-
-                # Apply state filter (skip if state requested and not in this region's states)
-                # Backbone has empty states → never skipped
-                if requested_state and requested_state not in states:
+                # Skip if state filter doesn't match (except backbone)
+                if requested_state and requested_state not in display_name.upper() and "backbone" not in display_name.lower():
                     continue
-
                 print(f" → Streaming {display_name}")
                 yield from stream_kmz(path, display_name, "#9932CC")
                 streamed_any = True
@@ -2665,17 +2659,16 @@ def stream_national():
                 if f.lower().endswith('.kmz'):
                     path = os.path.join(fna_dir, f)
                     name = os.path.splitext(f)[0].replace('_', ' ').title()
-                    lower_name = name.lower()
                     if requested_state and requested_state not in name.upper():
                         continue
-                    if requested_provider and requested_provider not in lower_name:
+                    if requested_provider and requested_provider not in name.lower():
                         continue
                     print(f"STREAMING FNA MEMBER: {name}")
                     yield from stream_kmz(path, name, colors[idx % len(colors)])
                     idx += 1
 
     return Response(generate(), mimetype='application/x-ndjson')
-
+    
 # =======================================================
 # === RETURN STATE BOUNDS  =================================
 # =======================================================
