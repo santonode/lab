@@ -38,10 +38,10 @@
         .header h1 { margin: 0; font-size: 1.5rem; font-weight: 600; }
         .logout { position: absolute; right: 1rem; top: 50%; transform: translateY(-50%); color: white; text-decoration: none; font-size: 0.9rem; }
         .logout:hover { text-decoration: underline; }
-        .container { 
-            max-width: 1000px; 
-            margin: 2rem auto; 
-            padding: 0 1rem; 
+        .container {
+            max-width: 1000px;
+            margin: 2rem auto;
+            padding: 0 1rem;
             flex: 1;
         }
         .card {
@@ -141,7 +141,6 @@
             color: #999;
         }
         .close-btn:hover { color: #333; }
-
         /* FOOTER LINKS (MATCH erate.html) */
         .footer-links {
             text-align: center;
@@ -167,37 +166,34 @@
         }
         @media (max-width: 900px) {
             table { font-size: 0.78rem; }
-            .btn-sm { 
-                padding: 0.6rem 0.6rem !important; 
-                font-size: 0.78rem !important; 
+            .btn-sm {
+                padding: 0.6rem 0.6rem !important;
+                font-size: 0.78rem !important;
                 min-width: 55px;
             }
         }
-
         /* TIGHTER ADMIN TABLE – MINIMAL VERTICAL PADDING */
         #usersTable th,
         #usersTable td {
-            padding: 0.4rem 0.75rem !important;   /* was 0.75rem → now super tight */
+            padding: 0.4rem 0.75rem !important;
             line-height: 1.3;
         }
         #usersTable .btn-sm {
             padding: 0.25rem 0.5rem !important;
             font-size: 0.8rem !important;
         }
-
         /* MAKE EDIT & DELETE BUTTONS SIDE-BY-SIDE + TIGHT ROWS */
         #usersTable td:last-child {
-            white-space: nowrap;                    /* prevents wrapping */
-            padding: 0.35rem 0.5rem !important;     /* tighter cell */
+            white-space: nowrap;
+            padding: 0.35rem 0.5rem !important;
         }
         #usersTable .btn-sm {
             display: inline-block !important;
-            margin: 0 4px !important;               /* small gap between buttons */
+            margin: 0 4px !important;
             padding: 0.25rem 0.55rem !important;
             font-size: 0.78rem !important;
             min-width: 48px;
         }
-        
     </style>
 </head>
 <body>
@@ -236,14 +232,12 @@
             </form>
         </div>
     </div>
-
     <div class="header">
         <h1>E-Rate Admin</h1>
         {% if session.username %}
             <a href="{{ url_for('erate.logout') }}" class="logout">Logout</a>
         {% endif %}
     </div>
-
     <div class="container">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -252,7 +246,6 @@
                 {% endfor %}
             {% endif %}
         {% endwith %}
-
         {% if not session.username %}
             <div class="auth-form">
                 <form method="POST">
@@ -270,7 +263,6 @@
                 </p>
                 {% if session.is_santo %}
                     <h2>User Management</h2>
-
                     <!-- FILTER TOGGLE -->
                     <div style="margin-bottom:1rem;text-align:right;">
                         <label style="font-weight:600;margin-right:10px;">Show:</label>
@@ -279,7 +271,6 @@
                             <option value="members">Members Only</option>
                         </select>
                     </div>
-
                     <table id="usersTable">
                         <thead>
                             <tr>
@@ -338,6 +329,7 @@
                                                 <option value="FNA Network" {% if user.Provider == 'FNA Network' %}selected{% endif %}>FNA Network</option>
                                                 <option value="Segra EAST" {% if user.Provider == 'Segra EAST' %}selected{% endif %}>Segra EAST</option>
                                                 <option value="Segra WEST" {% if user.Provider == 'Segra WEST' %}selected{% endif %}>Segra WEST</option>
+                                                <option value="Fidium Network" {% if user.Provider == 'Fidium Network' %}selected{% endif %}>Fidium Network</option>
                                             </select>
                                             <input type="password" name="new_password" placeholder="New Password (blank = keep)">
                                             <input type="number" name="new_points" value="{{ user.points }}" min="0">
@@ -371,14 +363,12 @@
             </div>
         {% endif %}
     </div>
-
     <!-- FOOTER LINKS -->
     <div class="footer-links">
         <a href="{{ url_for('erate.extract_csv') }}">Extract CSV</a>
         <a href="{{ url_for('erate.import_interactive') }}">Resume Import</a>
         <a href="https://santoelectronics.com/toser">Terms of Service</a>
     </div>
-
     <script>
         function continueAsGuest() {
             fetch('/erate/set_guest', { method: 'POST' })
@@ -404,28 +394,21 @@
                 document.getElementById('authModal').style.display = 'flex';
             {% endif %}
         });
-
-    function filterUsers() {
-        const filter = document.getElementById('userFilter').value;
-        const rows = document.querySelectorAll('#usersTable tbody tr');
-
-        rows.forEach(row => {
-            // Member rows have user_type = Member, guest rows have Guest
-            const typeCell = row.cells[6]; // Type column (0-based index)
-            if (!typeCell) return;
-
-            const isMember = typeCell.textContent.trim() === 'Member';
-            if (filter === 'all') {
-                row.style.display = '';
-            } else if (filter === 'members') {
-                row.style.display = isMember ? '' : 'none';
-            }
-        });
-    }
-
-    // Run on page load in case default is "members only"
-    document.addEventListener('DOMContentLoaded', filterUsers);
-        
+        function filterUsers() {
+            const filter = document.getElementById('userFilter').value;
+            const rows = document.querySelectorAll('#usersTable tbody tr');
+            rows.forEach(row => {
+                const typeCell = row.cells[6];
+                if (!typeCell) return;
+                const isMember = typeCell.textContent.trim() === 'Member';
+                if (filter === 'all') {
+                    row.style.display = '';
+                } else if (filter === 'members') {
+                    row.style.display = isMember ? '' : 'none';
+                }
+            });
+        }
+        document.addEventListener('DOMContentLoaded', filterUsers);
     </script>
 </body>
 </html>
