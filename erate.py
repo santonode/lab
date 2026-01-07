@@ -3,8 +3,8 @@
 # + NEW: FNA dropdown shows top 3 closest members first with star
 
 # === LOCAL DEV ONLY LOAD .env AND USE PRODUCTION DB ===
-#from dotenv import load_dotenv
-#load_dotenv()  # reads your .env with DATABASE_URL
+# from dotenv import load_dotenv
+# load_dotenv()  # reads your .env with DATABASE_URL
 
 # Optional: nicer debug prints
 import logging
@@ -45,7 +45,10 @@ os.makedirs(EXPORT_DIR, exist_ok=True)
 
 # === TRUE NEAREST FIBER DISTANCE (for table column) ===
 def get_nearest_fiber_distance(lat, lon, kmz_path):
-    if not lat or not lon or not os.path.exists(kmz_path):
+    if not (lat and lon):
+        return None
+
+    if not os.path.exists(kmz_path):
         return None
 
     R = 3958.8  # Earth radius in miles
@@ -56,29 +59,45 @@ def get_nearest_fiber_distance(lat, lon, kmz_path):
             kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
             if not kml_files:
                 return None
+
             root = ET.fromstring(kmz.read(kml_files[0]))
             ns = {'kml': 'http://www.opengis.net/kml/2.2'}
 
-            for coord_elem in root.findall('.//kml:coordinates', ns):
+            # Find ALL LineString coordinates (direct + inside MultiGeometry)
+            coord_elems = root.findall('.//kml:LineString/kml:coordinates', ns)
+            coord_elems += root.findall('.//kml:MultiGeometry/kml:LineString/kml:coordinates', ns)
+
+            for coord_elem in coord_elems:
                 if not coord_elem.text:
                     continue
-                for point in coord_elem.text.strip().split():
-                    parts = point.split(',')
+                for point_str in coord_elem.text.strip().split():
+                    parts = point_str.split(',')
                     if len(parts) < 2:
                         continue
                     try:
-                        p_lon, p_lat = float(parts[0]), float(parts[1])
+                        p_lon = float(parts[0])
+                        p_lat = float(parts[1])
                         dlat = radians(p_lat - lat)
                         dlon = radians(p_lon - lon)
-                        a = sin(dlat/2)**2 + cos(radians(lat)) * cos(radians(p_lat)) * sin(dlon/2)**2
-                        c = 2 * atan2(sqrt(a), sqrt(1-a))
+                        a = sin(dlat / 2)**2 + cos(radians(lat)) * cos(radians(p_lat)) * sin(dlon / 2)**2
+                        c = 2 * atan2(sqrt(a), sqrt(1 - a))
                         distance = R * c
                         if distance < min_dist:
                             min_dist = distance
-                    except:
+                    except ValueError:
                         continue
-        return round(min_dist, 1) if min_dist != float('inf') else None
-    except:
+
+            if min_dist == float('inf'):
+                return None
+
+            # Return formatted string
+            if min_dist < 1.0:  # includes 0.9999 etc.
+                return "<1 mi"
+            else:
+                return f"{round(min_dist, 1)} mi"
+
+    except Exception as e:
+        log("Distance calc error [%s]: %s", kmz_path, e)
         return None
 
 # === LOGGING ===
@@ -492,51 +511,73 @@ def get_bluebird_distance(address):
 KMZ_PATH_SEGRA_EAST = "SEGRA_EAST.kmz"
 KMZ_PATH_SEGRA_WEST = "SEGRA_WEST.kmz"
 KMZ_PATH_BLUEBIRD = os.path.join(os.path.dirname(__file__), "BBN Map KMZ 122023.kmz")
+
 FNA_MEMBERS_DIR = os.path.join(os.path.dirname(__file__), "fna_members")
+FIDUM_REGIONS_DIR = os.path.join(os.path.dirname(__file__), "fidium_regions")
+
+# State → preferred Fidium regional file (smart selection for bbmap)
+STATE_TO_FIDIUM_REGION = {
+    "ME": "FidiumNE.kmz",   # dense — cap
+    "NH": "FidiumNE.kmz",
+    "VT": "FidiumNE.kmz",
+    "MA": "FidiumNE.kmz",
+    "CT": "FidiumNE.kmz",   # if in NNE
+    "RI": "FidiumNE.kmz",   # if in NNE
+    "NY": "FidiumNE2.kmz",  # sparse — no cap
+    "PA": "FidiumNE2.kmz",  # sparse — no cap
+    "MN": "FidiumMW.kmz",
+    "IL": "FidiumMW.kmz",
+    "IA": "FidiumMW.kmz",
+    "KS": "FidiumMW.kmz",
+    "CO": "FidiumMW.kmz",
+    "OK": "FidiumMW.kmz",
+    "TX": "FidiumSO.kmz",
+    "FL": "FidiumSO.kmz",
+    "AL": "FidiumSO.kmz",
+    "CA": "FidiumWE.kmz",
+}
+
+# === FNA MEMBERS LOADING ===
 FNA_MEMBERS = {}
 
-# === LOAD FNA MEMBERS FROM SPLIT KMZ FILES ===
 def _load_fna_members():
     global FNA_MEMBERS
-    if FNA_MEMBERS:
+    if FNA_MEMBERS:  # Already loaded
         return
     if not os.path.exists(FNA_MEMBERS_DIR):
         log("FNA members directory not found: %s", FNA_MEMBERS_DIR)
         return
     for file in os.listdir(FNA_MEMBERS_DIR):
         if file.lower().endswith('.kmz'):
-            member_name = os.path.splitext(file)[0].replace('_', ' ')
+            member_name = os.path.splitext(file)[0].replace('_', ' ').title()
             FNA_MEMBERS[member_name] = os.path.join(FNA_MEMBERS_DIR, file)
     log("Loaded %d FNA members", len(FNA_MEMBERS))
 
-_load_fna_members()
+_load_fna_members()  # ← This line is critical — it runs at import time
 
-# === GLOBAL MAP DATA (LAZY LOADED) ===
+# === GLOBAL MAP DATA (LAZY LOADED) — BLUEBIRD & SEGRA ONLY ===
 MAP_DATA = {
     "bluebird": {"pops": None, "routes": None, "loaded": False},
     "segra_east": {"pops": None, "routes": None, "loaded": False},
     "segra_west": {"pops": None, "routes": None, "loaded": False},
 }
 
-# === GENERALIZED KMZ LOADER — Bluebird + Segra cached, FNA fresh ===
+# === GENERALIZED KMZ LOADER — FOR BLUEBIRD, SEGRA, FNA, AND FIDIUM REGIONAL FILES ===
 def _load_kmz(arg):
     """
     arg can be:
-    - "bluebird" (use cached MAP_DATA)
-    - "segra_east" or "segra_west" (use cached)
-    - direct path string (e.g. FNA member path — no cache)
+    - "bluebird", "segra_east", "segra_west" → cached
+    - direct path string → FNA member or specific Fidium regional file
     """
-    # Check if it's a cachable provider
     cache_key = None
     if arg in ["bluebird", "segra_east", "segra_west"]:
         cache_key = arg
 
-    # Use cache if available
     if cache_key and MAP_DATA[cache_key]["loaded"]:
         log(f"Returning cached data for {cache_key}")
         return MAP_DATA[cache_key]["pops"], MAP_DATA[cache_key]["routes"]
 
-    # Determine path
+    path = None
     if arg == "bluebird":
         path = KMZ_PATH_BLUEBIRD
     elif arg == "segra_east":
@@ -544,7 +585,7 @@ def _load_kmz(arg):
     elif arg == "segra_west":
         path = KMZ_PATH_SEGRA_WEST
     else:
-        path = arg  # direct path for FNA members — no cache
+        path = arg  # direct path (FNA or Fidium regional)
 
     if not os.path.exists(path):
         log("KMZ not found: %s", path)
@@ -556,23 +597,22 @@ def _load_kmz(arg):
 
     pops = []
     routes = []
-    pops_count = 0
-    routes_count = 0
     try:
-        log("Loading KMZ: %s", path)
+        log("Loading KMZ: %s", os.path.basename(path))
         with zipfile.ZipFile(path, 'r') as kmz:
             kml_files = [f for f in kmz.namelist() if f.lower().endswith('.kml')]
             if not kml_files:
                 log("No .kml in %s", path)
-                if cache_key:
-                    MAP_DATA[cache_key]["loaded"] = True
                 return [], []
             kml_data = kmz.read(kml_files[0])
+
         root = ET.fromstring(kml_data)
         ns = {'kml': 'http://www.opengis.net/kml/2.2'}
+
         for placemark in root.findall('.//kml:Placemark', ns):
             name_elem = placemark.find('kml:name', ns)
             name = name_elem.text.strip() if name_elem is not None and name_elem.text else "Unnamed"
+
             # POINT (PoP)
             point = placemark.find('.//kml:Point/kml:coordinates', ns)
             if point is not None and point.text:
@@ -581,10 +621,10 @@ def _load_kmz(arg):
                     try:
                         lon, lat = float(parts[0]), float(parts[1])
                         pops.append({"name": name, "lon": lon, "lat": lat})
-                        pops_count += 1
                     except ValueError:
                         pass
-            # LINESTRING — SUPPORT MultiGeometry
+
+            # LINESTRING (support MultiGeometry)
             line_strings = placemark.findall('.//kml:LineString/kml:coordinates', ns)
             if not line_strings:
                 line_strings = placemark.findall('.//kml:MultiGeometry/kml:LineString/kml:coordinates', ns)
@@ -601,29 +641,29 @@ def _load_kmz(arg):
                                 continue
                     if len(coords) > 1:
                         routes.append({"name": name, "coords": coords})
-                        routes_count += 1
-        log("KMZ loaded [%s] – %d PoPs, %d routes", os.path.basename(path), pops_count, routes_count)
-        # Cache if it's a cachable provider
+
+        log("KMZ loaded [%s] – %d PoPs, %d routes", os.path.basename(path), len(pops), len(routes))
+
         if cache_key:
             MAP_DATA[cache_key]["pops"] = pops
             MAP_DATA[cache_key]["routes"] = routes
             MAP_DATA[cache_key]["loaded"] = True
+
         return pops, routes
+
     except Exception as e:
         log("KMZ parse error [%s]: %s", path, e)
         if cache_key:
             MAP_DATA[cache_key]["loaded"] = True
-            MAP_DATA[cache_key]["pops"] = []
-            MAP_DATA[cache_key]["routes"] = []
         return [], []
 
-# === FINAL WORKING BBMap API — FNA RANKING FIXED + TRUE DISTANCE + NO OOM ===
+# === FINAL BBMAP — WORKING VERSION WITH FIDIUM SPLIT + LIGHT ONLY FOR NE ===
 @erate_bp.route('/bbmap/<app_number>')
 def bbmap(app_number):
     fna_member = request.args.get('fna_member')
     distance_only = request.args.get('distance_only') == '1'
 
-    # Get user's Provider (guest = Bluebird)
+    # Determine provider
     provider = 'bluebird'
     if 'username' in session:
         try:
@@ -642,29 +682,24 @@ def bbmap(app_number):
                     provider = 'fna'
                 elif provider_raw == 'Bluebird Network':
                     provider = 'bluebird'
-                else:
-                    provider = 'bluebird'
+                elif provider_raw == 'Fidium Network':
+                    provider = 'fidium'
         except Exception as e:
             log("Failed to get user provider: %s", e)
 
-    # DEBUG
-    log("bbmap called — unique request ID: %s", request.args.get('request_id', 'no_id'))
+    log("bbmap called — app=%s provider=%s member=%s distance_only=%s", app_number, provider, fna_member, distance_only)
 
-    log("bbmap request: app=%s provider=%s member=%s distance_only=%s",
-        app_number, provider, fna_member, distance_only)
-
+    # Fetch applicant data
     conn = psycopg.connect(DATABASE_URL, connect_timeout=10)
     with conn.cursor() as cur:
         cur.execute("SELECT entity_name, address1, address2, city, state, zip_code, latitude, longitude FROM erate WHERE app_number = %s", (app_number,))
         row = cur.fetchone()
     conn.close()
-
     if not row:
         return jsonify({"error": "Applicant not found"}), 404
 
     entity_name, address1, address2, city, state, zip_code, db_lat, db_lon = row
     full_address = f"{address1 or ''} {address2 or ''}, {city or ''}, {state or ''} {zip_code or ''}".strip(', ')
-
     applicant_lat = float(db_lat) if db_lat and str(db_lat).strip() and float(db_lat) != 0 else None
     applicant_lon = float(db_lon) if db_lon and str(db_lon).strip() and float(db_lon) != 0 else None
 
@@ -677,51 +712,103 @@ def bbmap(app_number):
             if geo:
                 applicant_lat = float(geo[0]['lat'])
                 applicant_lon = float(geo[0]['lon'])
-        except:
-            pass
+        except Exception as e:
+            log("Geocoding failed: %s", e)
 
     final_applicant_coords = [applicant_lat, applicant_lon] if applicant_lat and applicant_lon else None
 
-    # === SELECT CORRECT KMZ PATH FOR DISTANCE ONLY ===
+    # === SELECT CORRECT KMZ PATH — LIGHT ONLY FOR NE ===
+    kmz_path = None
     if provider == 'segra_east':
         kmz_path = KMZ_PATH_SEGRA_EAST
     elif provider == 'segra_west':
         kmz_path = KMZ_PATH_SEGRA_WEST
+    elif provider == 'fidium':
+        state_upper = state.upper() if state else ""
+        preferred_file = STATE_TO_FIDIUM_REGION.get(state_upper)
+
+        if preferred_file:
+            base_path = os.path.join(FIDUM_REGIONS_DIR, preferred_file)
+
+            if distance_only:
+                # Use full for accuracy
+                if os.path.exists(base_path):
+                    kmz_path = base_path
+                    log("Fidium distance_only: using full %s", preferred_file)
+                else:
+                    log("Full file missing — using light if available")
+                    kmz_path = base_path.replace(".kmz", "_light.kmz")
+            else:
+                # Map: use light only for NE
+                if preferred_file == "FidiumNE.kmz":
+                    light_path = base_path.replace(".kmz", "_light.kmz")
+                    if os.path.exists(light_path):
+                        kmz_path = light_path
+                        log("Fidium map: using light NE file")
+                    else:
+                        kmz_path = base_path
+                        log("NE light missing — using full NE")
+                else:
+                    # MW, SO, WE — use full file
+                    if os.path.exists(base_path):
+                        kmz_path = base_path
+                        log("Fidium map: using full %s", preferred_file)
+        else:
+            backbone_path = os.path.join(FIDUM_REGIONS_DIR, "FidiumBackbone.kmz")
+            if os.path.exists(backbone_path):
+                kmz_path = backbone_path
+                log("Fidium: using FidiumBackbone.kmz")
+            else:
+                ne_full = os.path.join(FIDUM_REGIONS_DIR, "FidiumNE.kmz")
+                kmz_path = ne_full if os.path.exists(ne_full) else KMZ_PATH_BLUEBIRD
+                log("Fidium: fallback to full NE or Bluebird")
     elif provider == 'fna':
         if fna_member:
             clean = fna_member.lstrip('★ ').split(' (')[0].strip()
             kmz_path = FNA_MEMBERS.get(clean) or KMZ_PATH_BLUEBIRD
         else:
-            # closest member for FNA ranking
             closest_path = KMZ_PATH_BLUEBIRD
             min_d = float('inf')
             for name, path in FNA_MEMBERS.items():
                 if not os.path.exists(path):
                     continue
                 d = get_nearest_fiber_distance(applicant_lat, applicant_lon, path)
-                if d is not None and d < min_d:
-                    min_d = d
-                    closest_path = path
+                if d is not None:
+                    try:
+                        d_num = 0.0 if d == "<1 mi" else float(d)
+                    except:
+                        d_num = float('inf')
+                    if d_num < min_d:
+                        min_d = d_num
+                        closest_path = path
             kmz_path = closest_path
     else:
         kmz_path = KMZ_PATH_BLUEBIRD
 
-    # === FAST PATH: Only return nearest fiber distance (for table) ===
+    # === DISTANCE ONLY MODE ===
     if distance_only:
-        dist = get_nearest_fiber_distance(applicant_lat, applicant_lon, kmz_path)
-        dist_str = "<1 mi" if dist and dist < 1 else f"{dist:.1f} mi" if dist else "—"
+        raw_dist = get_nearest_fiber_distance(applicant_lat, applicant_lon, kmz_path)
+        if raw_dist is None:
+            dist_str = "—"
+        elif isinstance(raw_dist, str):
+            dist_str = raw_dist
+        else:
+            dist_str = "<1 mi" if raw_dist < 1 else f"{raw_dist:.1f} mi"
+        log("bbmap distance result: %s", dist_str)
         return jsonify({"nearest_fiber_distance": dist_str})
 
-    # === FNA RANKING ===
+    # === FNA RANKING — FULLY PRESERVED ===
     if provider == "fna" and not fna_member:
         log("Calculating true closest FNA members for %s", full_address)
         def haversine(lat1, lon1, lat2, lon2):
             R = 3958.8
+            from math import radians, sin, cos, sqrt, atan2
             dlat = radians(lat2 - lat1)
             dlon = radians(lon2 - lon1)
             a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
             c = 2 * atan2(sqrt(a), sqrt(1-a))
             return R * c
+
         rankings = []
         for name, path in FNA_MEMBERS.items():
             if not os.path.exists(path):
@@ -750,6 +837,7 @@ def bbmap(app_number):
                         rankings.append((name, 99999))
             except:
                 rankings.append((name, 99999))
+
         rankings.sort(key=lambda x: x[1])
         display_list = []
         for i, (name, dist) in enumerate(rankings):
@@ -757,6 +845,8 @@ def bbmap(app_number):
                 display_list.append(f"★ {name} ({dist:.0f}mi)")
             else:
                 display_list.append(name)
+
+        log("FNA ranking complete")
         return jsonify({
             "fna_members": display_list,
             "pops": [], "routes": [],
@@ -772,6 +862,8 @@ def bbmap(app_number):
     nearest_kmz_coords = None
     nearest_fiber_distance = "—"
 
+    log("bbmap loading full map for provider: %s | kmz_path: %s", provider, kmz_path)
+
     if provider == "bluebird":
         if not MAP_DATA["bluebird"]["loaded"]:
             _load_kmz("bluebird")
@@ -781,17 +873,15 @@ def bbmap(app_number):
         pops, routes = _load_kmz(KMZ_PATH_SEGRA_EAST)
     elif provider == "segra_west":
         pops, routes = _load_kmz(KMZ_PATH_SEGRA_WEST)
-    elif provider == "fna" and fna_member:
-        clean = fna_member.lstrip('★ ').split(' (')[0].strip()
-        path = FNA_MEMBERS.get(clean) or FNA_MEMBERS.get(fna_member)
-        if not path or not os.path.exists(path):
-            return jsonify({"error": "Member not found"}), 404
-        pops, routes = _load_kmz(path)
+    elif provider == "fidium" and kmz_path:
+        pops, routes = _load_kmz(kmz_path)
+        log("Fidium map loaded from %s — %d routes", os.path.basename(kmz_path), len(routes))
+    elif provider == "fna" and fna_member and kmz_path:
+        pops, routes = _load_kmz(kmz_path)
     else:
-        # fallback
         pops, routes = [], []
 
-    # === TRUE NEAREST FIBER DISTANCE (red line on map) ===
+    # === TRUE NEAREST FIBER DISTANCE ===
     if final_applicant_coords and routes:
         app_lat, app_lon = final_applicant_coords
         min_d = float('inf')
@@ -808,6 +898,7 @@ def bbmap(app_number):
 
     dist_info = get_bluebird_distance(full_address)
 
+    log("bbmap response ready — sending to frontend")
     return jsonify({
         "entity_name": entity_name,
         "address": full_address,
@@ -2097,15 +2188,14 @@ def set_guest():
             conn.commit()
     return redirect(url_for('erate.dashboard'))
 
-# === USER SETTINGS API – FULL 2025 VERSION (supports Email, State, Provider) ===
+# === USER SETTINGS API – FULL 2025 VERSION (WITH LOGGING FOR PROVIDER SAVE) ===
 @erate_bp.route('/user_settings', methods=['GET', 'POST'])
 def user_settings():
     username = session.get('username') or ''
-
     # BLOCK GUESTS
     if username.startswith('guest_'):
         return jsonify({"error": "Settings disabled for guest accounts"}), 403
-        
+       
     if not session.get('username'):
         return jsonify({"ft": 100, "dm": 5.0})
 
@@ -2124,24 +2214,38 @@ def user_settings():
                 mystate = (data.get('mystate', '')[:2] or '').upper()
                 provider = data.get('provider', '').strip()
 
+                log("Settings POST for user %s — received provider: '%s'", username, provider)
+
+                # Get current provider for comparison
+                cur.execute('SELECT "Provider" FROM users WHERE username = %s', (username,))
+                current_row = cur.fetchone()
+                current_provider = current_row[0].strip() if current_row and current_row[0] else ''
+
+                log("Current provider in DB: '%s' — new: '%s'", current_provider, provider)
+
                 # Build dynamic update
                 sets = ['ft = %s', 'dm = %s', '"Email" = %s', '"MyState" = %s', '"Provider" = %s']
                 vals = [ft, dm, email, mystate, provider]
-
                 if password:
                     sets.append('password = %s')
                     vals.append(hash_password(password))
-
                 vals.append(username)
 
-                cur.execute(f"UPDATE users SET {', '.join(sets)} WHERE username = %s", vals)
+                update_sql = f"UPDATE users SET {', '.join(sets)} WHERE username = %s"
+                log("Executing SQL: %s with values: %s", update_sql, vals)
+
+                cur.execute(update_sql, vals)
                 conn.commit()
+
+                log("Settings saved successfully for user %s — provider now '%s'", username, provider)
+
                 return jsonify({"status": "success"})
 
             # GET – return all values
             cur.execute('SELECT ft, dm, "Email", "MyState", "Provider" FROM users WHERE username = %s', (username,))
             row = cur.fetchone()
             if row:
+                log("Settings GET for user %s — returning Provider: '%s'", username, row[4] or '')
                 return jsonify({
                     "ft": row[0] if row[0] is not None else 100,
                     "dm": float(row[1]) if row[1] is not None else 5.0,
@@ -2346,10 +2450,10 @@ def coverage_map_data():
 
     return Response(generate(), mimetype='application/x-ndjson')
 
+# =======================================================
+# === FINAL NATIONAL MAP — FULL SUPPORT FOR 4 REGIONS + BACKBONE ===
+# =======================================================
 
-# =======================================================
-# === NEW NATIONAL MAP =================================
-# =======================================================
 @erate_bp.route('/national-map')
 def national_map():
     return render_template('local_test.html')
@@ -2358,13 +2462,45 @@ def national_map():
 def stream_national():
     print("=== STREAMING NATIONAL FIBER MAP — STATE + PROVIDER FILTER ===")
     requested_state = request.args.get('state', '').upper()
-    requested_provider = request.args.get('provider', '').strip().lower()  # normalize to lowercase for comparison
+    requested_provider = request.args.get('provider', '').strip().lower()
     print(f"State: '{requested_state}' | Provider: '{requested_provider}'")
 
     import zipfile
     import xml.etree.ElementTree as ET
     import json
+    import re
+    import os
 
+    # === DOUGLAS-PEUCKER SIMPLIFICATION ===
+    def simplify_coords(points, tolerance):
+        if len(points) <= 2:
+            return points
+        max_dist = 0
+        index = 0
+        end = len(points) - 1
+        for i in range(1, end):
+            dist = perpendicular_distance(points[i], points[0], points[end])
+            if dist > max_dist:
+                index = i
+                max_dist = dist
+        if max_dist > tolerance:
+            left = simplify_coords(points[:index + 1], tolerance)
+            right = simplify_coords(points[index:], tolerance)
+            return left[:-1] + right
+        else:
+            return [points[0], points[end]]
+
+    def perpendicular_distance(point, line_start, line_end):
+        x0, y0 = point
+        x1, y1 = line_start
+        x2, y2 = line_end
+        if line_start == line_end:
+            return ((x0 - x1)**2 + (y0 - y1)**2)**0.5
+        numerator = abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1)
+        denominator = ((y2 - y1)**2 + (x2 - x1)**2)**0.5
+        return numerator / denominator if denominator != 0 else 0
+
+    # === STREAM KMZ ===
     def stream_kmz(path, name, color):
         if not os.path.exists(path):
             print(f"Missing KMZ: {path}")
@@ -2377,26 +2513,36 @@ def stream_national():
                 root = ET.fromstring(z.read(kml_files[0]))
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
                 count = 0
-                for coords in root.findall('.//kml:LineString/kml:coordinates', ns):
-                    if not coords.text:
+                coord_split = re.compile(r'\s+')
+                tolerance = 0.001 if "Fidium" in name else 0.001
+
+                for coords_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
+                    if not coords_elem.text:
                         continue
-                    points = []
-                    for token in coords.text.strip().split():
-                        p = token.split(',')
-                        if len(p) >= 2:
+                    tokens = coord_split.split(coords_elem.text.strip())
+                    raw_points = []
+                    for token in tokens:
+                        if not token:
+                            continue
+                        parts = token.split(',')
+                        if len(parts) >= 2:
                             try:
-                                lon, lat = float(p[0]), float(p[1])
-                                points.append([lat, lon])
-                            except:
+                                lon = float(parts[0])
+                                lat = float(parts[1])
+                                raw_points.append((lat, lon))
+                            except ValueError:
                                 continue
-                    if len(points) >= 2:
-                        yield json.dumps({"name": name, "color": color, "coords": points}) + "\n"
+                    if len(raw_points) < 2:
+                        continue
+                    simplified = simplify_coords(raw_points, tolerance)
+                    if len(simplified) >= 2:
+                        yield json.dumps({"name": name, "color": color, "coords": simplified}) + "\n"
                         count += 1
-                if count:
-                    print(f" → {name}: {count} lines (KMZ)")
+                print(f" → {name}: {count} lines streamed (tolerance={tolerance})")
         except Exception as e:
             print(f"KMZ error {path}: {e}")
 
+    # === STREAM KML (CDT) ===
     def stream_kml(path, name, color):
         if not os.path.exists(path):
             print(f"Missing KML: {path}")
@@ -2406,52 +2552,111 @@ def stream_national():
                 root = ET.fromstring(f.read())
             ns = {'kml': 'http://www.opengis.net/kml/2.2'}
             count = 0
-            for coords in root.findall('.//kml:LineString/kml:coordinates', ns):
-                if not coords.text:
+            coord_split = re.compile(r'\s+')
+            tolerance = 0.001
+            for coords_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
+                if not coords_elem.text:
                     continue
-                points = []
-                for token in coords.text.strip().split():
-                    p = token.split(',')
-                    if len(p) >= 2:
+                tokens = coord_split.split(coords_elem.text.strip())
+                raw_points = []
+                for token in tokens:
+                    if not token:
+                        continue
+                    parts = token.split(',')
+                    if len(parts) >= 2:
                         try:
-                            lon, lat = float(p[0]), float(p[1])
-                            points.append([lat, lon])
-                        except:
+                            lon = float(parts[0])
+                            lat = float(parts[1])
+                            raw_points.append((lat, lon))
+                        except ValueError:
                             continue
-                if len(points) >= 2:
-                    yield json.dumps({"name": name, "color": color, "coords": points}) + "\n"
+                if len(raw_points) < 2:
+                    continue
+                simplified = simplify_coords(raw_points, tolerance)
+                if len(simplified) >= 2:
+                    yield json.dumps({"name": name, "color": color, "coords": simplified}) + "\n"
                     count += 1
-            if count:
-                print(f" → {name}: {count} lines (KML)")
+            print(f" → {name}: {count} lines streamed")
         except Exception as e:
             print(f"KML error {path}: {e}")
 
     def generate():
-        # BLUEBIRD — show if no provider or Bluebird selected
+        fidium_dir = "fidium_regions"
+
+        # === BLUEBIRD ===
         if not requested_provider or "bluebird" in requested_provider:
-            if os.path.exists("BBN Map KMZ 122023.kmz"):
+            path = "BBN Map KMZ 122023.kmz"
+            if os.path.exists(path):
                 print("STREAMING BLUEBIRD")
-                yield from stream_kmz("BBN Map KMZ 122023.kmz", "Bluebird Network", "#0066cc")
+                yield from stream_kmz(path, "Bluebird Network", "#0066cc")
 
-        # SEGRA EAST — show if no provider or Segra East selected
+        # === SEGRA EAST ===
         if not requested_provider or "segra east" in requested_provider:
-            if os.path.exists("SEGRA_EAST.kmz"):
+            path = "SEGRA_EAST.kmz"
+            if os.path.exists(path):
                 print("STREAMING SEGRA EAST")
-                yield from stream_kmz("SEGRA_EAST.kmz", "Segra East", "#ff6600")  # Orange
+                yield from stream_kmz(path, "Segra East", "#ff6600")
 
-        # SEGRA WEST — show if no provider or Segra West selected
+        # === SEGRA WEST ===
         if not requested_provider or "segra west" in requested_provider:
-            if os.path.exists("SEGRA_WEST.kmz"):
+            path = "SEGRA_WEST.kmz"
+            if os.path.exists(path):
                 print("STREAMING SEGRA WEST")
-                yield from stream_kmz("SEGRA_WEST.kmz", "Segra West", "#ffaa00")  # Lighter orange
+                yield from stream_kmz(path, "Segra West", "#ffaa00")
 
-        # CDT — show only if no provider or CDT selected
+        # === FIDUM — 4 REGIONS + BACKBONE (EXACT MATCHING) ===
+        if os.path.isdir(fidium_dir):
+            # Mapping: expected dropdown value (lowercase) → (filename, display_name, states)
+            fidium_map = {
+                "fidium network (ne)": ("FidiumNE.kmz", "Fidium Network (NE)", ["ME", "NH", "VT", "NY", "PA", "MA"]),
+                "fidium network (mw)": ("FidiumMW.kmz", "Fidium Network (MW)", ["MN", "KS", "IL", "IA", "CO", "OK"]),
+                "fidium network (so)": ("FidiumSO.kmz", "Fidium Network (SO)", ["TX", "FL", "AL"]),
+                "fidium network (we)": ("FidiumWE.kmz", "Fidium Network (WE)", ["CA"]),
+                "fidium network (backbone)": ("FidiumBackbone.kmz", "Fidium Network (Backbone)", []),  # no state filter
+            }
+
+            requested_lower = requested_provider.lower() if requested_provider else ""
+
+            # Determine which files to stream
+            if not requested_provider or requested_lower not in fidium_map:
+                # All Providers or generic "fidium" → stream everything
+                print("STREAMING ALL FIDUM (regions + backbone)")
+                files_to_stream = list(fidium_map.values())
+            else:
+                # Exact match → only the selected one
+                selected = fidium_map.get(requested_lower)
+                if selected:
+                    print(f"STREAMING FIDUM: only {selected[1]}")
+                    files_to_stream = [selected]
+                else:
+                    files_to_stream = []
+
+            streamed_any = False
+            for filename, display_name, states in files_to_stream:
+                path = os.path.join(fidium_dir, filename)
+                if not os.path.exists(path):
+                    print(f"Missing expected Fidium file: {path}")
+                    continue
+
+                # Apply state filter (skip if state requested and not in this region's states)
+                # Backbone has empty states → never skipped
+                if requested_state and requested_state not in states:
+                    continue
+
+                print(f" → Streaming {display_name}")
+                yield from stream_kmz(path, display_name, "#9932CC")
+                streamed_any = True
+
+            if not streamed_any:
+                print(" → No Fidium files matched current filters")
+
+        # === CDT ===
         if not requested_provider or requested_provider == "cdt":
             if os.path.exists("CDT.kml"):
                 print("STREAMING CDT.kml")
                 yield from stream_kml("CDT.kml", "CDT", "#00ff00")
 
-        # FNA MEMBERS — filter by state and provider
+        # === FNA MEMBERS ===
         fna_dir = "fna_members"
         if os.path.isdir(fna_dir):
             colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
@@ -2460,12 +2665,12 @@ def stream_national():
                 if f.lower().endswith('.kmz'):
                     path = os.path.join(fna_dir, f)
                     name = os.path.splitext(f)[0].replace('_', ' ').title()
-                    # STATE FILTER
+                    lower_name = name.lower()
                     if requested_state and requested_state not in name.upper():
                         continue
-                    # PROVIDER FILTER
-                    if requested_provider and requested_provider not in name.lower():
+                    if requested_provider and requested_provider not in lower_name:
                         continue
+                    print(f"STREAMING FNA MEMBER: {name}")
                     yield from stream_kmz(path, name, colors[idx % len(colors)])
                     idx += 1
 
@@ -2511,27 +2716,52 @@ def state_bounds():
     return jsonify(bounds)
 
 # =======================================================
-# === RETURN PROVIDERS FROM KMZ or KMLs ==========================
+# === UPDATED: RETURN PROVIDERS INCLUDING SPLIT FIDUM REGIONS ===
 # =======================================================
 @erate_bp.route('/providers')
 def providers():
     providers = ["Bluebird Network", "CDT"]
 
     # FNA Members (from fna_members directory)
-    if os.path.isdir("fna_members"):
-        for f in os.listdir("fna_members"):
+    fna_dir = "fna_members"
+    if os.path.isdir(fna_dir):
+        for f in sorted(os.listdir(fna_dir)):
             if f.lower().endswith('.kmz'):
                 name = os.path.splitext(f)[0].replace('_', ' ').title()
                 providers.append(name)
 
-    # Segra East and Segra West (files in root /src)
+    # Segra East and West
     if os.path.exists("SEGRA_EAST.kmz"):
         providers.append("Segra East")
     if os.path.exists("SEGRA_WEST.kmz"):
         providers.append("Segra West")
 
-    # Remove duplicates and sort alphabetically
-    return jsonify(sorted(set(providers)))
+    # === UPDATED: FIDUM REGIONAL FILES ===
+    fidium_dir = "fidium_regions"
+    if os.path.isdir(fidium_dir):
+        for f in sorted(os.listdir(fidium_dir)):
+            if f.lower().endswith('.kmz'):
+                # Expected filenames: FidiumNE.kmz, FidiumMW.kmz, etc.
+                base_name = os.path.splitext(f)[0]  # e.g., "FidiumNE"
+                if base_name == "Other":
+                    display_name = "Fidium Network (Other)"
+                else:
+                    # Extract region suffix: NE → (NE), MW → (MW), etc.
+                    region = base_name.replace("Fidium", "").strip()
+                    display_name = f"Fidium Network ({region})" if region else "Fidium Network"
+                providers.append(display_name)
+
+    # Optional: Remove old monolithic entry if it still exists (prevents confusion)
+    old_fidium_path = "Fidium Network KMZ Nov4 2025.kmz"
+    if os.path.exists(old_fidium_path):
+        # Do NOT add "Fidium Network" — we're fully migrated to regional splits
+        pass  # Intentionally skip
+
+    # Remove duplicates (in case of overlap), sort alphabetically
+    unique_providers = sorted(set(providers))
+
+    print(f"Providers endpoint returning: {unique_providers}")  # Helpful for debugging
+    return jsonify(unique_providers)
 
 # === ADD TO EXPORT FILE ON CLICK =======================
 @erate_bp.route('/add-to-export', methods=['POST'])
@@ -2691,6 +2921,8 @@ def get_provider():
                     provider = 'fna'
                 elif provider_raw == 'Bluebird Network':
                     provider = 'bluebird'
+                elif provider_raw == 'Fidium Network':  # NEW: Fidium support
+                    provider = 'fidium'
                 else:
                     provider = 'bluebird'
         except Exception as e:
