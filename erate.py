@@ -2614,17 +2614,17 @@ def stream_national():
                 "fidium network (backbone)": ("FidiumBackbone.kmz", "Fidium Network (Backbone)"),
             }
 
-            if requested_lower.startswith("fidium network"):
-                # Specific Fidium region selected
+            # If no provider or not a Fidium-specific dropdown value → stream all Fidium
+            if not requested_provider or not any(requested_lower == key for key in fidium_map):
+                print("STREAMING ALL FIDIUM REGIONS")
+                files_to_stream = list(fidium_map.values())
+            else:
                 selected = fidium_map.get(requested_lower)
                 if selected:
                     print(f"STREAMING FIDIUM: only {selected[1]}")
                     files_to_stream = [selected]
                 else:
                     files_to_stream = []
-            else:
-                # No Fidium selected or other provider — don't stream Fidium
-                files_to_stream = []
 
             streamed_any = False
             for filename, display_name in files_to_stream:
