@@ -474,10 +474,11 @@
         }
         .flash-close:hover { opacity: 1; }
 
+		/* USER POINTS DISPLAY */
         .user-info {
             display: flex;
             align-items: center;
-            gap: 0.3rem; /* tighter spacing - no leading space feel */
+            gap: 0.1rem; /* tighter spacing - no leading space feel */
             flex-wrap: wrap;
             text-decoration: none; /* no underline */
         }
@@ -486,22 +487,23 @@
         }
         .points {
             color: #ffc107;
+	    font-size: 0.7rem;
             font-weight: normal; /* regular font, not bold */
         }
         @media (max-width: 768px) {
             .user-info {
                 /* Removed flex-direction: column — keeps inline on mobile */
                 align-items: center; /* keep centered */
-                gap: 0.3rem; /* keep tight spacing */
+                gap: 0.1rem; /* keep tight spacing */
             }
             .username-display {
                 font-size: 1rem;
             }
             .points {
-                font-size: 0.9rem;
+                font-size: 0.7rem;
             }
         }
-        
+		
     </style>
 </head>
 <body>
