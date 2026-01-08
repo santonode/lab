@@ -1,6 +1,6 @@
 # Map4.net E-Rate Query Tool
 
-Fast, mobile-first web application for searching and analyzing live USAC E-Rate 470/471 open data. test.
+Fast, mobile-first web application for searching and analyzing live USAC E-Rate 470/471 open data.
 
 Live at: https://lab.santoelectronics.com/erate
 
