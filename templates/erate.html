@@ -473,6 +473,37 @@
             justify-content: center;
         }
         .flash-close:hover { opacity: 1; }
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.points {
+    font-weight: bold;
+    color: #ffc107;
+}
+
+@media (max-width: 768px) {
+    .user-info {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.2rem;
+    }
+    .username-display {
+        font-size: 1rem;
+    }
+    .points {
+        font-size: 0.9rem;
+    }
+}
+
+/* Show full email on hover (desktop only) */
+.user-info:hover .full-email {
+    display: inline;
+}
         
     </style>
 </head>
@@ -533,12 +564,14 @@
     </div>
     <div class="container">
         <div class="header">
-            {% if session.username %}
-                <span class="user-info" id="user-settings-btn" style="cursor:pointer; text-decoration:underline;">
-                    {{ session.username }} 
-                    <span class="points" id="points-display">Loading...</span>
-                </span>
-            {% endif %}
+	    {% if session.username %}
+	        <span class="user-info" id="user-settings-btn" style="cursor:pointer; text-decoration:underline;">
+	            {% set full_name = session.username %}
+	            {% set short_name = full_name.split('@')[0].split('.')[0]|capitalize if '@' in full_name else full_name.split('.')[0]|capitalize %}
+	            <span class="username-display">{{ short_name }}</span>
+	            <span class="points" id="points-display">Loading...</span>
+	        </span>
+	    {% endif %}
             <!-- CENTERED LOGO + TITLE -->
             <div style="display:flex; align-items:center; gap:3px;">
                 <img src="{{ url_for('static', filename='m4logo-w.png') }}" alt="Logo" style="height:48px; width:48px;">
