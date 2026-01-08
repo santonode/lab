@@ -1,12 +1,12 @@
-# Santo E-Rate Query Tool
+# Map4.net E-Rate Query Tool
 
 Fast, mobile-first web application for searching and analyzing live USAC E-Rate 470/471 open data.
 
 Live at: https://lab.santoelectronics.com/erate
 
 ## Features
-- Real-time search of all active FCC Form 470s from USAC open data
-- Geographic mapping with Bluebird Network and FNA fiber overlay (57+ KMZ files parsed live)
+- Real-time search of all active FCC Form 470/471 Applications from USAC open data
+- Geographic mapping with Bluebird Network, Segra and FNA fiber overlay (60+ KMZ files parsed live)
 - Distance-to-fiber calculation (Bluebird or FNA member-specific)
 - Guest mode + pay-as-you-go points system (deducts 1 point per map/distance click)
 - Registered users get higher limits and persistent points
@@ -18,7 +18,8 @@ Live at: https://lab.santoelectronics.com/erate
 <pre>
 | Name             | Type  | Owner
 |------------------|-------|----------------
-| erate            | table | wurdle_db_user
+| erate            | table | wurdle_db_user (470)
+| erate2           | table | wurdle_db_user (471)
 | erate_hash       | table | wurdle_db_user  
 | import_hash_log  | table | wurdle_db_user
 | users            | table | wurdle_db_user
@@ -42,6 +43,7 @@ Live at: https://lab.santoelectronics.com/erate
 ├── requirements.txt
 └── /templates
     ├── erate.html            # Main dashboard
+    ├── erate471.html         # Main471 dashboard
     ├── eadmin.html           # Admin/import page
     ├── erate_import.html
     └── erate_import_complete.html
