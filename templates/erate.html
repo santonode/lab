@@ -474,36 +474,33 @@
         }
         .flash-close:hover { opacity: 1; }
 
-.user-info {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-}
-
-.points {
-    font-weight: bold;
-    color: #ffc107;
-}
-
-@media (max-width: 768px) {
-    .user-info {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.2rem;
-    }
-    .username-display {
-        font-size: 1rem;
-    }
-    .points {
-        font-size: 0.9rem;
-    }
-}
-
-/* Show full email on hover (desktop only) */
-.user-info:hover .full-email {
-    display: inline;
-}
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem; /* tighter spacing - no leading space feel */
+            flex-wrap: wrap;
+            text-decoration: none; /* no underline */
+        }
+        .user-info:hover {
+            text-decoration: none; /* no underline on hover */
+        }
+        .points {
+            color: #ffc107;
+            font-weight: normal; /* regular font, not bold */
+        }
+        @media (max-width: 768px) {
+            .user-info {
+                /* Removed flex-direction: column — keeps inline on mobile */
+                align-items: center; /* keep centered */
+                gap: 0.3rem; /* keep tight spacing */
+            }
+            .username-display {
+                font-size: 1rem;
+            }
+            .points {
+                font-size: 0.9rem;
+            }
+        }
         
     </style>
 </head>
@@ -565,11 +562,11 @@
     <div class="container">
         <div class="header">
 	    {% if session.username %}
-	        <span class="user-info" id="user-settings-btn" style="cursor:pointer; text-decoration:underline;">
+	        <span class="user-info" id="user-settings-btn" style="cursor:pointer; text-decoration:underline; white-space:nowrap;">
 	            {% set full_name = session.username %}
 	            {% set short_name = full_name.split('@')[0].split('.')[0]|capitalize if '@' in full_name else full_name.split('.')[0]|capitalize %}
 	            <span class="username-display">{{ short_name }}</span>
-	            <span class="points" id="points-display">Loading...</span>
+	            <span class="points" id="points-display" style="text-decoration:none; margin-left:6px;">Loading...</span>
 	        </span>
 	    {% endif %}
             <!-- CENTERED LOGO + TITLE -->
