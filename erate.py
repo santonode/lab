@@ -2461,8 +2461,9 @@ def national_map():
 def stream_national():
     print("=== STREAMING NATIONAL FIBER MAP — STATE + PROVIDER FILTER ===")
     requested_state = request.args.get('state', '').upper()
-    requested_provider = request.args.get('provider', '').strip().lower()
-    print(f"State: '{requested_state}' | Provider: '{requested_provider}'")
+    requested_provider = request.args.get('provider', '').strip()
+    requested_lower = requested_provider.lower() if requested_provider else ""
+    print(f"State: '{requested_state}' | Provider: '{requested_provider}' (lower: '{requested_lower}')")
 
     import zipfile
     import xml.etree.ElementTree as ET
@@ -2513,7 +2514,7 @@ def stream_national():
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
                 count = 0
                 coord_split = re.compile(r'\s+')
-                tolerance = 0.001  # adjust if needed
+                tolerance = 0.001
                 for coords_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
                     if not coords_elem.text:
                         continue
@@ -2582,21 +2583,21 @@ def stream_national():
         fidium_dir = "fidium_regions"
 
         # === BLUEBIRD ===
-        if not requested_provider or "bluebird" in requested_provider:
+        if not requested_provider or "bluebird" in requested_lower:
             path = "BBN Map KMZ 122023.kmz"
             if os.path.exists(path):
                 print("STREAMING BLUEBIRD")
                 yield from stream_kmz(path, "Bluebird Network", "#0066cc")
 
         # === SEGRA EAST ===
-        if not requested_provider or "segra east" in requested_provider:
+        if not requested_provider or "segra east" in requested_lower:
             path = "SEGRA_EAST.kmz"
             if os.path.exists(path):
                 print("STREAMING SEGRA EAST")
                 yield from stream_kmz(path, "Segra East", "#ff6600")
 
         # === SEGRA WEST ===
-        if not requested_provider or "segra west" in requested_provider:
+        if not requested_provider or "segra west" in requested_lower:
             path = "SEGRA_WEST.kmz"
             if os.path.exists(path):
                 print("STREAMING SEGRA WEST")
@@ -2604,7 +2605,6 @@ def stream_national():
 
         # === FIDIUM — 5 REGIONS + BACKBONE ===
         if os.path.isdir(fidium_dir):
-            # Mapping: dropdown value (lowercase) → (filename, display_name)
             fidium_map = {
                 "fidium network (ne)": ("FidiumNE.kmz", "Fidium Network (NE)"),
                 "fidium network (ne2)": ("FidiumNE2.kmz", "Fidium Network (NE2)"),
@@ -2614,19 +2614,17 @@ def stream_national():
                 "fidium network (backbone)": ("FidiumBackbone.kmz", "Fidium Network (Backbone)"),
             }
 
-            requested_lower = requested_provider.lower() if requested_provider else ""
-
-            if not requested_provider or requested_lower not in fidium_map:
-                # No specific Fidium selected → stream all
-                print("STREAMING ALL FIDIUM REGIONS")
-                files_to_stream = list(fidium_map.values())
-            else:
+            if requested_lower.startswith("fidium network"):
+                # Specific Fidium region selected
                 selected = fidium_map.get(requested_lower)
                 if selected:
                     print(f"STREAMING FIDIUM: only {selected[1]}")
                     files_to_stream = [selected]
                 else:
                     files_to_stream = []
+            else:
+                # No Fidium selected or other provider — don't stream Fidium
+                files_to_stream = []
 
             streamed_any = False
             for filename, display_name in files_to_stream:
@@ -2634,18 +2632,17 @@ def stream_national():
                 if not os.path.exists(path):
                     print(f"Missing expected Fidium file: {path}")
                     continue
-                # Skip if state filter doesn't match (except backbone)
                 if requested_state and requested_state not in display_name.upper() and "backbone" not in display_name.lower():
                     continue
                 print(f" → Streaming {display_name}")
                 yield from stream_kmz(path, display_name, "#9932CC")
                 streamed_any = True
 
-            if not streamed_any:
+            if not streamed_any and files_to_stream:
                 print(" → No Fidium files matched current filters")
 
         # === CDT ===
-        if not requested_provider or requested_provider == "cdt":
+        if not requested_provider or "cdt" in requested_lower:
             if os.path.exists("CDT.kml"):
                 print("STREAMING CDT.kml")
                 yield from stream_kml("CDT.kml", "CDT", "#00ff00")
@@ -2661,7 +2658,7 @@ def stream_national():
                     name = os.path.splitext(f)[0].replace('_', ' ').title()
                     if requested_state and requested_state not in name.upper():
                         continue
-                    if requested_provider and requested_provider not in name.lower():
+                    if requested_provider and requested_provider.lower() not in name.lower():
                         continue
                     print(f"STREAMING FNA MEMBER: {name}")
                     yield from stream_kmz(path, name, colors[idx % len(colors)])
