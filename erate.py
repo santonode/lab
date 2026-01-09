@@ -2308,9 +2308,8 @@ def coverage_map_data():
 
     return Response(generate(), mimetype='application/x-ndjson')
 
-
 # =======================================================
-# === NEW NATIONAL MAP =================================
+# === FINAL NATIONAL MAP — STRICT SINGLE PROVIDER + ALL SUPPORT ===
 # =======================================================
 @erate_bp.route('/national-map')
 def national_map():
@@ -2318,15 +2317,47 @@ def national_map():
 
 @erate_bp.route('/stream-national')
 def stream_national():
-    print("=== STREAMING NATIONAL FIBER MAP — STATE + PROVIDER FILTER ===")
-    requested_state = request.args.get('state', '').upper()
-    requested_provider = request.args.get('provider', '').strip().lower()  # normalize to lowercase for comparison
-    print(f"State: '{requested_state}' | Provider: '{requested_provider}'")
+    print("=== STREAMING NATIONAL FIBER MAP — STRICT SINGLE PROVIDER + ALL ===")
+    requested_provider = request.args.get('provider', '').strip()
+    requested_lower = requested_provider.lower() if requested_provider else ""
+    print(f"Provider selected: '{requested_provider}' (lower: '{requested_lower}')")
 
     import zipfile
     import xml.etree.ElementTree as ET
     import json
+    import re
+    import os
 
+    # === DOUGLAS-PEUCKER SIMPLIFICATION ===
+    def simplify_coords(points, tolerance):
+        if len(points) <= 2:
+            return points
+        max_dist = 0
+        index = 0
+        end = len(points) - 1
+        for i in range(1, end):
+            dist = perpendicular_distance(points[i], points[0], points[end])
+            if dist > max_dist:
+                index = i
+                max_dist = dist
+        if max_dist > tolerance:
+            left = simplify_coords(points[:index + 1], tolerance)
+            right = simplify_coords(points[index:], tolerance)
+            return left[:-1] + right
+        else:
+            return [points[0], points[end]]
+
+    def perpendicular_distance(point, line_start, line_end):
+        x0, y0 = point
+        x1, y1 = line_start
+        x2, y2 = line_end
+        if line_start == line_end:
+            return ((x0 - x1)**2 + (y0 - y1)**2)**0.5
+        numerator = abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1)
+        denominator = ((y2 - y1)**2 + (x2 - x1)**2)**0.5
+        return numerator / denominator if denominator != 0 else 0
+
+    # === STREAM KMZ ===
     def stream_kmz(path, name, color):
         if not os.path.exists(path):
             print(f"Missing KMZ: {path}")
@@ -2339,26 +2370,35 @@ def stream_national():
                 root = ET.fromstring(z.read(kml_files[0]))
                 ns = {'kml': 'http://www.opengis.net/kml/2.2'}
                 count = 0
-                for coords in root.findall('.//kml:LineString/kml:coordinates', ns):
-                    if not coords.text:
+                coord_split = re.compile(r'\s+')
+                tolerance = 0.001
+                for coords_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
+                    if not coords_elem.text:
                         continue
-                    points = []
-                    for token in coords.text.strip().split():
-                        p = token.split(',')
-                        if len(p) >= 2:
+                    tokens = coord_split.split(coords_elem.text.strip())
+                    raw_points = []
+                    for token in tokens:
+                        if not token:
+                            continue
+                        parts = token.split(',')
+                        if len(parts) >= 2:
                             try:
-                                lon, lat = float(p[0]), float(p[1])
-                                points.append([lat, lon])
-                            except:
+                                lon = float(parts[0])
+                                lat = float(parts[1])
+                                raw_points.append((lat, lon))
+                            except ValueError:
                                 continue
-                    if len(points) >= 2:
-                        yield json.dumps({"name": name, "color": color, "coords": points}) + "\n"
+                    if len(raw_points) < 2:
+                        continue
+                    simplified = simplify_coords(raw_points, tolerance)
+                    if len(simplified) >= 2:
+                        yield json.dumps({"name": name, "color": color, "coords": simplified}) + "\n"
                         count += 1
-                if count:
-                    print(f" → {name}: {count} lines (KMZ)")
+                print(f" → {name}: {count} lines streamed")
         except Exception as e:
             print(f"KMZ error {path}: {e}")
 
+    # === STREAM KML (CDT) ===
     def stream_kml(path, name, color):
         if not os.path.exists(path):
             print(f"Missing KML: {path}")
@@ -2368,68 +2408,164 @@ def stream_national():
                 root = ET.fromstring(f.read())
             ns = {'kml': 'http://www.opengis.net/kml/2.2'}
             count = 0
-            for coords in root.findall('.//kml:LineString/kml:coordinates', ns):
-                if not coords.text:
+            coord_split = re.compile(r'\s+')
+            tolerance = 0.001
+            for coords_elem in root.findall('.//kml:LineString/kml:coordinates', ns):
+                if not coords_elem.text:
                     continue
-                points = []
-                for token in coords.text.strip().split():
-                    p = token.split(',')
-                    if len(p) >= 2:
+                tokens = coord_split.split(coords_elem.text.strip())
+                raw_points = []
+                for token in tokens:
+                    if not token:
+                        continue
+                    parts = token.split(',')
+                    if len(parts) >= 2:
                         try:
-                            lon, lat = float(p[0]), float(p[1])
-                            points.append([lat, lon])
-                        except:
+                            lon = float(parts[0])
+                            lat = float(parts[1])
+                            raw_points.append((lat, lon))
+                        except ValueError:
                             continue
-                if len(points) >= 2:
-                    yield json.dumps({"name": name, "color": color, "coords": points}) + "\n"
+                if len(raw_points) < 2:
+                    continue
+                simplified = simplify_coords(raw_points, tolerance)
+                if len(simplified) >= 2:
+                    yield json.dumps({"name": name, "color": color, "coords": simplified}) + "\n"
                     count += 1
-            if count:
-                print(f" → {name}: {count} lines (KML)")
+            print(f" → {name}: {count} lines streamed")
         except Exception as e:
             print(f"KML error {path}: {e}")
 
     def generate():
-        # BLUEBIRD — show if no provider or Bluebird selected
-        if not requested_provider or "bluebird" in requested_provider:
-            if os.path.exists("BBN Map KMZ 122023.kmz"):
+        # === ALL PROVIDERS ===
+        if not requested_provider or "all" in requested_lower.lower():
+            print("ALL PROVIDERS SELECTED — streaming all")
+
+            # Bluebird
+            path = "BBN Map KMZ 122023.kmz"
+            if os.path.exists(path):
                 print("STREAMING BLUEBIRD")
-                yield from stream_kmz("BBN Map KMZ 122023.kmz", "Bluebird Network", "#0066cc")
+                yield from stream_kmz(path, "Bluebird Network", "#0066cc")
 
-        # SEGRA EAST — show if no provider or Segra East selected
-        if not requested_provider or "segra east" in requested_provider:
-            if os.path.exists("SEGRA_EAST.kmz"):
+            # Segra East
+            path = "SEGRA_EAST.kmz"
+            if os.path.exists(path):
                 print("STREAMING SEGRA EAST")
-                yield from stream_kmz("SEGRA_EAST.kmz", "Segra East", "#ff6600")  # Orange
+                yield from stream_kmz(path, "Segra East", "#ff6600")
 
-        # SEGRA WEST — show if no provider or Segra West selected
-        if not requested_provider or "segra west" in requested_provider:
-            if os.path.exists("SEGRA_WEST.kmz"):
+            # Segra West
+            path = "SEGRA_WEST.kmz"
+            if os.path.exists(path):
                 print("STREAMING SEGRA WEST")
-                yield from stream_kmz("SEGRA_WEST.kmz", "Segra West", "#ffaa00")  # Lighter orange
+                yield from stream_kmz(path, "Segra West", "#ffaa00")
 
-        # CDT — show only if no provider or CDT selected
-        if not requested_provider or requested_provider == "cdt":
+            # Fidium all regions + backbone
+            fidium_dir = "fidium_regions"
+            if os.path.isdir(fidium_dir):
+                fidium_files = [
+                    ("FidiumNE.kmz", "Fidium Network (NE)"),
+                    ("FidiumNE2.kmz", "Fidium Network (NE2)"),
+                    ("FidiumMW.kmz", "Fidium Network (MW)"),
+                    ("FidiumSO.kmz", "Fidium Network (SO)"),
+                    ("FidiumWE.kmz", "Fidium Network (WE)"),
+                    ("FidiumBackbone.kmz", "Fidium Network (Backbone)"),
+                ]
+                for filename, display_name in fidium_files:
+                    path = os.path.join(fidium_dir, filename)
+                    if os.path.exists(path):
+                        print(f" → Streaming {display_name}")
+                        yield from stream_kmz(path, display_name, "#9932CC")
+
+            # CDT
             if os.path.exists("CDT.kml"):
-                print("STREAMING CDT.kml")
+                print("STREAMING CDT")
                 yield from stream_kml("CDT.kml", "CDT", "#00ff00")
 
-        # FNA MEMBERS — filter by state and provider
-        fna_dir = "fna_members"
-        if os.path.isdir(fna_dir):
-            colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
-            idx = 0
-            for f in sorted(os.listdir(fna_dir)):
-                if f.lower().endswith('.kmz'):
-                    path = os.path.join(fna_dir, f)
-                    name = os.path.splitext(f)[0].replace('_', ' ').title()
-                    # STATE FILTER
-                    if requested_state and requested_state not in name.upper():
-                        continue
-                    # PROVIDER FILTER
-                    if requested_provider and requested_provider not in name.lower():
-                        continue
-                    yield from stream_kmz(path, name, colors[idx % len(colors)])
-                    idx += 1
+            # All FNA members
+            fna_dir = "fna_members"
+            if os.path.isdir(fna_dir):
+                colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
+                idx = 0
+                for f in sorted(os.listdir(fna_dir)):
+                    if f.lower().endswith('.kmz'):
+                        path = os.path.join(fna_dir, f)
+                        name = os.path.splitext(f)[0].replace('_', ' ').title()
+                        print(f"STREAMING FNA MEMBER: {name}")
+                        yield from stream_kmz(path, name, colors[idx % len(colors)])
+                        idx += 1
+
+        else:
+            # Specific provider selected — stream only that one
+            print(f"SPECIFIC PROVIDER SELECTED: {requested_provider}")
+
+            # Bluebird
+            if "bluebird" in requested_lower:
+                path = "BBN Map KMZ 122023.kmz"
+                if os.path.exists(path):
+                    print("STREAMING BLUEBIRD ONLY")
+                    yield from stream_kmz(path, "Bluebird Network", "#0066cc")
+
+            # Segra East
+            elif "segra east" in requested_lower:
+                path = "SEGRA_EAST.kmz"
+                if os.path.exists(path):
+                    print("STREAMING SEGRA EAST ONLY")
+                    yield from stream_kmz(path, "Segra East", "#ff6600")
+
+            # Segra West
+            elif "segra west" in requested_lower:
+                path = "SEGRA_WEST.kmz"
+                if os.path.exists(path):
+                    print("STREAMING SEGRA WEST ONLY")
+                    yield from stream_kmz(path, "Segra West", "#ffaa00")
+
+            # CDT
+            elif "cdt" in requested_lower:
+                if os.path.exists("CDT.kml"):
+                    print("STREAMING CDT ONLY")
+                    yield from stream_kml("CDT.kml", "CDT", "#00ff00")
+
+            # FNA member — only trigger if provider looks like FNA member name
+            elif os.path.isdir("fna_members") and "fidium" not in requested_lower:
+                fna_dir = "fna_members"
+                clean_request = requested_provider.lower().strip()
+                print(f"FNA search for: '{clean_request}'")
+                found = False
+                for f in os.listdir(fna_dir):
+                    if f.lower().endswith('.kmz'):
+                        file_name = os.path.splitext(f)[0].lower().replace('_', ' ')
+                        if clean_request in file_name:
+                            path = os.path.join(fna_dir, f)
+                            name = os.path.splitext(f)[0].replace('_', ' ').title()
+                            print(f"STREAMING FNA MEMBER: {name}")
+                            yield from stream_kmz(path, name, "#dc3545")
+                            found = True
+                            break
+                if not found:
+                    print(f" → No FNA member matched '{clean_request}'")
+
+            # Fidium specific region — exact match (after FNA)
+            elif requested_lower.startswith("fidium network"):
+                fidium_dir = "fidium_regions"
+                fidium_map = {
+                    "fidium network (ne)": ("FidiumNE.kmz", "Fidium Network (NE)"),
+                    "fidium network (ne2)": ("FidiumNE2.kmz", "Fidium Network (NE2)"),
+                    "fidium network (mw)": ("FidiumMW.kmz", "Fidium Network (MW)"),
+                    "fidium network (so)": ("FidiumSO.kmz", "Fidium Network (SO)"),
+                    "fidium network (we)": ("FidiumWE.kmz", "Fidium Network (WE)"),
+                    "fidium network (backbone)": ("FidiumBackbone.kmz", "Fidium Network (Backbone)"),
+                }
+                selected = fidium_map.get(requested_lower)
+                if selected:
+                    path = os.path.join(fidium_dir, selected[0])
+                    if os.path.exists(path):
+                        print(f"STREAMING FIDIUM: only {selected[1]}")
+                        yield from stream_kmz(path, selected[1], "#9932CC")
+                else:
+                    print("No matching Fidium region")
+
+            else:
+                print("Unknown provider — streaming nothing")
 
     return Response(generate(), mimetype='application/x-ndjson')
 
