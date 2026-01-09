@@ -1059,7 +1059,7 @@ window.addEventListener('load', () => {
                 .then(data => {
                     const el = document.getElementById('points-display');
                     if (el) {
-                        el.textContent = `(${data.points} pts)`;
+                        el.textContent = `${data.points} pts`;
                         if (data.points <= 5) el.style.color = '#ffc107';
                         if (data.points <= 0) {
                             el.style.color = '#dc3545';
