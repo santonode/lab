@@ -2451,7 +2451,7 @@ def coverage_map_data():
     return Response(generate(), mimetype='application/x-ndjson')
 
 # =======================================================
-# === FINAL NATIONAL MAP — FULL SUPPORT FOR 5 REGIONS + BACKBONE ===
+# === FINAL NATIONAL MAP — STRICT SINGLE PROVIDER + ALL SUPPORT ===
 # =======================================================
 @erate_bp.route('/national-map')
 def national_map():
@@ -2459,11 +2459,10 @@ def national_map():
 
 @erate_bp.route('/stream-national')
 def stream_national():
-    print("=== STREAMING NATIONAL FIBER MAP — STATE + PROVIDER FILTER ===")
-    requested_state = request.args.get('state', '').upper()
+    print("=== STREAMING NATIONAL FIBER MAP — STRICT SINGLE PROVIDER + ALL ===")
     requested_provider = request.args.get('provider', '').strip()
     requested_lower = requested_provider.lower() if requested_provider else ""
-    print(f"State: '{requested_state}' | Provider: '{requested_provider}' (lower: '{requested_lower}')")
+    print(f"Provider selected: '{requested_provider}' (lower: '{requested_lower}')")
 
     import zipfile
     import xml.etree.ElementTree as ET
@@ -2580,89 +2579,135 @@ def stream_national():
             print(f"KML error {path}: {e}")
 
     def generate():
-        fidium_dir = "fidium_regions"
+        # === ALL PROVIDERS ===
+        if not requested_provider or "all" in requested_lower.lower():
+            print("ALL PROVIDERS SELECTED — streaming all")
 
-        # === BLUEBIRD ===
-        if not requested_provider or "bluebird" in requested_lower:
+            # Bluebird
             path = "BBN Map KMZ 122023.kmz"
             if os.path.exists(path):
                 print("STREAMING BLUEBIRD")
                 yield from stream_kmz(path, "Bluebird Network", "#0066cc")
 
-        # === SEGRA EAST ===
-        if not requested_provider or "segra east" in requested_lower:
+            # Segra East
             path = "SEGRA_EAST.kmz"
             if os.path.exists(path):
                 print("STREAMING SEGRA EAST")
                 yield from stream_kmz(path, "Segra East", "#ff6600")
 
-        # === SEGRA WEST ===
-        if not requested_provider or "segra west" in requested_lower:
+            # Segra West
             path = "SEGRA_WEST.kmz"
             if os.path.exists(path):
                 print("STREAMING SEGRA WEST")
                 yield from stream_kmz(path, "Segra West", "#ffaa00")
 
-        # === FIDIUM — 5 REGIONS + BACKBONE ===
-        if os.path.isdir(fidium_dir):
-            fidium_map = {
-                "fidium network (ne)": ("FidiumNE.kmz", "Fidium Network (NE)"),
-                "fidium network (ne2)": ("FidiumNE2.kmz", "Fidium Network (NE2)"),
-                "fidium network (mw)": ("FidiumMW.kmz", "Fidium Network (MW)"),
-                "fidium network (so)": ("FidiumSO.kmz", "Fidium Network (SO)"),
-                "fidium network (we)": ("FidiumWE.kmz", "Fidium Network (WE)"),
-                "fidium network (backbone)": ("FidiumBackbone.kmz", "Fidium Network (Backbone)"),
-            }
+            # Fidium all regions + backbone
+            fidium_dir = "fidium_regions"
+            if os.path.isdir(fidium_dir):
+                fidium_files = [
+                    ("FidiumNE.kmz", "Fidium Network (NE)"),
+                    ("FidiumNE2.kmz", "Fidium Network (NE2)"),
+                    ("FidiumMW.kmz", "Fidium Network (MW)"),
+                    ("FidiumSO.kmz", "Fidium Network (SO)"),
+                    ("FidiumWE.kmz", "Fidium Network (WE)"),
+                    ("FidiumBackbone.kmz", "Fidium Network (Backbone)"),
+                ]
+                for filename, display_name in fidium_files:
+                    path = os.path.join(fidium_dir, filename)
+                    if os.path.exists(path):
+                        print(f" → Streaming {display_name}")
+                        yield from stream_kmz(path, display_name, "#9932CC")
 
-            # If no provider or not a Fidium-specific dropdown value → stream all Fidium
-            if not requested_provider or not any(requested_lower == key for key in fidium_map):
-                print("STREAMING ALL FIDIUM REGIONS")
-                files_to_stream = list(fidium_map.values())
-            else:
-                selected = fidium_map.get(requested_lower)
-                if selected:
-                    print(f"STREAMING FIDIUM: only {selected[1]}")
-                    files_to_stream = [selected]
-                else:
-                    files_to_stream = []
-
-            streamed_any = False
-            for filename, display_name in files_to_stream:
-                path = os.path.join(fidium_dir, filename)
-                if not os.path.exists(path):
-                    print(f"Missing expected Fidium file: {path}")
-                    continue
-                if requested_state and requested_state not in display_name.upper() and "backbone" not in display_name.lower():
-                    continue
-                print(f" → Streaming {display_name}")
-                yield from stream_kmz(path, display_name, "#9932CC")
-                streamed_any = True
-
-            if not streamed_any and files_to_stream:
-                print(" → No Fidium files matched current filters")
-
-        # === CDT ===
-        if not requested_provider or "cdt" in requested_lower:
+            # CDT
             if os.path.exists("CDT.kml"):
-                print("STREAMING CDT.kml")
+                print("STREAMING CDT")
                 yield from stream_kml("CDT.kml", "CDT", "#00ff00")
 
-        # === FNA MEMBERS ===
-        fna_dir = "fna_members"
-        if os.path.isdir(fna_dir):
-            colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
-            idx = 0
-            for f in sorted(os.listdir(fna_dir)):
-                if f.lower().endswith('.kmz'):
-                    path = os.path.join(fna_dir, f)
-                    name = os.path.splitext(f)[0].replace('_', ' ').title()
-                    if requested_state and requested_state not in name.upper():
-                        continue
-                    if requested_provider and requested_provider.lower() not in name.lower():
-                        continue
-                    print(f"STREAMING FNA MEMBER: {name}")
-                    yield from stream_kmz(path, name, colors[idx % len(colors)])
-                    idx += 1
+            # All FNA members
+            fna_dir = "fna_members"
+            if os.path.isdir(fna_dir):
+                colors = ["#dc3545","#28a745","#fd7e14","#6f42c1","#20c997","#e83e8c","#6610f2","#17a2b8","#ffc107","#6c757d"]
+                idx = 0
+                for f in sorted(os.listdir(fna_dir)):
+                    if f.lower().endswith('.kmz'):
+                        path = os.path.join(fna_dir, f)
+                        name = os.path.splitext(f)[0].replace('_', ' ').title()
+                        print(f"STREAMING FNA MEMBER: {name}")
+                        yield from stream_kmz(path, name, colors[idx % len(colors)])
+                        idx += 1
+
+        else:
+            # Specific provider selected — stream only that one
+            print(f"SPECIFIC PROVIDER SELECTED: {requested_provider}")
+
+            # Bluebird
+            if "bluebird" in requested_lower:
+                path = "BBN Map KMZ 122023.kmz"
+                if os.path.exists(path):
+                    print("STREAMING BLUEBIRD ONLY")
+                    yield from stream_kmz(path, "Bluebird Network", "#0066cc")
+
+            # Segra East
+            elif "segra east" in requested_lower:
+                path = "SEGRA_EAST.kmz"
+                if os.path.exists(path):
+                    print("STREAMING SEGRA EAST ONLY")
+                    yield from stream_kmz(path, "Segra East", "#ff6600")
+
+            # Segra West
+            elif "segra west" in requested_lower:
+                path = "SEGRA_WEST.kmz"
+                if os.path.exists(path):
+                    print("STREAMING SEGRA WEST ONLY")
+                    yield from stream_kmz(path, "Segra West", "#ffaa00")
+
+            # CDT
+            elif "cdt" in requested_lower:
+                if os.path.exists("CDT.kml"):
+                    print("STREAMING CDT ONLY")
+                    yield from stream_kml("CDT.kml", "CDT", "#00ff00")
+
+            # FNA member — only trigger if provider looks like FNA member name
+            elif os.path.isdir("fna_members") and "fidium" not in requested_lower:
+                fna_dir = "fna_members"
+                clean_request = requested_provider.lower().strip()
+                print(f"FNA search for: '{clean_request}'")
+                found = False
+                for f in os.listdir(fna_dir):
+                    if f.lower().endswith('.kmz'):
+                        file_name = os.path.splitext(f)[0].lower().replace('_', ' ')
+                        if clean_request in file_name:
+                            path = os.path.join(fna_dir, f)
+                            name = os.path.splitext(f)[0].replace('_', ' ').title()
+                            print(f"STREAMING FNA MEMBER: {name}")
+                            yield from stream_kmz(path, name, "#dc3545")
+                            found = True
+                            break
+                if not found:
+                    print(f" → No FNA member matched '{clean_request}'")
+
+            # Fidium specific region — exact match (after FNA)
+            elif requested_lower.startswith("fidium network"):
+                fidium_dir = "fidium_regions"
+                fidium_map = {
+                    "fidium network (ne)": ("FidiumNE.kmz", "Fidium Network (NE)"),
+                    "fidium network (ne2)": ("FidiumNE2.kmz", "Fidium Network (NE2)"),
+                    "fidium network (mw)": ("FidiumMW.kmz", "Fidium Network (MW)"),
+                    "fidium network (so)": ("FidiumSO.kmz", "Fidium Network (SO)"),
+                    "fidium network (we)": ("FidiumWE.kmz", "Fidium Network (WE)"),
+                    "fidium network (backbone)": ("FidiumBackbone.kmz", "Fidium Network (Backbone)"),
+                }
+                selected = fidium_map.get(requested_lower)
+                if selected:
+                    path = os.path.join(fidium_dir, selected[0])
+                    if os.path.exists(path):
+                        print(f"STREAMING FIDIUM: only {selected[1]}")
+                        yield from stream_kmz(path, selected[1], "#9932CC")
+                else:
+                    print("No matching Fidium region")
+
+            else:
+                print("Unknown provider — streaming nothing")
 
     return Response(generate(), mimetype='application/x-ndjson')
     
