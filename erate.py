@@ -2569,6 +2569,7 @@ def stream_national():
 
     return Response(generate(), mimetype='application/x-ndjson')
 
+
 # =======================================================
 # === RETURN STATE BOUNDS  =================================
 # =======================================================
