@@ -478,7 +478,7 @@
         .user-info {
             display: flex;
             align-items: center;
-            gap: 0.1rem; /* tighter spacing - no leading space feel */
+            gap: 0.3rem; /* tighter spacing - no leading space feel */
             flex-wrap: wrap;
             text-decoration: none; /* no underline */
         }
@@ -487,14 +487,14 @@
         }
         .points {
             color: #ffc107;
-	    font-size: 0.7rem;
-            font-weight: 600; /* regular font, not bold */
+            font-weight: normal; /* regular font, not bold */
         }
         @media (max-width: 768px) {
             .user-info {
-                /* Removed flex-direction: column — keeps inline on mobile */
-                align-items: center; /* keep centered */
-                gap: 0.1rem; /* keep tight spacing */
+                /* Keep inline on mobile */
+                flex-direction: row; /* force inline */
+                align-items: center;
+                gap: 0.3rem;
             }
             .username-display {
                 font-size: 0.9rem;
@@ -565,11 +565,13 @@
     <div class="container">
         <div class="header">
 	    {% if session.username %}
-	        <span class="user-info" id="user-settings-btn" style="cursor:pointer; text-decoration:underline; white-space:nowrap;">
+	        <span class="user-info" style="cursor:pointer;">
 	            {% set full_name = session.username %}
 	            {% set short_name = full_name.split('@')[0].split('.')[0]|capitalize if '@' in full_name else full_name.split('.')[0]|capitalize %}
-	            <span class="username-display">{{ short_name }}</span>
-	            <span class="points" id="points-display" style="text-decoration:none; margin-left:6px;">Loading...</span>
+	            <span class="username-display" id="user-settings-btn" onclick="openSettingsModal()">
+	                {{ short_name }}
+	            </span>
+	            <span class="points" id="points-display">Loading...</span>
 	        </span>
 	    {% endif %}
             <!-- CENTERED LOGO + TITLE -->
